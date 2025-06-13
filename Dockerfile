@@ -21,12 +21,10 @@ RUN npm run build
 FROM node:20-alpine AS production
 
 # Install system dependencies for MCP servers
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    postgresql-client \
-    curl \
-    && pip3 install --no-cache-dir uvx
+RUN apk add --no-cache python3 py3-pip postgresql-client curl \
+    && python3 -m venv /venv \
+    && . /venv/bin/activate \
+    && pip install --no-cache-dir uvx
 
 # Create app user
 RUN addgroup -g 1001 -S nodejs && \
