@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "bamboo-mcp": {
+      "command": "node",
+      "args": ["/path/to/bamboo-mcp/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": "8443",
+        "DATABASE_URL": "postgresql://bamboo:your_password@localhost:5432/bamboo_mcp",
+        "REDIS_URL": "redis://localhost:6379",
+        "JWT_SECRET": "your-super-secret-jwt-key-change-this-in-production",
+        "JWT_EXPIRES_IN": "24h",
+        "FACEBOOK_APP_ID": "your-facebook-app-id",
+        "FACEBOOK_APP_SECRET": "your-facebook-app-secret",
+        "FACEBOOK_CALLBACK_URL": "http://localhost:8443/auth/facebook/callback",
+        "PIPEBOARD_API_TOKEN": "your-pipeboard-api-token",
+        "CORS_ORIGIN": "*",
+        "LOG_LEVEL": "info",
+        "RATE_LIMIT_WINDOW_MS": "60000",
+        "RATE_LIMIT_MAX_REQUESTS": "60",
+        "META_ADS_MCP_COMMAND": "uvx",
+        "META_ADS_MCP_ARGS": "meta-ads-mcp",
+        "POSTGRES_MCP_COMMAND": "postgres-mcp"
+      }
+    }
+  }
+}
+

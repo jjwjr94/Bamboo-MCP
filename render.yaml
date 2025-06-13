@@ -1,0 +1,74 @@
+services:
+  # Bamboo MCP Gateway Web Service
+  - type: web
+    name: bamboo-mcp-gateway
+    env: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8443
+      - key: LOG_LEVEL
+        value: info
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 60
+      - key: JWT_EXPIRES_IN
+        value: 24h
+      - key: META_ADS_MCP_COMMAND
+        value: uvx
+      - key: META_ADS_MCP_ARGS
+        value: meta-ads-mcp
+      - key: POSTGRES_MCP_COMMAND
+        value: postgres-mcp
+      - key: CORS_ORIGIN
+        value: "*"
+      # Secrets (to be set in Render dashboard)
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      - key: FACEBOOK_CALLBACK_URL
+        sync: false
+      - key: PIPEBOARD_API_TOKEN
+        sync: false
+
+  # PostgreSQL Database
+  - type: pserv
+    name: bamboo-mcp-postgres
+    env: postgres
+    plan: starter
+    disk:
+      name: bamboo-mcp-db
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 1
+    envVars:
+      - key: POSTGRES_DB
+        value: bamboo_mcp
+      - key: POSTGRES_USER
+        value: bamboo
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+
+  # Redis Cache
+  - type: redis
+    name: bamboo-mcp-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: bamboo-mcp-db
+    databaseName: bamboo_mcp
+    user: bamboo
+

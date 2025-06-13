@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Bamboo MCP Gateway - Production Configuration
+  bamboo-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      - NODE_ENV=production
+      - PORT=8443
+      # These should be set via environment variables or secrets in production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - FACEBOOK_APP_ID=${FACEBOOK_APP_ID}
+      - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET}
+      - FACEBOOK_CALLBACK_URL=${FACEBOOK_CALLBACK_URL}
+      - PIPEBOARD_API_TOKEN=${PIPEBOARD_API_TOKEN}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-60}
+      - META_ADS_MCP_COMMAND=${META_ADS_MCP_COMMAND:-uvx}
+      - META_ADS_MCP_ARGS=${META_ADS_MCP_ARGS:-meta-ads-mcp}
+      - POSTGRES_MCP_COMMAND=${POSTGRES_MCP_COMMAND:-postgres-mcp}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8443/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    networks:
+      - bamboo-network
+
+networks:
+  bamboo-network:
+    driver: bridge
+
