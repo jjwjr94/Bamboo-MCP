@@ -86,3 +86,20 @@ dist/** linguist-generated
 build/** linguist-generated
 coverage/** linguist-generated
 
+export {
+  MCPManifest,
+  MCPTool,
+  MCPResource,
+  MCPToolCall,
+  MCPToolResult,
+  MCPContent,
+  MCPMessage,
+  UpstreamServer,
+  GatewayConfig,
+  CompanyProfile,
+  ConversationState,
+  AuthToken,
+  PromptPointer,
+  PromptSeed
+};
+
