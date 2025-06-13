@@ -1,3 +1,20 @@
+// Main entry point for Bamboo MCP Gateway
+import express from 'express';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 8443;
+
+app.get('/', (req, res) => {
+  res.send('Bamboo MCP Gateway is running!');
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
+
 // Core MCP types and interfaces for Bamboo MCP Gateway
 
 export interface MCPManifest {
