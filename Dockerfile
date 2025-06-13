@@ -26,7 +26,7 @@ RUN apk add --no-cache \
     py3-pip \
     postgresql-client \
     curl \
-    && pip3 install --no-cache-dir uvx
+    && pip3 install --break-system-packages --no-cache-dir uvx
 
 # Create app user
 RUN addgroup -g 1001 -S nodejs && \
