@@ -12,7 +12,7 @@ COPY tsconfig.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Copy source code
-COPY src/ ./src/
+COPY . .
 
 # Build the application
 RUN npm run build
