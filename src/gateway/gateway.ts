@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { MCPManifest, MCPMessage, MCPToolCall, MCPToolResult, UpstreamServer } from '../types';
 import { AuthService } from '../auth/service';
-import { ConfigService } from './config';
-import { Logger } from './logger';
+import { ConfigService } from '../core/config';
+import { Logger } from '../core/logger';
 import { UpstreamProxy } from '../proxy/upstream';
 import { PromptSeeder } from '../resources/prompt-seeder';
 
