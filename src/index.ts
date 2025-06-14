@@ -10,7 +10,7 @@ import { MCPServer } from './mcp-server';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 8443;
+const port = parseInt(process.env.PORT || '8443', 10);
 
 // Initialize MCP Server
 const mcpServer = new MCPServer();
