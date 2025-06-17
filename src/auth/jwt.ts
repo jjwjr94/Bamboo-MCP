@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import type { JWTPayload } from '../types/index.js';
+import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';

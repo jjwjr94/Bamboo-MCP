@@ -10,16 +10,17 @@ import type {
   OAuthTokenRevocationRequest,
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
 import { OAuthDatabaseService } from '../db/OAuthDatabaseService.js';
 import { db } from '../db/client.js';
-import { oauthRefreshTokens, oauthTokens } from '../db/schema.js';
+import { oauthTokens } from '../db/schema.js';
 import { MetaApiService } from '../tools/MetaApiService.js';
+import type { SessionData } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
-import type { SessionData } from './SessionData.js';
 import { SessionManager } from './SessionManager.js';
+import { TokenManager } from './TokenManager.js';
 import { createJWT, verifyJWT } from './jwt.js';
 
 /**
@@ -52,10 +53,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
   private _clientsStoreImpl: OAuthRegisteredClientsStore;
   private dbService: OAuthDatabaseService;
   private sessionManager: SessionManager;
+  private tokenManager: TokenManager;
 
   private constructor() {
     this.dbService = OAuthDatabaseService.getInstance();
     this.sessionManager = SessionManager.getInstance();
+    this.tokenManager = new TokenManager(this.dbService);
     this._clientsStoreImpl = {
       getClient: (clientId: string) => {
         logger.debug('Getting client', { clientId });
@@ -85,8 +88,6 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
   public get clientsStore(): OAuthRegisteredClientsStore {
     return this._clientsStoreImpl;
   }
-
-
 
   async authorize(
     client: OAuthClientInformationFull,
@@ -152,7 +153,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
       // 2. Get user info and persist user
       const fbUser = await MetaApiService.getMetaUserInfo(accessToken);
-      const user = await this.dbService.findOrCreateUser(fbUser.email);
+      const user = await this.dbService.findOrCreateUserByFacebookId(fbUser.id);
 
       // 3. Store Meta token and sync ad accounts (can run in parallel)
       await Promise.all([
@@ -226,22 +227,11 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     const sessionToken = tempCodeData.sessionToken;
     const payload = verifyJWT(sessionToken);
 
-    // 1. Generate a new refresh token
-    const refreshToken = crypto.randomBytes(64).toString('hex');
-    const hashedRefreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
-
-    // 2. Store the hashed refresh token in the database
-    await db.insert(oauthRefreshTokens).values({
-      token: hashedRefreshToken,
-      userId: payload.userId,
-      clientId: client.client_id,
-      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90-day expiry
-    });
-
-    logger.info('Refresh token created and stored', {
-      userId: payload.userId,
-      clientId: client.client_id,
-    });
+    // 1. Create refresh token using TokenManager
+    const refreshToken = await this.tokenManager.createInitialRefreshToken(
+      payload.userId,
+      client.client_id
+    );
 
     // 3. Return both access and refresh tokens
     return {
@@ -322,54 +312,8 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     refreshToken: string,
     _scopes?: string[] // Note: Scopes are not used here but are part of the interface.
   ): Promise<OAuthTokens> {
-    logger.info('Exchanging refresh token', { clientId: client.client_id });
-
-    const hashedRefreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    const storedToken = await this._findAndValidateRefreshToken(
-      hashedRefreshToken,
-      client.client_id
-    );
-
-    const { newAccessToken, newRefreshToken, newPayload } = await db.transaction(async (tx) => {
-      // Invalidate the used refresh token
-      await tx
-        .update(oauthRefreshTokens)
-        .set({ revokedAt: new Date() })
-        .where(eq(oauthRefreshTokens.id, storedToken.id));
-
-      // Create new tokens
-      const newAccessToken = createJWT({
-        userId: storedToken.userId,
-        clientId: client.client_id,
-        scopes: env.FACEBOOK_OAUTH_SCOPES.split(','),
-      });
-      const newPayload = verifyJWT(newAccessToken);
-      const newRefreshToken = crypto.randomBytes(64).toString('hex');
-      const newHashedRefreshToken = crypto
-        .createHash('sha256')
-        .update(newRefreshToken)
-        .digest('hex');
-
-      // Store the new refresh token
-      await tx.insert(oauthRefreshTokens).values({
-        token: newHashedRefreshToken,
-        userId: storedToken.userId,
-        clientId: client.client_id,
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-      });
-
-      return { newAccessToken, newRefreshToken, newPayload };
-    });
-
-    logger.info('Refresh token rotated successfully', { userId: storedToken.userId });
-
-    return {
-      access_token: newAccessToken,
-      token_type: 'Bearer',
-      expires_in: Math.floor((newPayload.exp * 1000 - Date.now()) / 1000),
-      refresh_token: newRefreshToken,
-      scope: env.FACEBOOK_OAUTH_SCOPES,
-    };
+    // Delegate the entire rotation logic to TokenManager
+    return this.tokenManager.rotateRefreshToken(client, refreshToken);
   }
 
   async revokeToken(
@@ -377,104 +321,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     request: OAuthTokenRevocationRequest
   ): Promise<void> {
     const { token, token_type_hint } = request;
-    logger.info('Revoking token', { clientId: client.client_id, token_type_hint });
-
-    if (token_type_hint === 'refresh_token') {
-      const hashedRefreshToken = crypto.createHash('sha256').update(token).digest('hex');
-      const storedToken = await db.query.oauthRefreshTokens.findFirst({
-        where: and(
-          eq(oauthRefreshTokens.token, hashedRefreshToken),
-          eq(oauthRefreshTokens.clientId, client.client_id)
-        ),
-      });
-
-      if (storedToken) {
-        await db
-          .update(oauthRefreshTokens)
-          .set({ revokedAt: new Date() })
-          .where(eq(oauthRefreshTokens.id, storedToken.id));
-        logger.info('Refresh token revoked successfully', { tokenId: storedToken.id });
-      }
-    } else if (token_type_hint === 'access_token') {
-      // Can't revoke stateless JWT, so revoke associated refresh token
-      try {
-        const payload = verifyJWT(token);
-        await db
-          .update(oauthRefreshTokens)
-          .set({ revokedAt: new Date() })
-          .where(
-            and(
-              eq(oauthRefreshTokens.userId, payload.userId),
-              eq(oauthRefreshTokens.clientId, client.client_id),
-              isNull(oauthRefreshTokens.revokedAt)
-            )
-          );
-        logger.info('Revoked active refresh token for user due to access token revocation', {
-          userId: payload.userId,
-        });
-      } catch (error) {
-        // Ignore errors from invalid JWTs, as they are already invalid.
-        logger.warn('Attempted to revoke an invalid access token', { error });
-      }
-    } else {
-      // If no hint, you must check both, but we will prioritize refresh_token.
-
-      logger.warn('Token revocation request with no or unsupported hint', { token_type_hint });
-    }
-
-    return Promise.resolve();
-  }
-
-
-
-  private async _findAndValidateRefreshToken(
-    hashedRefreshToken: string,
-    clientId: string
-  ): Promise<{
-    id: string;
-    userId: string;
-    clientId: string;
-    expiresAt: Date;
-    revokedAt: Date | null;
-    createdAt: Date | null;
-  }> {
-    const storedToken = await db.query.oauthRefreshTokens.findFirst({
-      where: and(
-        eq(oauthRefreshTokens.token, hashedRefreshToken),
-        eq(oauthRefreshTokens.clientId, clientId)
-      ),
-    });
-
-    if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
-      // If a token was found but is invalid, we might have a breach.
-      if (storedToken) {
-        await this._revokeTokenFamily(storedToken.userId, clientId);
-      }
-      throw new Error('Invalid refresh token');
-    }
-
-    return storedToken;
-  }
-
-  private async _revokeTokenFamily(userId: string, clientId: string): Promise<void> {
-    logger.warn('Invalid or expired refresh token used, revoking token family', {
-      clientId: clientId,
-      userId: userId,
-    });
-    await db
-      .update(oauthRefreshTokens)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(oauthRefreshTokens.userId, userId),
-          eq(oauthRefreshTokens.clientId, clientId),
-          isNull(oauthRefreshTokens.revokedAt)
-        )
-      );
-    logger.warn('All active refresh tokens revoked for user/client due to breach detection', {
-      userId: userId,
-      clientId: clientId,
-    });
+    // Delegate the entire revocation logic to TokenManager
+    await this.tokenManager.revokeToken(
+      client,
+      token,
+      token_type_hint as 'refresh_token' | 'access_token' | undefined
+    );
   }
 
   private cleanExpiredTokens(): void {

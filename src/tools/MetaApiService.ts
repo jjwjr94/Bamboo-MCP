@@ -68,16 +68,16 @@ export class MetaApiService {
   }
 
   /**
-   * Retrieves user information (ID and email) from Meta using an access token.
+   * Retrieves user information (ID only) from Meta using an access token.
    *
    * @param accessToken The Meta access token
-   * @returns Object containing user ID and email
+   * @returns Object containing user ID
    * @throws MetaApiError if user info retrieval fails
    */
-  public static async getMetaUserInfo(accessToken: string): Promise<{ id: string; email: string }> {
+  public static async getMetaUserInfo(accessToken: string): Promise<{ id: string }> {
     try {
       const userResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id,email`
+        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`
       );
 
       if (!userResponse.ok) {
@@ -92,7 +92,7 @@ export class MetaApiService {
       }
 
       const userData = (await userResponse.json()) as MetaOAuthUserInfoResponse;
-      return { id: userData.id, email: userData.email };
+      return { id: userData.id };
     } catch (error) {
       if (error instanceof MetaApiError) {
         throw error;

@@ -1,5 +1,5 @@
+import type { SessionData } from '../types/auth.js';
 import { logger } from '../utils/logger.js';
-import type { SessionData } from './SessionData.js';
 
 /**
  * Manages transient session state for the OAuth 2.0 authorization flow.

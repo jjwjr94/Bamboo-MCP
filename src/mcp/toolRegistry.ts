@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
 import type { MetaToolsHandler } from '../tools/metaToolsHandler.js';
-import type { JWTPayload } from '../types/index.js';
 import { accountManager } from '../utils/accountManager.js';
-import { env } from '../utils/env.js';
-import { AuthenticationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
+import { AdSetToolRegistry } from './AdSetToolRegistry.js';
+import { CampaignToolRegistry } from './CampaignToolRegistry.js';
 
 // Define the schema for the call_meta_api tool
 const CallMetaApiSchema = z.object({
@@ -19,10 +19,14 @@ const CallMetaApiSchema = z.object({
 export class ToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private campaignToolRegistry: CampaignToolRegistry;
+  private adSetToolRegistry: AdSetToolRegistry;
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.campaignToolRegistry = new CampaignToolRegistry(server, toolsHandler);
+    this.adSetToolRegistry = new AdSetToolRegistry(server, toolsHandler);
   }
 
   // --- Tool Registration ---
@@ -50,55 +54,16 @@ export class ToolRegistry {
         },
       },
       async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         return this.toolsHandler.getAdAccounts(authPayload, params);
       }
     );
 
-    // Register get_campaigns tool
-    this.server.registerTool(
-      'get_campaigns',
-      {
-        title: 'Get Campaigns',
-        description:
-          'Retrieves all campaigns for a specific ad account. If no adAccountId is provided, uses the previously selected account or auto-selects if only one account is available.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-        },
-        outputSchema: {
-          campaigns: z
-            .array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                status: z.string(),
-                effective_status: z.string(),
-                objective: z.string(),
-                created_time: z.string().optional(),
-                updated_time: z.string().optional(),
-                daily_budget: z.string().optional(),
-                lifetime_budget: z.string().optional(),
-                bid_strategy: z.string().optional(),
-                budget_remaining: z.string().optional(),
-                spend_cap: z.string().optional(),
-                configured_status: z.string().optional(),
-                start_time: z.string().optional(),
-                stop_time: z.string().optional(),
-              })
-            )
-            .describe('A list of campaigns.'),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.getCampaigns(authPayload, params);
-      }
-    );
+    // Delegate campaign tool registration to specialized registry
+    this.campaignToolRegistry.register();
+
+    // Delegate ad set tool registration to specialized registry
+    this.adSetToolRegistry.register();
 
     // Register generic Meta API call tool
     this.server.registerTool(
@@ -112,338 +77,8 @@ export class ToolRegistry {
         },
       },
       async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         return this.toolsHandler.callMetaApi(authPayload, params);
-      }
-    );
-
-    // Register create campaign tool
-    this.server.registerTool(
-      'create_campaign',
-      {
-        title: 'Create Campaign',
-        description: 'Creates a new advertising campaign.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-          name: z.string().describe('The name of the campaign.'),
-          objective: z
-            .enum([
-              'OUTCOME_TRAFFIC',
-              'OUTCOME_ENGAGEMENT',
-              'OUTCOME_LEADS',
-              'OUTCOME_SALES',
-              'OUTCOME_APP_PROMOTION',
-              'OUTCOME_AWARENESS',
-            ])
-            .describe('The campaign objective.'),
-          status: z.enum(['ACTIVE', 'PAUSED']).default('PAUSED').describe('The campaign status.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('Daily budget in cents (e.g., 1000 = $10.00).'),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('Lifetime budget in cents (e.g., 10000 = $100.00).'),
-          specialAdCategories: z
-            .array(z.string())
-            .optional()
-            .describe('Special ad categories if applicable.'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          name: z.string(),
-          objective: z.string(),
-          status: z.string(),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.createCampaign(authPayload, params);
-      }
-    );
-
-    // Register update campaign tool
-    this.server.registerTool(
-      'update_campaign',
-      {
-        title: 'Update Campaign',
-        description: 'Updates an existing campaign.',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to update.'),
-          name: z.string().optional().describe('New name for the campaign.'),
-          status: z
-            .enum(['ACTIVE', 'PAUSED', 'DELETED'])
-            .optional()
-            .describe('New status for the campaign.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('New daily budget in cents (e.g., 1000 = $10.00).'),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          updatedFields: z.array(z.string()),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.updateCampaign(authPayload, params);
-      }
-    );
-
-    // Register delete campaign tool
-    this.server.registerTool(
-      'delete_campaign',
-      {
-        title: 'Delete Campaign',
-        description: 'Deletes a campaign (sets status to DELETED).',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to delete.'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.deleteCampaign(authPayload, params);
-      }
-    );
-
-    // Register get ad sets tool
-    this.server.registerTool(
-      'get_adsets',
-      {
-        title: 'Get Ad Sets',
-        description: 'Retrieves ad sets for a campaign or ad account.',
-        inputSchema: {
-          campaignId: z.string().optional().describe('The ID of the campaign to get ad sets from.'),
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-        },
-        outputSchema: {
-          adSets: z
-            .array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                status: z.string(),
-                effective_status: z.string().optional(),
-                configured_status: z.string().optional(),
-                created_time: z.string().optional(),
-                updated_time: z.string().optional(),
-                start_time: z.string().optional().nullable(),
-                end_time: z.string().optional().nullable(),
-                daily_budget: z.string().optional(),
-                lifetime_budget: z.string().optional(),
-                budget_remaining: z.string().optional(),
-                billing_event: z.string().optional(),
-                optimization_goal: z.string().optional(),
-                bid_amount: z.number().optional().nullable(),
-                targeting: z.any().optional(),
-                attribution_spec: z.any().optional(),
-                promoted_object: z.any().optional(),
-              })
-            )
-            .describe('A list of ad sets.'),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.getAdSets(authPayload, params);
-      }
-    );
-
-    // Register create ad set tool
-    this.server.registerTool(
-      'create_adset',
-      {
-        title: 'Create Ad Set',
-        description: 'Creates a new ad set within a campaign.',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to create the ad set in.'),
-          name: z.string().describe('The name of the ad set.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('Daily budget in cents (e.g., 1000 = $10.00).'),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('Lifetime budget in cents (e.g., 10000 = $100.00).'),
-          targeting: z
-            .object({
-              geoLocations: z
-                .object({
-                  countries: z.array(z.string()).optional(),
-                  regions: z.array(z.object({ key: z.string() })).optional(),
-                  cities: z.array(z.object({ key: z.string() })).optional(),
-                })
-                .optional(),
-              ageMin: z.number().int().min(13).max(65).optional(),
-              ageMax: z.number().int().min(13).max(65).optional(),
-              genders: z
-                .array(z.enum(['1', '2']))
-                .optional()
-                .describe('1 = male, 2 = female'),
-              interests: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              behaviors: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              customAudiences: z.array(z.object({ id: z.string() })).optional(),
-              excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
-            })
-            .describe('Targeting criteria for the ad set.'),
-          billingEvent: z
-            .enum(['LINK_CLICKS', 'IMPRESSIONS', 'REACH', 'THRUPLAY', 'LANDING_PAGE_VIEWS'])
-            .describe('Billing event for the ad set.'),
-          optimizationGoal: z
-            .enum([
-              'LINK_CLICKS',
-              'IMPRESSIONS',
-              'REACH',
-              'LANDING_PAGE_VIEWS',
-              'LEAD_GENERATION',
-              'CONVERSIONS',
-              'THRUPLAY',
-            ])
-            .describe('Optimization goal for the ad set.'),
-          bidAmount: z.number().int().positive().optional().describe('Bid amount in cents.'),
-          startTime: z.string().optional().describe('Start time in ISO format.'),
-          endTime: z.string().optional().describe('End time in ISO format.'),
-          status: z.enum(['ACTIVE', 'PAUSED']).default('PAUSED').describe('The ad set status.'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          name: z.string(),
-          campaignId: z.string(),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.createAdSet(authPayload, params);
-      }
-    );
-
-    // Register update ad set tool
-    this.server.registerTool(
-      'update_adset',
-      {
-        title: 'Update Ad Set',
-        description: 'Updates an existing ad set.',
-        inputSchema: {
-          adSetId: z.string().describe('The ID of the ad set to update.'),
-          name: z.string().optional().describe('New name for the ad set.'),
-          status: z
-            .enum(['ACTIVE', 'PAUSED', 'DELETED'])
-            .optional()
-            .describe('New status for the ad set.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('New daily budget in cents (e.g., 1000 = $10.00).'),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
-          bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
-          startTime: z.string().optional().describe('New start time in ISO format.'),
-          endTime: z.string().optional().describe('New end time in ISO format.'),
-          targeting: z
-            .object({
-              geoLocations: z
-                .object({
-                  countries: z.array(z.string()).optional(),
-                  regions: z.array(z.object({ key: z.string() })).optional(),
-                  cities: z.array(z.object({ key: z.string() })).optional(),
-                })
-                .optional(),
-              ageMin: z.number().int().min(13).max(65).optional(),
-              ageMax: z.number().int().min(13).max(65).optional(),
-              genders: z.array(z.enum(['1', '2'])).optional(),
-              interests: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              behaviors: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              customAudiences: z.array(z.object({ id: z.string() })).optional(),
-              excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
-            })
-            .optional()
-            .describe('New targeting criteria for the ad set.'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          updatedFields: z.array(z.string()),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.updateAdSet(authPayload, params);
-      }
-    );
-
-    // Register delete ad set tool
-    this.server.registerTool(
-      'delete_adset',
-      {
-        title: 'Delete Ad Set',
-        description: 'Deletes an ad set (sets status to DELETED).',
-        inputSchema: {
-          adSetId: z.string().describe('The ID of the ad set to delete.'),
-        },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          message: z.string(),
-        },
-      },
-      async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
-        return this.toolsHandler.deleteAdSet(authPayload, params);
       }
     );
 
@@ -467,7 +102,7 @@ export class ToolRegistry {
         },
       },
       async (params, extra) => {
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         const { adAccountId } = params;
 
         logger.info('Executing select_ad_account', { userId: authPayload.userId, adAccountId });
@@ -510,25 +145,8 @@ export class ToolRegistry {
       }
     );
 
-    logger.info('MCP tools registered using modern API', { count: 10 });
+    logger.info('Registered main MCP tools', { count: 3 });
   }
 
   // --- Helper Methods ---
-  private extractAuthPayload(extra: unknown): JWTPayload {
-    // Narrow the unknown input to the expected structure
-    const authInfo = (extra as { authInfo?: { extra?: { authPayload?: JWTPayload } } } | undefined)
-      ?.authInfo;
-
-    if (authInfo?.extra?.authPayload) {
-      return authInfo.extra.authPayload;
-    }
-
-    // Development mode fallback
-    if (env.NODE_ENV === 'development') {
-      logger.warn('No auth payload found, using development fallback');
-      throw new AuthenticationError('Authentication required');
-    }
-
-    throw new AuthenticationError('Authorization required');
-  }
 }

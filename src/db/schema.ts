@@ -18,12 +18,12 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    email: text('email').notNull().unique(),
+    facebookUserId: text('facebook_user_id').notNull().unique(),
     createdAt: timestamp('created_at').defaultNow(),
   },
   (table) => [
-    // Index for efficient email lookups
-    index('users_email_idx').on(table.email),
+    index('users_facebook_user_id_idx').on(table.facebookUserId),
+
     // Users can only access their own data using session variable
     pgPolicy('users_select_own', {
       for: 'select',
@@ -48,7 +48,6 @@ export const oauthTokens = pgTable(
       .notNull()
       .unique(),
     accessToken: text('access_token').notNull(),
-    refreshToken: text('refresh_token'),
     expiresAt: timestamp('expires_at'),
     scopes: text('scopes').array(),
     createdAt: timestamp('created_at').defaultNow(),

@@ -252,7 +252,6 @@ export interface MetaOAuthTokenResponse {
 
 export interface MetaOAuthUserInfoResponse {
   id: string;
-  email: string;
   name?: string;
 }
 
@@ -280,5 +279,77 @@ export interface MetaGraphApiError {
     error_user_title?: string;
     error_user_msg?: string;
     fbtrace_id?: string;
+  };
+}
+
+export interface MetaAdAccount {
+  id: string;
+  name: string;
+  account_status: string | number; // API may return numeric code – stored as string later
+  currency: string;
+  timezone_name: string;
+}
+
+export interface MetaCampaign {
+  id: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  objective: string;
+  created_time: string;
+  updated_time: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  budget_remaining?: string;
+  spend_cap?: string;
+  configured_status?: string;
+  start_time?: string;
+  stop_time?: string;
+}
+
+export interface MetaAdSet {
+  id: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  configured_status: string;
+  created_time: string;
+  updated_time: string;
+  start_time: string;
+  end_time: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  budget_remaining?: string;
+  billing_event?: string;
+  optimization_goal?: string;
+  bid_amount?: string;
+  targeting?: unknown;
+  attribution_spec?: unknown;
+  promoted_object?: unknown;
+}
+
+export interface MetaAd {
+  id: string;
+  name: string;
+  status: string;
+  adsetId: string;
+  creativeId?: string;
+  created_time: string;
+  updated_time: string;
+}
+
+export interface MetaAsset {
+  id: string;
+  filename: string;
+  type: 'image' | 'video';
+  dimensions?: string;
+  hash?: string;
+  url: string;
+  thumbnailUrl?: string;
+  createdTime: string;
+  displayData?: {
+    dataUri: string;
+    alt: string;
   };
 }

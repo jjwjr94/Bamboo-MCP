@@ -1,5 +1,5 @@
 {
-  "id": "354504ec-8bbd-410a-9c39-a88f665acbe6",
+  "id": "314a40c5-021f-4281-bf7a-e18f0e4f4f84",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -80,8 +80,12 @@
           "name": "ad_accounts_user_id_users_id_fk",
           "tableFrom": "ad_accounts",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -89,7 +93,10 @@
       "compositePrimaryKeys": {
         "ad_accounts_id_user_id_pk": {
           "name": "ad_accounts_id_user_id_pk",
-          "columns": ["id", "user_id"]
+          "columns": [
+            "id",
+            "user_id"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -98,21 +105,27 @@
           "name": "ad_accounts_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_insert_own": {
           "name": "ad_accounts_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_update_own": {
           "name": "ad_accounts_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -120,10 +133,259 @@
           "name": "ad_accounts_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_clients": {
+      "name": "oauth_clients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_secret": {
+          "name": "client_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_name": {
+          "name": "client_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redirect_uris": {
+          "name": "redirect_uris",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_scopes": {
+          "name": "allowed_scopes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grant_types": {
+          "name": "grant_types",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"authorization_code\"}'"
+        },
+        "response_types": {
+          "name": "response_types",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"code\"}'"
+        },
+        "token_endpoint_auth_method": {
+          "name": "token_endpoint_auth_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "oauth_clients_client_id_idx": {
+          "name": "oauth_clients_client_id_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "oauth_clients_client_id_unique": {
+          "name": "oauth_clients_client_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "client_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_refresh_tokens": {
+      "name": "oauth_refresh_tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "oauth_refresh_tokens_user_id_idx": {
+          "name": "oauth_refresh_tokens_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "oauth_refresh_tokens_token_idx": {
+          "name": "oauth_refresh_tokens_token_idx",
+          "columns": [
+            {
+              "expression": "token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "oauth_refresh_tokens_client_id_idx": {
+          "name": "oauth_refresh_tokens_client_id_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "oauth_refresh_tokens_user_id_users_id_fk": {
+          "name": "oauth_refresh_tokens_user_id_users_id_fk",
+          "tableFrom": "oauth_refresh_tokens",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "oauth_refresh_tokens_client_id_oauth_clients_client_id_fk": {
+          "name": "oauth_refresh_tokens_client_id_oauth_clients_client_id_fk",
+          "tableFrom": "oauth_refresh_tokens",
+          "tableTo": "oauth_clients",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "client_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "oauth_refresh_tokens_token_unique": {
+          "name": "oauth_refresh_tokens_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -149,12 +411,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "refresh_token": {
-          "name": "refresh_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "expires_at": {
           "name": "expires_at",
@@ -205,8 +461,12 @@
           "name": "oauth_tokens_user_id_users_id_fk",
           "tableFrom": "oauth_tokens",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -216,7 +476,9 @@
         "oauth_tokens_user_id_unique": {
           "name": "oauth_tokens_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["user_id"]
+          "columns": [
+            "user_id"
+          ]
         }
       },
       "policies": {
@@ -224,21 +486,27 @@
           "name": "tokens_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_insert_own": {
           "name": "tokens_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_update_own": {
           "name": "tokens_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -246,7 +514,9 @@
           "name": "tokens_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
@@ -264,8 +534,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "email": {
-          "name": "email",
+        "facebook_user_id": {
+          "name": "facebook_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -279,11 +549,11 @@
         }
       },
       "indexes": {
-        "users_email_idx": {
-          "name": "users_email_idx",
+        "users_facebook_user_id_idx": {
+          "name": "users_facebook_user_id_idx",
           "columns": [
             {
-              "expression": "email",
+              "expression": "facebook_user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -298,10 +568,12 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "users_email_unique": {
-          "name": "users_email_unique",
+        "users_facebook_user_id_unique": {
+          "name": "users_facebook_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "facebook_user_id"
+          ]
         }
       },
       "policies": {
@@ -309,14 +581,18 @@
           "name": "users_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         },
         "users_update_own": {
           "name": "users_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["app_user"],
+          "to": [
+            "app_user"
+          ],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         }

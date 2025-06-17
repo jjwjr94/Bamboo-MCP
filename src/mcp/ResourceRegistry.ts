@@ -3,11 +3,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { eq } from 'drizzle-orm';
+import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
 import { db, withUserContext } from '../db/client.js';
 import { adAccounts } from '../db/schema.js';
-import type { JWTPayload } from '../types/index.js';
-import { env } from '../utils/env.js';
-import { AuthenticationError, NotFoundError } from '../utils/errors.js';
+import { NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
 // Use import.meta.url to safely resolve file paths
@@ -22,24 +21,6 @@ export class ResourceRegistry {
     this.server = server;
   }
 
-  private extractAuthPayload(extra: unknown): JWTPayload {
-    // Extract auth payload from the request context in a type-safe way
-    const authPayload = (extra as { authInfo?: { extra?: { authPayload?: JWTPayload } } })?.authInfo
-      ?.extra?.authPayload;
-
-    if (authPayload) {
-      return authPayload;
-    }
-
-    // Development mode fallback
-    if (env.NODE_ENV === 'development') {
-      logger.warn('No auth payload found, using development fallback');
-      throw new AuthenticationError('Authentication required');
-    }
-
-    throw new AuthenticationError('Authorization required');
-  }
-
   public register() {
     // Register system prompt resource
     this.server.registerResource(
@@ -51,7 +32,7 @@ export class ResourceRegistry {
         mimeType: 'text/plain',
       },
       async (uri: URL, extra: unknown) => {
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         logger.info('Reading system prompt resource', {
           userId: authPayload.userId,
           uri: uri.href,
@@ -85,7 +66,7 @@ export class ResourceRegistry {
         mimeType: 'text/markdown',
       },
       async (uri: URL, extra: unknown) => {
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         logger.info('Reading best practices resource', {
           userId: authPayload.userId,
           uri: uri.href,
@@ -114,7 +95,7 @@ export class ResourceRegistry {
       'ad-account',
       new ResourceTemplate('bamboo://ad-accounts/{accountId}', {
         list: async (extra: unknown) => {
-          const authPayload = this.extractAuthPayload(extra);
+          const authPayload = extractAuthPayload(extra);
           logger.info('Listing ad account resources', { userId: authPayload.userId });
 
           try {
@@ -156,7 +137,7 @@ export class ResourceRegistry {
           [variables, extra] = rest as [Record<string, string>, unknown];
         }
 
-        const authPayload = this.extractAuthPayload(extra);
+        const authPayload = extractAuthPayload(extra);
         const accountId = variables?.accountId;
 
         logger.info('Reading ad account resource', {

@@ -2,36 +2,12 @@ import {
   AdAccount as MetaAdAccountSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { JWTPayload } from '../types/index.js';
-import type { CampaignStatus, CreateCampaignRequest } from '../types/meta.js';
+import type { JWTPayload } from '../types/auth.js';
+import type { CampaignStatus, CreateCampaignRequest, MetaCampaign } from '../types/meta.js';
 import { accountManager } from '../utils/accountManager.js';
 import { logger } from '../utils/logger.js';
+import { removeUndefinedProperties } from '../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './metaApi.js';
-
-// ---------------------------------------------------------------------------
-// Local helper interface for SDK responses where upstream types are missing.
-// This interface captures only the fields that are used inside this file in
-// order to keep the typings minimal yet useful. It is NOT exhaustive
-// representation of the Meta Ads SDK responses.
-// ---------------------------------------------------------------------------
-
-interface MetaCampaign {
-  id: string;
-  name: string;
-  status: string;
-  effective_status: string;
-  objective: string;
-  created_time: string;
-  updated_time: string;
-  daily_budget?: string;
-  lifetime_budget?: string;
-  bid_strategy?: string;
-  budget_remaining?: string;
-  spend_cap?: string;
-  configured_status?: string;
-  start_time?: string;
-  stop_time?: string;
-}
 
 export class MetaCampaignHandler {
   async getCampaigns(authPayload: JWTPayload, params: { adAccountId?: string }) {
@@ -110,11 +86,7 @@ export class MetaCampaignHandler {
       };
 
       // Remove undefined values
-      for (const [key, value] of Object.entries(campaignData)) {
-        if (typeof value === 'undefined') {
-          delete campaignData[key as keyof typeof campaignData];
-        }
-      }
+      removeUndefinedProperties(campaignData);
 
       const campaign = await new MetaAdAccountSDK(adAccountId).createCampaign([], campaignData);
 
@@ -151,20 +123,13 @@ export class MetaCampaignHandler {
     await initializeMetaApi(authPayload.userId);
 
     return await handleMetaApiCall(async () => {
-      const updateData: Record<string, unknown> = {};
-
-      if (params.name !== undefined) {
-        updateData[MetaCampaignSDK.Fields.name] = params.name;
-      }
-      if (params.status !== undefined) {
-        updateData[MetaCampaignSDK.Fields.status] = params.status;
-      }
-      if (params.dailyBudget !== undefined) {
-        updateData[MetaCampaignSDK.Fields.daily_budget] = params.dailyBudget;
-      }
-      if (params.lifetimeBudget !== undefined) {
-        updateData[MetaCampaignSDK.Fields.lifetime_budget] = params.lifetimeBudget;
-      }
+      const updateData = {
+        [MetaCampaignSDK.Fields.name]: params.name,
+        [MetaCampaignSDK.Fields.status]: params.status,
+        [MetaCampaignSDK.Fields.daily_budget]: params.dailyBudget,
+        [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
+      };
+      removeUndefinedProperties(updateData);
 
       const campaign = new MetaCampaignSDK(params.campaignId);
       await campaign.update([], updateData);

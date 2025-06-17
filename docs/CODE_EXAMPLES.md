@@ -98,7 +98,7 @@ export const appUser = pgRole('app_user');
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email').notNull().unique(),
+  facebookUserId: text('facebook_user_id').notNull().unique(),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
   // Users can only access their own data using session variable

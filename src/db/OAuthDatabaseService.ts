@@ -91,15 +91,20 @@ export class OAuthDatabaseService {
   }
 
   // User and Token Management
-  public async findOrCreateUser(email: string): Promise<User> {
+  public async findOrCreateUserByFacebookId(facebookUserId: string): Promise<User> {
     return db.transaction(async (tx) => {
-      const existingUser = await tx.query.users.findFirst({ where: eq(users.email, email) });
+      const existingUser = await tx.query.users.findFirst({ 
+        where: eq(users.facebookUserId, facebookUserId) 
+      });
       if (existingUser) {
         return existingUser;
       }
 
-      const [newUser] = await tx.insert(users).values({ email }).returning();
-      logger.info('New user created via OAuth', { userId: newUser.id, email: newUser.email });
+      const [newUser] = await tx.insert(users).values({ facebookUserId }).returning();
+      logger.info('New user created via Facebook OAuth', { 
+        userId: newUser.id, 
+        facebookUserId: newUser.facebookUserId 
+      });
       return newUser;
     });
   }

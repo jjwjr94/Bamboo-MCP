@@ -16,7 +16,7 @@ const envSchema = z.object({
   FACEBOOK_OAUTH_SCOPES: z
     .string()
     .default(
-      'email,ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read'
+      'public_profile,ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read'
     ),
 
   // JWT

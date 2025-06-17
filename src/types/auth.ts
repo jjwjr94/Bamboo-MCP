@@ -1,3 +1,15 @@
+export interface JWTPayload {
+  userId: string;
+  clientId: string;
+  adAccountId?: string;
+  scopes: string[];
+  iat: number;
+  exp: number;
+  iss: string;
+  aud: string;
+  jti?: string;
+}
+
 export interface SessionData {
   clientId: string;
   redirectUri: string;
