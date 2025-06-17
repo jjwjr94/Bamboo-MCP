@@ -16,11 +16,14 @@ const client = postgres(env.DATABASE_URL, {
 
 export const db = drizzle(client, { schema });
 
+// Derive the correct transaction type from the db.transaction callback to avoid using `any`
+export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // Helper function to execute database operations with user context
 // Uses transactions to safely set the user context for RLS (Row Level Security)
 export const withUserContext = async <T>(
   userId: string,
-  operation: (tx: any) => Promise<T>
+  operation: (tx: DbTransaction) => Promise<T>
 ): Promise<T> => {
   return db.transaction(async (tx) => {
     // SET LOCAL is transaction-scoped and safe for concurrent requests

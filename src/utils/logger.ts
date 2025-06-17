@@ -7,7 +7,7 @@ interface LogEntry {
   level: LogLevel;
   message: string;
   timestamp: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 class Logger {
@@ -27,7 +27,7 @@ class Logger {
     return levels[level] >= levels[this.minLevel];
   }
 
-  private log(level: LogLevel, message: string, meta: Record<string, any> = {}): void {
+  private log(level: LogLevel, message: string, meta: Record<string, unknown> = {}): void {
     if (!this.shouldLog(level)) return;
 
     const logEntry: LogEntry = {
@@ -41,19 +41,19 @@ class Logger {
     console.error(JSON.stringify(logEntry));
   }
 
-  debug(message: string, meta?: Record<string, any>): void {
+  debug(message: string, meta?: Record<string, unknown>): void {
     this.log('debug', message, meta);
   }
 
-  info(message: string, meta?: Record<string, any>): void {
+  info(message: string, meta?: Record<string, unknown>): void {
     this.log('info', message, meta);
   }
 
-  warn(message: string, meta?: Record<string, any>): void {
+  warn(message: string, meta?: Record<string, unknown>): void {
     this.log('warn', message, meta);
   }
 
-  error(message: string, meta?: Record<string, any>): void {
+  error(message: string, meta?: Record<string, unknown>): void {
     this.log('error', message, meta);
   }
 
@@ -75,7 +75,7 @@ class Logger {
     });
   }
 
-  suspiciousActivity(event: string, details: Record<string, any>): void {
+  suspiciousActivity(event: string, details: Record<string, unknown>): void {
     this.warn('SUSPICIOUS_ACTIVITY', {
       event,
       ...details,

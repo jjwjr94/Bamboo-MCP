@@ -52,21 +52,34 @@ export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi>
 export async function handleMetaApiCall<T>(apiCall: () => Promise<T>): Promise<T> {
   try {
     return await apiCall();
-  } catch (error: any) {
-    logger.error('Meta API call failed', { error: error.message });
+  } catch (error: unknown) {
+    logger.error('Meta API call failed', { error: (error as Error).message });
 
     // The SDK often throws errors with a 'response' property or structured error fields
-    const errorResponse = error.response?.data?.error || error;
+    const errorObj = error as {
+      message?: string;
+      response?: { data?: { error?: unknown }; status?: number };
+    };
+
+    const errorResponse = errorObj.response?.data?.error || errorObj;
 
     if (errorResponse) {
+      interface ErrorResponseShape {
+        message?: string;
+        code?: number | string;
+        error_subcode?: number | string;
+      }
+
+      const { message, code, error_subcode } = errorResponse as ErrorResponseShape;
+
       throw new MetaApiError(
-        errorResponse.message || error.message || 'Meta API request failed',
-        errorResponse.code?.toString(),
-        errorResponse.error_subcode?.toString(),
-        error.response?.status || 400
+        message || (errorObj as Error).message || 'Meta API request failed',
+        code?.toString(),
+        error_subcode?.toString(),
+        errorObj.response?.status || 400
       );
     }
 
-    throw new MetaApiError(error.message || 'An unknown Meta API error occurred.');
+    throw new MetaApiError((errorObj as Error).message || 'An unknown Meta API error occurred.');
   }
 }

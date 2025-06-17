@@ -40,7 +40,6 @@ export function createJWT(options: CreateTokenOptions): string {
     logger.info('JWT created', { userId, adAccountId, scopes: scopes.length });
     return token;
   } catch (error) {
-    console.log(error);
     logger.error('JWT creation failed', { userId, error });
     throw new TokenError('Failed to create JWT token');
   }

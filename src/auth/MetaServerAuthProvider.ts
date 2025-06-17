@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
 import type {
   AuthorizationParams,
@@ -12,21 +12,15 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
+import { OAuthDatabaseService } from '../db/OAuthDatabaseService.js';
 import { db } from '../db/client.js';
-import { adAccounts, oauthClients, oauthRefreshTokens, oauthTokens, users } from '../db/schema.js';
-import type {
-  MetaGraphApiError,
-  MetaOAuthAdAccountsResponse,
-  MetaOAuthTokenResponse,
-  MetaOAuthUserInfoResponse,
-} from '../types/meta.js';
+import { oauthRefreshTokens, oauthTokens } from '../db/schema.js';
+import { MetaApiService } from '../tools/MetaApiService.js';
 import { env } from '../utils/env.js';
-import { MetaApiError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import type { SessionData } from './SessionData.js';
+import { SessionManager } from './SessionManager.js';
 import { createJWT, verifyJWT } from './jwt.js';
-
-// Removed unused interfaces - using inline types and SessionData interface instead
 
 /**
  * Custom Meta OAuth Server Provider
@@ -44,8 +38,6 @@ import { createJWT, verifyJWT } from './jwt.js';
 export class MetaServerAuthProvider implements OAuthServerProvider {
   private static instance: MetaServerAuthProvider;
 
-  // TODO: Replace with Redis for production deployments
-  private _sessionStore: Map<string, SessionData> = new Map();
   private _tempAuthCodes: Map<
     string,
     {
@@ -58,16 +50,20 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
   > = new Map();
 
   private _clientsStoreImpl: OAuthRegisteredClientsStore;
+  private dbService: OAuthDatabaseService;
+  private sessionManager: SessionManager;
 
   private constructor() {
+    this.dbService = OAuthDatabaseService.getInstance();
+    this.sessionManager = SessionManager.getInstance();
     this._clientsStoreImpl = {
       getClient: (clientId: string) => {
         logger.debug('Getting client', { clientId });
-        return this.getClientFromDatabase(clientId);
+        return this.dbService.getClient(clientId);
       },
       registerClient: (client: OAuthClientInformationFull) => {
         logger.info('Registering client', { clientId: client.client_id });
-        return this.registerClientInDatabase(client);
+        return this.dbService.registerClient(client);
       },
     };
 
@@ -90,54 +86,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     return this._clientsStoreImpl;
   }
 
-  private async getClientFromDatabase(
-    clientId: string
-  ): Promise<OAuthClientInformationFull | undefined> {
-    logger.debug('Getting OAuth client', { clientId });
 
-    const client = await db.query.oauthClients.findFirst({
-      where: eq(oauthClients.clientId, clientId),
-    });
-
-    if (!client || !client.isActive) {
-      logger.debug('Client not found or inactive', { clientId });
-      return undefined;
-    }
-
-    return {
-      client_id: client.clientId,
-      client_secret: client.clientSecret || undefined,
-      redirect_uris: client.redirectUris,
-      grant_types: client.grantTypes,
-      response_types: client.responseTypes,
-      token_endpoint_auth_method: client.tokenEndpointAuthMethod as any,
-      scope: client.allowedScopes.join(' '),
-      client_id_issued_at: Math.floor(client.createdAt!.getTime() / 1000),
-    };
-  }
-
-  private async registerClientInDatabase(
-    client: OAuthClientInformationFull
-  ): Promise<OAuthClientInformationFull> {
-    logger.info('Registering MCP client', { clientId: client.client_id });
-
-    const clientName = (client as any).client_name || 'Unnamed MCP Client';
-
-    await db.insert(oauthClients).values({
-      clientId: client.client_id,
-      clientSecret: client.client_secret || null,
-      clientName,
-      redirectUris: client.redirect_uris,
-      allowedScopes: client.scope?.split(' ') || [],
-      grantTypes: client.grant_types || ['authorization_code'],
-      responseTypes: client.response_types || ['code'],
-      tokenEndpointAuthMethod: client.token_endpoint_auth_method || 'none',
-      isActive: true,
-    });
-
-    logger.info('Successfully registered MCP client', { clientId: client.client_id, clientName });
-    return client;
-  }
 
   async authorize(
     client: OAuthClientInformationFull,
@@ -162,7 +111,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         clientCodeChallengeMethod: 'S256',
       };
 
-      await this.storeSessionData(state, sessionData);
+      this.sessionManager.storeSessionData(state, sessionData);
 
       // Redirect to Meta OAuth
       const metaAuthUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth');
@@ -192,23 +141,28 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     error?: string;
   }> {
     try {
-      const sessionData = this.getSessionData(state);
+      const sessionData = this.sessionManager.getSessionData(state);
 
       if (!sessionData) {
         return { redirectUrl: '', success: false, error: 'Invalid state parameter' };
       }
 
       // 1. Exchange Meta code for an access token
-      const { accessToken, expiresIn } = await this._exchangeMetaCodeForToken(code);
+      const { accessToken, expiresIn } = await MetaApiService.exchangeMetaCodeForToken(code);
 
       // 2. Get user info and persist user
-      const fbUser = await this._getMetaUserInfo(accessToken);
-      const user = await this._findOrCreateUser(fbUser.email);
+      const fbUser = await MetaApiService.getMetaUserInfo(accessToken);
+      const user = await this.dbService.findOrCreateUser(fbUser.email);
 
       // 3. Store Meta token and sync ad accounts (can run in parallel)
       await Promise.all([
-        this._storeMetaToken(user.id, accessToken, expiresIn),
-        this._syncUserAdAccounts(user.id, accessToken),
+        this.dbService.storeMetaToken(
+          user.id,
+          accessToken,
+          env.FACEBOOK_OAUTH_SCOPES.split(','),
+          expiresIn
+        ),
+        MetaApiService.syncUserAdAccounts(user.id, accessToken),
       ]);
 
       // 4. Create internal auth code and prepare redirect
@@ -232,7 +186,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       clientRedirectUrl.searchParams.append('state', sessionData.originalState || '');
 
       // 5. Clean up
-      this.clearSessionData(state);
+      this.sessionManager.clearSessionData(state);
 
       return {
         redirectUrl: clientRedirectUrl.toString(),
@@ -293,7 +247,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     return {
       access_token: sessionToken,
       token_type: 'Bearer',
-      expires_in: Math.floor((payload.exp! * 1000 - Date.now()) / 1000),
+      expires_in: Math.floor((payload.exp * 1000 - Date.now()) / 1000),
       scope: env.FACEBOOK_OAUTH_SCOPES,
       refresh_token: refreshToken, // Return the raw token to the client
     };
@@ -311,18 +265,9 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         throw new Error('No OAuth token found for user');
       }
 
-      try {
-        const metaResponse = await fetch(
-          `https://graph.facebook.com/v22.0/me?access_token=${oauthToken.accessToken}&fields=id`
-        );
-        if (!metaResponse.ok) {
-          throw new Error('Meta access token is invalid or expired');
-        }
-      } catch (error) {
-        logger.warn('Meta token validation failed', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          userId: payload.userId,
-        });
+      // Use the new service method for validation
+      const isMetaTokenValid = await MetaApiService.validateAccessToken(oauthToken.accessToken);
+      if (!isMetaTokenValid) {
         throw new Error('Meta access token is invalid or expired');
       }
 
@@ -421,7 +366,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     return {
       access_token: newAccessToken,
       token_type: 'Bearer',
-      expires_in: Math.floor((newPayload.exp! * 1000 - Date.now()) / 1000),
+      expires_in: Math.floor((newPayload.exp * 1000 - Date.now()) / 1000),
       refresh_token: newRefreshToken,
       scope: env.FACEBOOK_OAUTH_SCOPES,
     };
@@ -480,172 +425,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     return Promise.resolve();
   }
 
-  private async _exchangeMetaCodeForToken(
-    code: string
-  ): Promise<{ accessToken: string; expiresIn?: number }> {
-    try {
-      const tokenResponse = await fetch('https://graph.facebook.com/v22.0/oauth/access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: env.FACEBOOK_APP_ID,
-          client_secret: env.FACEBOOK_APP_SECRET,
-          code: code,
-          redirect_uri: env.FACEBOOK_CALLBACK_URL,
-        }),
-      });
 
-      if (!tokenResponse.ok) {
-        const errorData = (await tokenResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        throw new MetaApiError(
-          errorData.error?.message ||
-            `Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}`,
-          errorData.error?.code?.toString(),
-          errorData.error?.error_subcode?.toString(),
-          tokenResponse.status
-        );
-      }
-
-      const tokenData = (await tokenResponse.json()) as MetaOAuthTokenResponse;
-      if (!tokenData.access_token) {
-        throw new MetaApiError('Failed to obtain Meta access token');
-      }
-
-      return { accessToken: tokenData.access_token, expiresIn: tokenData.expires_in };
-    } catch (error) {
-      if (error instanceof MetaApiError) {
-        throw error;
-      }
-      logger.error('Token exchange error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw new MetaApiError('OAuth token exchange failed', 'OAUTH_ERROR');
-    }
-  }
-
-  private async _getMetaUserInfo(accessToken: string): Promise<{ id: string; email: string }> {
-    try {
-      const userResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id,email`
-      );
-
-      if (!userResponse.ok) {
-        const errorData = (await userResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        throw new MetaApiError(
-          errorData.error?.message ||
-            `Failed to get user info: ${userResponse.status} ${userResponse.statusText}`,
-          errorData.error?.code?.toString(),
-          errorData.error?.error_subcode?.toString(),
-          userResponse.status
-        );
-      }
-
-      const userData = (await userResponse.json()) as MetaOAuthUserInfoResponse;
-      return { id: userData.id, email: userData.email };
-    } catch (error) {
-      if (error instanceof MetaApiError) {
-        throw error;
-      }
-      logger.error('User info retrieval error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw new MetaApiError('Failed to retrieve user information', 'USER_INFO_ERROR');
-    }
-  }
-
-  private async _findOrCreateUser(
-    email: string
-  ): Promise<{ id: string; email: string; createdAt: Date | null }> {
-    return db.transaction(async (tx) => {
-      const existingUser = await tx.query.users.findFirst({ where: eq(users.email, email) });
-      if (existingUser) {
-        return existingUser;
-      }
-
-      const [newUser] = await tx.insert(users).values({ email }).returning();
-      logger.info('New user created via OAuth', { userId: newUser.id, email: newUser.email });
-      return newUser;
-    });
-  }
-
-  private async _storeMetaToken(
-    userId: string,
-    accessToken: string,
-    expiresIn?: number
-  ): Promise<void> {
-    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
-
-    await db
-      .insert(oauthTokens)
-      .values({
-        userId,
-        accessToken,
-        expiresAt,
-        scopes: env.FACEBOOK_OAUTH_SCOPES.split(','),
-      })
-      .onConflictDoUpdate({
-        target: oauthTokens.userId,
-        set: {
-          accessToken,
-          expiresAt,
-          updatedAt: new Date(),
-        },
-      });
-  }
-
-  private async _syncUserAdAccounts(userId: string, accessToken: string): Promise<void> {
-    try {
-      const adAccountsResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name,users{role}`
-      );
-
-      if (!adAccountsResponse.ok) {
-        const errorData = (await adAccountsResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        logger.warn('Failed to fetch ad accounts during auth', {
-          userId,
-          status: adAccountsResponse.status,
-          error: errorData.error?.message,
-        });
-        return; // Non-critical error, continue the flow
-      }
-
-      const adAccountsData = (await adAccountsResponse.json()) as MetaOAuthAdAccountsResponse;
-      const accounts = adAccountsData.data || [];
-
-      for (const account of accounts) {
-        const permissions = account.users?.data?.[0]?.role
-          ? [account.users.data[0].role]
-          : ['VIEWER'];
-        await db
-          .insert(adAccounts)
-          .values({
-            id: account.id,
-            userId: userId,
-            name: account.name,
-            status: account.account_status,
-            currency: account.currency,
-            timezone: account.timezone_name,
-            permissions,
-          })
-          .onConflictDoUpdate({
-            target: [adAccounts.id, adAccounts.userId],
-            set: {
-              name: account.name,
-              status: account.account_status,
-              currency: account.currency,
-              timezone: account.timezone_name,
-              permissions,
-            },
-          });
-      }
-    } catch (error) {
-      logger.warn('Ad account sync failed during auth', {
-        userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      // Non-critical error, don't throw
-    }
-  }
 
   private async _findAndValidateRefreshToken(
     hashedRefreshToken: string,
@@ -704,29 +484,5 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         this._tempAuthCodes.delete(code);
       }
     }
-  }
-
-  private async storeSessionData(state: string, data: SessionData): Promise<void> {
-    if (!state) {
-      throw new Error('Cannot store session data: state parameter is missing');
-    }
-
-    this._sessionStore.set(state, data);
-    logger.debug('Session data stored', { state, mapSize: this._sessionStore.size });
-  }
-
-  private getSessionData(state: string): SessionData | undefined {
-    const data = this._sessionStore.get(state);
-    logger.debug('Session data retrieved', {
-      state,
-      found: !!data,
-      mapSize: this._sessionStore.size,
-    });
-    return data;
-  }
-
-  private clearSessionData(state: string): void {
-    this._sessionStore.delete(state);
-    logger.debug('Session data cleared', { state });
   }
 }

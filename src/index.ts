@@ -59,10 +59,10 @@ export async function build(opts = {}) {
 
     if (result.success) {
       return reply.redirect(result.redirectUrl);
-    } else {
-      logger.error('OAuth callback failed', { error: result.error });
-      return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
     }
+
+    logger.error('OAuth callback failed', { error: result.error });
+    return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
   });
 
   // MCP OAuth router (MCP SDK implementation with Facebook OAuth proxy)
@@ -108,7 +108,6 @@ export async function build(opts = {}) {
 
   return app;
 }
-
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const start = async () => {

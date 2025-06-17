@@ -141,8 +141,8 @@ src/
 │   ├── metaTools.ts      # Meta Ads MCP tools
 │   └── schemas.ts        # Zod validation schemas
 ├── prompts/
-│   ├── system_prompt.txt     # Bamboo system prompt
-│   └── best_practices.txt    # Meta Ads guidelines
+│   ├── system_prompt.md      # Bamboo system prompt
+│   └── best_practices.md     # Meta Ads guidelines
 ├── utils/
 │   ├── env.ts           # Environment validation
 │   ├── logger.ts        # Structured logging

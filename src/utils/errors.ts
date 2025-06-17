@@ -92,7 +92,7 @@ export interface ErrorResponse {
   success: false;
   error: string;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
 
 export function createErrorResponse(
@@ -128,11 +128,11 @@ export function isOperationalError(error: unknown): boolean {
 }
 
 // Error handler for async functions
-export function asyncErrorHandler<T extends (...args: any[]) => Promise<any>>(fn: T): T {
+export function asyncErrorHandler<T extends (...args: unknown[]) => Promise<unknown>>(fn: T): T {
   return ((...args: Parameters<T>) => {
     const result = fn(...args);
     return Promise.resolve(result).catch((error) => {
-      throw isBambooError(error) ? error : new BambooError(error.message);
+      throw isBambooError(error) ? error : new BambooError((error as Error).message);
     });
   }) as T;
 }

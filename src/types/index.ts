@@ -1,5 +1,7 @@
 // Global type definitions for Bamboo MCP
 
+import type { MetaTargeting } from './meta.js';
+
 export interface User {
   id: string;
   email: string;
@@ -39,7 +41,7 @@ export interface JWTPayload {
   jti?: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -80,7 +82,7 @@ export interface MetaAdSet {
   status: string;
   campaignId: string;
   dailyBudget?: number;
-  targeting?: any;
+  targeting?: MetaTargeting;
   billingEvent?: string;
   optimizationGoal?: string;
   created_time: string;

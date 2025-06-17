@@ -30,7 +30,12 @@ export class AccountManager {
       const accounts = await this.fetchUserAccounts(userId);
       this.contexts.set(userId, { availableAccounts: accounts });
     }
-    return this.contexts.get(userId)!;
+    const context = this.contexts.get(userId);
+    if (!context) {
+      // This should not happen because we initialize the context above, but we guard to satisfy the type checker
+      throw new Error(`Failed to load account context for user ${userId}`);
+    }
+    return context;
   }
 
   async selectAccount(userId: string, accountId: string): Promise<void> {
@@ -68,8 +73,9 @@ export class AccountManager {
 
     // Multiple accounts available - return structured error for Claude to handle
     throw new Error(
-      `Multiple ad accounts available. Please specify which account to use:\n` +
-        context.availableAccounts.map((acc) => `- ${acc.id}: ${acc.name}`).join('\n')
+      `Multiple ad accounts available. Please specify which account to use:\n${context.availableAccounts
+        .map((acc) => `- ${acc.id}: ${acc.name}`)
+        .join('\n')}`
     );
   }
 

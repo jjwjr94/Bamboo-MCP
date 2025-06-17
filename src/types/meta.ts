@@ -226,7 +226,7 @@ export interface ProductRequest {
   retailerId: string;
   gtin?: string;
   mpn?: string;
-  customData?: Record<string, any>;
+  customData?: Record<string, unknown>;
 }
 
 export interface UploadAssetRequest {
@@ -239,8 +239,8 @@ export interface UploadAssetRequest {
 export interface MetaApiRequest {
   endpoint: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  params?: Record<string, any>;
-  data?: Record<string, any>;
+  params?: Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
 
 // OAuth-specific types for better type safety
