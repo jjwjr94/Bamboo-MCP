@@ -95,7 +95,7 @@ export class TokenManager {
       token_type: 'Bearer',
       expires_in: Math.floor((newPayload.exp * 1000 - Date.now()) / 1000),
       refresh_token: newRefreshToken,
-      scope: env.FACEBOOK_OAUTH_SCOPES,
+      scope: newPayload.scopes.join(' '),
     };
   }
 

@@ -80,12 +80,8 @@
           "name": "ad_accounts_user_id_users_id_fk",
           "tableFrom": "ad_accounts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -93,10 +89,7 @@
       "compositePrimaryKeys": {
         "ad_accounts_id_user_id_pk": {
           "name": "ad_accounts_id_user_id_pk",
-          "columns": [
-            "id",
-            "user_id"
-          ]
+          "columns": ["id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -105,27 +98,21 @@
           "name": "ad_accounts_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_insert_own": {
           "name": "ad_accounts_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_update_own": {
           "name": "ad_accounts_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -133,9 +120,7 @@
           "name": "ad_accounts_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
@@ -242,9 +227,7 @@
         "oauth_clients_client_id_unique": {
           "name": "oauth_clients_client_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "client_id"
-          ]
+          "columns": ["client_id"]
         }
       },
       "policies": {},
@@ -352,12 +335,8 @@
           "name": "oauth_refresh_tokens_user_id_users_id_fk",
           "tableFrom": "oauth_refresh_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -365,12 +344,8 @@
           "name": "oauth_refresh_tokens_client_id_oauth_clients_client_id_fk",
           "tableFrom": "oauth_refresh_tokens",
           "tableTo": "oauth_clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "client_id"
-          ],
+          "columnsFrom": ["client_id"],
+          "columnsTo": ["client_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -380,9 +355,7 @@
         "oauth_refresh_tokens_token_unique": {
           "name": "oauth_refresh_tokens_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -461,12 +434,8 @@
           "name": "oauth_tokens_user_id_users_id_fk",
           "tableFrom": "oauth_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -476,9 +445,7 @@
         "oauth_tokens_user_id_unique": {
           "name": "oauth_tokens_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {
@@ -486,27 +453,21 @@
           "name": "tokens_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_insert_own": {
           "name": "tokens_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_update_own": {
           "name": "tokens_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -514,9 +475,7 @@
           "name": "tokens_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
@@ -571,9 +530,7 @@
         "users_facebook_user_id_unique": {
           "name": "users_facebook_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "facebook_user_id"
-          ]
+          "columns": ["facebook_user_id"]
         }
       },
       "policies": {
@@ -581,18 +538,14 @@
           "name": "users_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         },
         "users_update_own": {
           "name": "users_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         }

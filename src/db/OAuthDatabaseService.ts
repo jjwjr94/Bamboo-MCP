@@ -1,5 +1,6 @@
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { and, eq, isNull } from 'drizzle-orm';
+import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import { db } from './client.js';
 import { oauthClients, oauthRefreshTokens, oauthTokens, users } from './schema.js';
@@ -71,12 +72,16 @@ export class OAuthDatabaseService {
     type ClientWithName = OAuthClientInformationFull & { client_name?: string };
     const clientName = (client as ClientWithName).client_name ?? 'Unnamed MCP Client';
 
+    // If no scopes provided, default to all supported scopes
+    // This ensures clients can request any of the server's supported scopes
+    const allowedScopes = client.scope?.split(' ') || env.FACEBOOK_OAUTH_SCOPES.split(',');
+
     await db.insert(oauthClients).values({
       clientId: client.client_id,
       clientSecret: client.client_secret || null,
       clientName,
       redirectUris: client.redirect_uris,
-      allowedScopes: client.scope?.split(' ') || [],
+      allowedScopes: allowedScopes,
       grantTypes: client.grant_types || ['authorization_code'],
       responseTypes: client.response_types || ['code'],
       tokenEndpointAuthMethod: client.token_endpoint_auth_method || 'none',
@@ -86,6 +91,7 @@ export class OAuthDatabaseService {
     logger.info('Successfully registered MCP client in database', {
       clientId: client.client_id,
       clientName,
+      allowedScopes: allowedScopes,
     });
     return client;
   }
@@ -93,17 +99,17 @@ export class OAuthDatabaseService {
   // User and Token Management
   public async findOrCreateUserByFacebookId(facebookUserId: string): Promise<User> {
     return db.transaction(async (tx) => {
-      const existingUser = await tx.query.users.findFirst({ 
-        where: eq(users.facebookUserId, facebookUserId) 
+      const existingUser = await tx.query.users.findFirst({
+        where: eq(users.facebookUserId, facebookUserId),
       });
       if (existingUser) {
         return existingUser;
       }
 
       const [newUser] = await tx.insert(users).values({ facebookUserId }).returning();
-      logger.info('New user created via Facebook OAuth', { 
-        userId: newUser.id, 
-        facebookUserId: newUser.facebookUserId 
+      logger.info('New user created via Facebook OAuth', {
+        userId: newUser.id,
+        facebookUserId: newUser.facebookUserId,
       });
       return newUser;
     });

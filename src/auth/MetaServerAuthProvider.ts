@@ -234,11 +234,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     );
 
     // 3. Return both access and refresh tokens
+    // IMPORTANT: Return only the granted scopes from the JWT payload, not all possible scopes
     return {
       access_token: sessionToken,
       token_type: 'Bearer',
       expires_in: Math.floor((payload.exp * 1000 - Date.now()) / 1000),
-      scope: env.FACEBOOK_OAUTH_SCOPES,
+      scope: payload.scopes.join(' '), // Return only granted scopes, not all possible scopes
       refresh_token: refreshToken, // Return the raw token to the client
     };
   }
