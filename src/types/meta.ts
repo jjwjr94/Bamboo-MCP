@@ -1,8 +1,8 @@
 // Meta Ads API type definitions
 
-export type CampaignObjective = 
+export type CampaignObjective =
   | 'OUTCOME_TRAFFIC'
-  | 'OUTCOME_ENGAGEMENT' 
+  | 'OUTCOME_ENGAGEMENT'
   | 'OUTCOME_LEADS'
   | 'OUTCOME_SALES'
   | 'OUTCOME_APP_PROMOTION'
@@ -10,14 +10,14 @@ export type CampaignObjective =
 
 export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'DELETED';
 
-export type AdSetBillingEvent = 
+export type AdSetBillingEvent =
   | 'LINK_CLICKS'
   | 'IMPRESSIONS'
   | 'REACH'
   | 'THRUPLAY'
   | 'LANDING_PAGE_VIEWS';
 
-export type AdSetOptimizationGoal = 
+export type AdSetOptimizationGoal =
   | 'LINK_CLICKS'
   | 'IMPRESSIONS'
   | 'REACH'
@@ -51,7 +51,7 @@ export interface CreateCampaignRequest {
   name: string;
   objective: CampaignObjective;
   status: CampaignStatus;
-  adAccountId: string;
+  adAccountId?: string; // Optional to support intelligent account selection
   dailyBudget?: number; // in cents
   lifetimeBudget?: number; // in cents
   specialAdCategories?: string[];
@@ -110,7 +110,14 @@ export interface CreateAdCreativeRequest {
 }
 
 export interface MetaInsightsParams {
-  datePreset?: 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'lifetime';
+  datePreset?:
+    | 'today'
+    | 'yesterday'
+    | 'this_week'
+    | 'last_week'
+    | 'this_month'
+    | 'last_month'
+    | 'lifetime';
   timeRange?: {
     since: string; // YYYY-MM-DD
     until: string; // YYYY-MM-DD
@@ -144,14 +151,66 @@ export interface MetaInsights {
 
 export interface CustomAudienceRequest {
   name: string;
-  subtype: 'CUSTOM' | 'WEBSITE' | 'APP' | 'OFFLINE_CONVERSION' | 'CLAIM' | 'PARTNER' | 'MANAGED' | 'VIDEO' | 'LOOKALIKE' | 'ENGAGEMENT' | 'DATA_SET' | 'BAG_OF_ACCOUNTS' | 'STUDY_RULE_AUDIENCE' | 'FOX';
+  subtype:
+    | 'CUSTOM'
+    | 'WEBSITE'
+    | 'APP'
+    | 'OFFLINE_CONVERSION'
+    | 'CLAIM'
+    | 'PARTNER'
+    | 'MANAGED'
+    | 'VIDEO'
+    | 'LOOKALIKE'
+    | 'ENGAGEMENT'
+    | 'DATA_SET'
+    | 'BAG_OF_ACCOUNTS'
+    | 'STUDY_RULE_AUDIENCE'
+    | 'FOX';
   description?: string;
-  customerFileSource?: 'USER_PROVIDED_ONLY' | 'PARTNER_PROVIDED_ONLY' | 'BOTH_USER_AND_PARTNER_PROVIDED';
+  customerFileSource?:
+    | 'USER_PROVIDED_ONLY'
+    | 'PARTNER_PROVIDED_ONLY'
+    | 'BOTH_USER_AND_PARTNER_PROVIDED';
 }
 
 export interface ProductCatalogRequest {
   name: string;
-  vertical?: 'commerce' | 'destinations' | 'flights' | 'home_listings' | 'hotels' | 'media' | 'offline_commerce' | 'automotive' | 'boats' | 'education' | 'events' | 'jobs' | 'motorbikes' | 'pet_supplies' | 'real_estate' | 'software_apps' | 'travel' | 'vehicles' | 'womens_apparel' | 'mens_apparel' | 'kids_apparel' | 'home_goods' | 'jewelry' | 'electronics' | 'sports' | 'beauty' | 'fitness' | 'baby_products' | 'food' | 'toys' | 'books' | 'music' | 'games' | 'outdoor' | 'generic';
+  vertical?:
+    | 'commerce'
+    | 'destinations'
+    | 'flights'
+    | 'home_listings'
+    | 'hotels'
+    | 'media'
+    | 'offline_commerce'
+    | 'automotive'
+    | 'boats'
+    | 'education'
+    | 'events'
+    | 'jobs'
+    | 'motorbikes'
+    | 'pet_supplies'
+    | 'real_estate'
+    | 'software_apps'
+    | 'travel'
+    | 'vehicles'
+    | 'womens_apparel'
+    | 'mens_apparel'
+    | 'kids_apparel'
+    | 'home_goods'
+    | 'jewelry'
+    | 'electronics'
+    | 'sports'
+    | 'beauty'
+    | 'fitness'
+    | 'baby_products'
+    | 'food'
+    | 'toys'
+    | 'books'
+    | 'music'
+    | 'games'
+    | 'outdoor'
+    | 'generic';
 }
 
 export interface ProductRequest {
@@ -182,4 +241,44 @@ export interface MetaApiRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   params?: Record<string, any>;
   data?: Record<string, any>;
-} 
+}
+
+// OAuth-specific types for better type safety
+export interface MetaOAuthTokenResponse {
+  access_token: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+export interface MetaOAuthUserInfoResponse {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+export interface MetaOAuthAdAccountsResponse {
+  data: Array<{
+    id: string;
+    name: string;
+    account_status: string;
+    currency: string;
+    timezone_name: string;
+    users?: {
+      data?: Array<{
+        role: string;
+      }>;
+    };
+  }>;
+}
+
+export interface MetaGraphApiError {
+  error: {
+    message: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+    error_user_title?: string;
+    error_user_msg?: string;
+    fbtrace_id?: string;
+  };
+}

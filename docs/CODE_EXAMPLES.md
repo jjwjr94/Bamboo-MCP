@@ -119,7 +119,6 @@ export const oauthTokens = pgTable('oauth_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   accessToken: text('access_token').notNull(),
-  refreshToken: text('refresh_token'),
   expiresAt: timestamp('expires_at'),
   scopes: text('scopes').array(),
   createdAt: timestamp('created_at').defaultNow(),
@@ -143,6 +142,39 @@ export const oauthTokens = pgTable('oauth_tokens', {
     withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
   }),
   pgPolicy('tokens_delete_own', {
+    for: 'delete',
+    to: appUser,
+    using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+  }),
+]);
+
+export const oauthRefreshTokens = pgTable('oauth_refresh_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: text('token').notNull().unique(), // SHA-256 hashed refresh token
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  clientId: text('client_id').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  // Users can only access their own refresh tokens
+  pgPolicy('refresh_tokens_select_own', {
+    for: 'select',
+    to: appUser,
+    using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+  }),
+  pgPolicy('refresh_tokens_insert_own', {
+    for: 'insert',
+    to: appUser,
+    withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+  }),
+  pgPolicy('refresh_tokens_update_own', {
+    for: 'update',
+    to: appUser,
+    using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+    withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+  }),
+  pgPolicy('refresh_tokens_delete_own', {
     for: 'delete',
     to: appUser,
     using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,

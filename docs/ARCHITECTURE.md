@@ -8,8 +8,9 @@ Bamboo MCP is a stateless, production-ready Model Context Protocol server that e
 
 ### 1. Authentication Layer
 - **OAuth 2.0 with PKCE**: Mandatory PKCE implementation for all clients
-- **JWT Security**: RS256/ES256 signing with strict validation
-- **Token Management**: Secure storage and refresh handling via Supabase
+- **JWT Security**: RS256/ES256 signing with strict validation (HS256 in development)
+- **Custom OAuth Provider**: MetaServerAuthProvider with database-backed client registration
+- **Token Management**: Refresh token rotation with breach detection and family revocation
 
 ### 2. Database Layer
 - **PostgreSQL**: Any PostgreSQL database (Supabase, AWS RDS, Google Cloud SQL, etc.)
@@ -69,10 +70,10 @@ Auth    Tokens  Tools   Validation    API Calls      Ad Operations
 - **Completed**: Proper request routing and response formatting via SDK
 - **Impact**: Modern streaming capabilities, reduced maintenance burden
 
-#### 3. **Static Resource Patterns** ⚠️ **Phase 2 Pending**
-- **Status**: Current static URIs work correctly with new registration API
-- **Next**: Migration to `ResourceTemplate` for dynamic resources planned for Phase 2
-- **Impact**: Foundation established for future scalability
+#### 3. **Dynamic Resource Patterns** ✅ **COMPLETED**
+- **Completed**: Implemented `ResourceTemplate` for dynamic ad account resources (`bamboo://ad-accounts/{accountId}`)
+- **Completed**: Migration from static URIs to parameterized resources for scalability
+- **Impact**: Scalable resource architecture enabling dynamic content discovery
 
 ### Architecture Changes Completed
 
@@ -82,10 +83,19 @@ Auth    Tokens  Tools   Validation    API Calls      Ad Operations
 3. **Transport Upgrade**: Custom HTTP → `StreamableHTTPServerTransport` ✅
 4. **Legacy Code Removal**: Removed deprecated patterns and custom handlers ✅
 
-#### Phase 2: Enhanced Capabilities 📋 **PLANNED**
-1. **Dynamic Resources**: Parameterized resources for ad accounts/campaigns
-2. **Resource Templates**: Implementation of `ResourceTemplate` for scalable URIs
-3. **Enhanced Discovery**: Improved resource and tool discovery capabilities
+#### Phase 2: Enhanced Capabilities ✅ **COMPLETED**
+1. **Dynamic Resources**: Implemented parameterized resources for ad accounts ✅
+2. **Resource Templates**: Successfully implemented `ResourceTemplate` for scalable URIs ✅
+3. **Account Management**: Added intelligent account selection and context management ✅
+4. **Database Schema**: Updated to support multi-user ad account access with composite primary keys ✅
+5. **OAuth Cleanup**: Unified to MCP SDK-based OAuth implementation ✅
+
+#### Phase 3: OAuth 2.0 Security Enhancement ✅ **COMPLETED**
+1. **Custom OAuth Provider**: Replaced ProxyOAuthServerProvider with MetaServerAuthProvider ✅
+2. **Refresh Token Flow**: Implemented token rotation with 90-day expiry ✅
+3. **Breach Detection**: Automatic token family revocation on invalid token usage ✅
+4. **Database Integration**: Added oauth_refresh_tokens table with proper indexing ✅
+5. **Code Refactoring**: Broke down large methods into focused, testable functions ✅
 
 ### Architecture Strengths to Preserve ✅
 - **Authentication**: JWT + RLS pattern is excellent and more sophisticated than typical MCP examples

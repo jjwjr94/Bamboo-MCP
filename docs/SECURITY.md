@@ -26,9 +26,10 @@ const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('b
 
 ### Token Security
 - **JWT Algorithm**: RS256/ES256 only (HS256 deprecated for production)
-- **Token Lifetime**: 24 hours maximum, configurable via JWT_EXPIRES_IN
-- **Refresh Tokens**: Secure storage with rotation on use
-- **Token Revocation**: Immediate invalidation capability
+- **Token Lifetime**: 15 minutes maximum for access tokens (configurable via JWT_EXPIRES_IN)
+- **Refresh Tokens**: SHA-256 hashed storage with automatic rotation on use
+- **Token Family Revocation**: Breach detection with automatic family invalidation
+- **Token Revocation**: Immediate invalidation capability via dedicated endpoint
 
 ## JWT Security Implementation
 
@@ -37,7 +38,7 @@ const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('b
 // JWT Configuration
 const jwtConfig = {
   algorithm: 'RS256', // or ES256
-  expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  expiresIn: process.env.JWT_EXPIRES_IN || '15m',
   issuer: process.env.BASE_URL,
   audience: 'bamboo-mcp-client'
 };
@@ -51,6 +52,69 @@ const verifyJWT = (token: string) => {
   });
 };
 ```
+
+### Refresh Token Security Implementation
+
+Following 2025 OAuth security best practices with token rotation and breach detection:
+
+```typescript
+// Refresh token generation and storage
+const generateRefreshToken = () => {
+  const refreshToken = crypto.randomBytes(64).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  
+  // Store hashed version in database
+  await db.insert(oauthRefreshTokens).values({
+    token: hashedToken,
+    userId: user.id,
+    clientId: client.client_id,
+    expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+  });
+  
+  return refreshToken; // Return raw token to client
+};
+
+// Token rotation with breach detection
+const exchangeRefreshToken = async (refreshToken: string, clientId: string) => {
+  const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  
+  const storedToken = await db.query.oauthRefreshTokens.findFirst({
+    where: and(
+      eq(oauthRefreshTokens.token, hashedToken),
+      eq(oauthRefreshTokens.clientId, clientId)
+    ),
+  });
+
+  // Breach detection: if invalid token used, revoke entire family
+  if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
+    if (storedToken) {
+      await revokeTokenFamily(storedToken.userId, clientId);
+    }
+    throw new Error('Invalid refresh token');
+  }
+
+  // Atomic token rotation in transaction
+  return await db.transaction(async (tx) => {
+    // Revoke old token
+    await tx.update(oauthRefreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(oauthRefreshTokens.id, storedToken.id));
+    
+    // Create new tokens
+    const newAccessToken = createJWT({...});
+    const newRefreshToken = generateRefreshToken();
+    
+    return { access_token: newAccessToken, refresh_token: newRefreshToken };
+  });
+};
+```
+
+**Key Security Features:**
+- **Token Hashing**: Refresh tokens stored as SHA-256 hashes
+- **Automatic Rotation**: New refresh token issued on each use
+- **Breach Detection**: Invalid token usage triggers family revocation
+- **Atomic Operations**: Database transactions prevent race conditions
+- **Short-lived Access Tokens**: Forces frequent refresh token usage
 
 ### JWT Payload Structure
 ```json

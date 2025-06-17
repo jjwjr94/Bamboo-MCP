@@ -14,4 +14,4 @@ export default defineConfig({
   entities: {
     roles: true, // Manage custom application roles
   },
-}); 
+});

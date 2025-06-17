@@ -11,8 +11,9 @@ Returns OAuth server metadata for MCP compliance.
   "issuer": "https://yourdomain.com",
   "authorization_endpoint": "https://yourdomain.com/authorize",
   "token_endpoint": "https://yourdomain.com/token",
+  "revocation_endpoint": "https://yourdomain.com/revoke",
   "response_types_supported": ["code"],
-  "grant_types_supported": ["authorization_code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
   "code_challenge_methods_supported": ["S256"],
   "scopes_supported": ["ads_management", "business_management"]
 }
@@ -42,8 +43,9 @@ Handles Facebook OAuth callback and token exchange.
 **Error Response:** 400/500 with error details
 
 ### `POST /token`
-Exchanges authorization code for access token.
+Exchanges authorization code for access token or refreshes existing tokens.
 
+#### Authorization Code Grant
 **Request Body:**
 ```json
 {
@@ -59,9 +61,46 @@ Exchanges authorization code for access token.
 {
   "access_token": "jwt_token",
   "token_type": "Bearer",
-  "expires_in": 86400
+  "expires_in": 900,
+  "refresh_token": "refresh_token_value",
+  "scope": "ads_management,business_management"
 }
 ```
+
+#### Refresh Token Grant
+**Request Body:**
+```json
+{
+  "grant_type": "refresh_token",
+  "refresh_token": "refresh_token_value",
+  "client_id": "client_identifier"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "new_jwt_token",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "refresh_token": "new_refresh_token_value",
+  "scope": "ads_management,business_management"
+}
+```
+
+### `POST /revoke`
+Revokes access or refresh tokens.
+
+**Request Body:**
+```json
+{
+  "token": "token_to_revoke",
+  "token_type_hint": "refresh_token",
+  "client_id": "client_identifier"
+}
+```
+
+**Response:** 200 OK (empty body)
 
 ## Health Check Endpoint
 

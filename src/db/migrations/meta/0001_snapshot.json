@@ -1,6 +1,6 @@
 {
-  "id": "1978d6c7-8957-4c35-be2a-e16dc7ef535d",
-  "prevId": "9ec41796-1165-4c91-95d0-5b44bd2508df",
+  "id": "b8caa806-688b-441c-afd6-a5440fe58914",
+  "prevId": "354504ec-8bbd-410a-9c39-a88f665acbe6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -11,7 +11,7 @@
         "id": {
           "name": "id",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "user_id": {
@@ -80,44 +80,39 @@
           "name": "ad_accounts_user_id_users_id_fk",
           "tableFrom": "ad_accounts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "ad_accounts_id_user_id_pk": {
+          "name": "ad_accounts_id_user_id_pk",
+          "columns": ["id", "user_id"]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {
         "ad_accounts_select_own": {
           "name": "ad_accounts_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_insert_own": {
           "name": "ad_accounts_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "ad_accounts_update_own": {
           "name": "ad_accounts_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -125,12 +120,117 @@
           "name": "ad_accounts_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"ad_accounts\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_clients": {
+      "name": "oauth_clients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_secret": {
+          "name": "client_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_name": {
+          "name": "client_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redirect_uris": {
+          "name": "redirect_uris",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_scopes": {
+          "name": "allowed_scopes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grant_types": {
+          "name": "grant_types",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"authorization_code\"}'"
+        },
+        "response_types": {
+          "name": "response_types",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"code\"}'"
+        },
+        "token_endpoint_auth_method": {
+          "name": "token_endpoint_auth_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "oauth_clients_client_id_idx": {
+          "name": "oauth_clients_client_id_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "oauth_clients_client_id_unique": {
+          "name": "oauth_clients_client_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["client_id"]
+        }
+      },
+      "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -212,44 +312,40 @@
           "name": "oauth_tokens_user_id_users_id_fk",
           "tableFrom": "oauth_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "oauth_tokens_user_id_unique": {
+          "name": "oauth_tokens_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["user_id"]
+        }
+      },
       "policies": {
         "tokens_select_own": {
           "name": "tokens_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_insert_own": {
           "name": "tokens_insert_own",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
         "tokens_update_own": {
           "name": "tokens_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         },
@@ -257,9 +353,7 @@
           "name": "tokens_delete_own",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"oauth_tokens\".\"user_id\" = current_setting('app.current_user_id')::uuid"
         }
       },
@@ -314,9 +408,7 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {
@@ -324,18 +416,14 @@
           "name": "users_select_own",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         },
         "users_update_own": {
           "name": "users_update_own",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": [
-            "app_user"
-          ],
+          "to": ["app_user"],
           "using": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid",
           "withCheck": "\"users\".\"id\" = current_setting('app.current_user_id')::uuid"
         }
@@ -347,14 +435,7 @@
   "enums": {},
   "schemas": {},
   "sequences": {},
-  "roles": {
-    "app_user": {
-      "name": "app_user",
-      "createDb": false,
-      "createRole": false,
-      "inherit": true
-    }
-  },
+  "roles": {},
   "policies": {},
   "views": {},
   "_meta": {

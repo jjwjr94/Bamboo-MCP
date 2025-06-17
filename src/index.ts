@@ -1,23 +1,18 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyExpress from '@fastify/express';
+import Fastify from 'fastify';
+import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
+import { closeDatabase, testConnection } from './db/client.js';
+import { setupMCPHttpTransport } from './mcp/http.js';
 import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
-import { testConnection, closeDatabase } from './db/client.js';
-import { 
-  handleAuthorize, 
-  handleFacebookCallback, 
-  handleTokenExchange 
-} from './auth/oauth.js';
-import { createMCPAuthRouter } from './auth/mcpOAuthSetup.js';
-import { bambooServer } from './mcp/server.js';
-import { setupMCPHttpTransport } from './mcp/http.js';
+// Removed unused imports after refactoring to use MetaServerAuthProvider
 
-// Build Fastify app 
+// Build Fastify app
 export async function build(opts = {}) {
   const app = Fastify({
-    logger: false, // Use our custom logger instead
+    logger: true, // Use our custom logger instead
     ...opts,
   });
 
@@ -35,7 +30,7 @@ export async function build(opts = {}) {
   // Health check endpoint
   app.get('/health', async (_request, reply) => {
     const dbConnected = await testConnection();
-    
+
     const healthStatus = {
       status: dbConnected ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -51,30 +46,32 @@ export async function build(opts = {}) {
     return reply.send(healthStatus);
   });
 
-  // OAuth server metadata endpoint
-  app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
-    return reply.send({
-      issuer: env.BASE_URL,
-      authorization_endpoint: `${env.BASE_URL}/authorize`,
-      token_endpoint: `${env.BASE_URL}/token`,
-      response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
-      code_challenge_methods_supported: ['S256'],
-      scopes_supported: ['ads_management', 'business_management'],
-    });
+  // Add Meta OAuth callback handler for our custom provider
+  app.get('/oauth/callback', async (request, reply) => {
+    const { code, state } = request.query as { code?: string; state?: string };
+
+    if (!code || !state) {
+      return reply.status(400).send({ error: 'Missing code or state parameter' });
+    }
+
+    const provider = createMCPOAuthProvider();
+    const result = await provider.handleCallback(code, state);
+
+    if (result.success) {
+      return reply.redirect(result.redirectUrl);
+    } else {
+      logger.error('OAuth callback failed', { error: result.error });
+      return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
+    }
   });
 
-  // OAuth routes (existing custom implementation)
-  app.get('/authorize', handleAuthorize);
-  app.get('/auth/facebook/callback', handleFacebookCallback);
-  app.post('/token', handleTokenExchange);
-
-  // MCP OAuth router (new MCP SDK implementation)
+  // MCP OAuth router (MCP SDK implementation with Facebook OAuth proxy)
+  // Mount at /oauth to avoid conflicts with our manual /register endpoint
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
 
-  // Setup MCP HTTP transport
-  setupMCPHttpTransport(app, bambooServer.getServer());
+  // Setup MCP HTTP transport (stateless pattern)
+  setupMCPHttpTransport(app);
 
   // Global error handler
   app.setErrorHandler(async (error, request, reply) => {
@@ -94,7 +91,7 @@ export async function build(opts = {}) {
   // Graceful shutdown handler
   const gracefulShutdown = async (signal: string) => {
     logger.info(`Received ${signal}, starting graceful shutdown`);
-    
+
     try {
       await app.close();
       await closeDatabase();
@@ -112,20 +109,20 @@ export async function build(opts = {}) {
   return app;
 }
 
-// Start server if this file is run directly
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const start = async () => {
     try {
       const app = await build();
-      const address = await app.listen({ 
-        port: env.PORT, 
-        host: process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost'
+      const address = await app.listen({
+        port: env.PORT,
+        host: process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost',
       });
-      
-      logger.info('Server started', { 
-        address, 
+
+      logger.info('Server started', {
+        address,
         env: env.NODE_ENV,
-        version: '0.1.0'
+        version: '0.1.0',
       });
     } catch (error) {
       logger.error('Server start failed', { error });
@@ -134,4 +131,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   };
 
   start();
-} 
+}

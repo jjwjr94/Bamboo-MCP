@@ -102,9 +102,7 @@ class Logger {
 }
 
 // Export singleton instance
-export const logger = new Logger(
-  process.env.NODE_ENV === 'development' ? 'debug' : 'info'
-);
+export const logger = new Logger(process.env.NODE_ENV === 'development' ? 'debug' : 'info');
 
 // Export class for custom instances
-export { Logger }; 
+export { Logger };

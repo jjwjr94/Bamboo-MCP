@@ -29,6 +29,7 @@ export interface AdAccount {
 
 export interface JWTPayload {
   userId: string;
+  clientId: string;
   adAccountId?: string;
   scopes: string[];
   iat: number;
@@ -109,4 +110,4 @@ export interface MetaAsset {
     dataUri: string;
     alt: string;
   };
-} 
+}

@@ -5,12 +5,7 @@ export class BambooError extends Error {
   public readonly statusCode: number;
   public readonly isOperational: boolean;
 
-  constructor(
-    message: string,
-    code: string = 'INTERNAL_ERROR',
-    statusCode: number = 500,
-    isOperational: boolean = true
-  ) {
+  constructor(message: string, code = 'INTERNAL_ERROR', statusCode = 500, isOperational = true) {
     super(message);
     this.name = 'BambooError';
     this.code = code;
@@ -23,37 +18,37 @@ export class BambooError extends Error {
 }
 
 export class AuthenticationError extends BambooError {
-  constructor(message: string = 'Authentication failed') {
+  constructor(message = 'Authentication failed') {
     super(message, 'AUTHENTICATION_ERROR', 401);
   }
 }
 
 export class AuthorizationError extends BambooError {
-  constructor(message: string = 'Insufficient permissions') {
+  constructor(message = 'Insufficient permissions') {
     super(message, 'AUTHORIZATION_ERROR', 403);
   }
 }
 
 export class ValidationError extends BambooError {
-  constructor(message: string = 'Invalid input') {
+  constructor(message = 'Invalid input') {
     super(message, 'VALIDATION_ERROR', 400);
   }
 }
 
 export class NotFoundError extends BambooError {
-  constructor(resource: string = 'Resource') {
+  constructor(resource = 'Resource') {
     super(`${resource} not found`, 'NOT_FOUND', 404);
   }
 }
 
 export class ConflictError extends BambooError {
-  constructor(message: string = 'Resource conflict') {
+  constructor(message = 'Resource conflict') {
     super(message, 'CONFLICT', 409);
   }
 }
 
 export class RateLimitError extends BambooError {
-  constructor(message: string = 'Rate limit exceeded') {
+  constructor(message = 'Rate limit exceeded') {
     super(message, 'RATE_LIMIT_EXCEEDED', 429);
   }
 }
@@ -66,7 +61,7 @@ export class MetaApiError extends BambooError {
     message: string,
     metaErrorCode?: string,
     metaErrorSubcode?: string,
-    statusCode: number = 400
+    statusCode = 400
   ) {
     super(message, 'META_API_ERROR', statusCode);
     this.metaErrorCode = metaErrorCode;
@@ -75,19 +70,19 @@ export class MetaApiError extends BambooError {
 }
 
 export class DatabaseError extends BambooError {
-  constructor(message: string = 'Database operation failed') {
+  constructor(message = 'Database operation failed') {
     super(message, 'DATABASE_ERROR', 500);
   }
 }
 
 export class TokenError extends BambooError {
-  constructor(message: string = 'Token error') {
+  constructor(message = 'Token error') {
     super(message, 'TOKEN_ERROR', 401);
   }
 }
 
 export class PKCEError extends BambooError {
-  constructor(message: string = 'PKCE validation failed') {
+  constructor(message = 'PKCE validation failed') {
     super(message, 'PKCE_ERROR', 400);
   }
 }
@@ -102,7 +97,7 @@ export interface ErrorResponse {
 
 export function createErrorResponse(
   error: Error | BambooError,
-  includeStack: boolean = false
+  includeStack = false
 ): ErrorResponse {
   const response: ErrorResponse = {
     success: false,
@@ -133,13 +128,11 @@ export function isOperationalError(error: unknown): boolean {
 }
 
 // Error handler for async functions
-export function asyncErrorHandler<T extends (...args: any[]) => Promise<any>>(
-  fn: T
-): T {
+export function asyncErrorHandler<T extends (...args: any[]) => Promise<any>>(fn: T): T {
   return ((...args: Parameters<T>) => {
     const result = fn(...args);
     return Promise.resolve(result).catch((error) => {
       throw isBambooError(error) ? error : new BambooError(error.message);
     });
   }) as T;
-} 
+}

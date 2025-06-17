@@ -1,10 +1,10 @@
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import type { JWTPayload } from '../types/index.js';
 import { env } from '../utils/env.js';
-import { JWTPayload } from '../types/index.js';
 import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
-// JWT Configuration following security best practices
+// JWT Configuration
 const jwtConfig = {
   algorithm: 'HS256' as const, // Will use RS256/ES256 in production with proper key pairs
   expiresIn: env.JWT_EXPIRES_IN,
@@ -14,15 +14,17 @@ const jwtConfig = {
 
 export interface CreateTokenOptions {
   userId: string;
+  clientId: string;
   adAccountId?: string;
   scopes: string[];
 }
 
 export function createJWT(options: CreateTokenOptions): string {
-  const { userId, adAccountId, scopes } = options;
-  
+  const { userId, clientId, adAccountId, scopes } = options;
+
   const payload = {
     userId,
+    clientId,
     ...(adAccountId && { adAccountId }),
     scopes,
     jti: generateJTI(), // Unique token identifier
@@ -38,6 +40,7 @@ export function createJWT(options: CreateTokenOptions): string {
     logger.info('JWT created', { userId, adAccountId, scopes: scopes.length });
     return token;
   } catch (error) {
+    console.log(error);
     logger.error('JWT creation failed', { userId, error });
     throw new TokenError('Failed to create JWT token');
   }
@@ -63,7 +66,7 @@ export function verifyJWT(token: string): JWTPayload {
       logger.warn('JWT verification failed', { error: error.message });
       throw new TokenError(`Invalid JWT: ${error.message}`);
     }
-    
+
     if (error instanceof jwt.TokenExpiredError) {
       logger.warn('JWT expired', { expiredAt: error.expiredAt });
       throw new TokenError('JWT token has expired');
@@ -121,12 +124,12 @@ export function getTokenExpiration(token: string): Date | null {
 }
 
 // Helper function to check if token is close to expiring
-export function isTokenExpiringSoon(token: string, minutesThreshold: number = 5): boolean {
+export function isTokenExpiringSoon(token: string, minutesThreshold = 5): boolean {
   const expiration = getTokenExpiration(token);
   if (!expiration) {
     return true; // Treat unknown expiration as expiring
   }
-  
+
   const thresholdTime = new Date(Date.now() + minutesThreshold * 60 * 1000);
   return expiration <= thresholdTime;
-} 
+}

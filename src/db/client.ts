@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -8,7 +8,7 @@ import * as schema from './schema.js';
 
 // Direct PostgreSQL connection with Drizzle ORM
 // prepare: false is required for Supabase connection pooling
-const client = postgres(env.DATABASE_URL, { 
+const client = postgres(env.DATABASE_URL, {
   prepare: false,
   max: 10, // Connection pool size
   onnotice: () => {}, // Suppress notices
@@ -26,7 +26,7 @@ export const withUserContext = async <T>(
     // SET LOCAL is transaction-scoped and safe for concurrent requests
     await tx.execute(sql`SET LOCAL app.current_user_id = ${userId}`);
     logger.dbOperation('SET_USER_CONTEXT', 'session', true, 0);
-    
+
     // Execute the user operation within the scoped transaction
     return await operation(tx);
   });
@@ -52,4 +52,4 @@ export const closeDatabase = async (): Promise<void> => {
   } catch (error) {
     logger.error('Error closing database connection', { error });
   }
-}; 
+};

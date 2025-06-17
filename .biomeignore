@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+.build/
+
+# Database files
+*.db
+*.sqlite
+
+# Generated files
+src/db/migrations/**/*.sql
+*.snap
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Cache directories
+.cache/
+.temp/
+
+# Documentation that might have different formatting preferences  
+docs/gh-example.txt 
