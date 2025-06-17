@@ -23,6 +23,56 @@ Based on current best practices:
 - **Simplified Setup**: Direct PostgreSQL connection, no additional client libraries required
 - **Render Deployment**: Enhanced environment variable security, health checks
 
+## Critical Refactoring Required (2025 MCP SDK Best Practices)
+
+### Current Non-Idiomatic Patterns Identified
+
+Based on research of 2025 MCP TypeScript SDK best practices, the current implementation has several anti-patterns that need immediate refactoring:
+
+#### 1. **Wrong Server Class Usage** ❌
+- **Current**: Using `Server` from `@modelcontextprotocol/sdk/server/index.js`
+- **Should Be**: Using `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`
+- **Issue**: `McpServer` is the official 2025 primary abstraction, `Server` is deprecated/generic
+
+#### 2. **Manual Request Handlers Instead of High-Level Registration** ❌
+- **Current**: Using low-level `setRequestHandler(ListToolsRequestSchema, ...)` etc.
+- **Should Be**: Using `server.registerTool()`, `server.registerResource()`, `server.registerPrompt()`
+- **Issue**: This is the biggest anti-pattern - SDK provides high-level methods that handle protocol details automatically
+
+#### 3. **Custom Schema Validation** ❌
+- **Current**: Custom `McpTool`/`McpResource` interfaces with manual Zod validation
+- **Should Be**: Let SDK handle schema validation through registration methods
+- **Issue**: Duplicating work that the SDK does automatically
+
+#### 4. **Legacy HTTP Transport** ❌
+- **Current**: Custom `handleMcpRequest` function for HTTP compatibility
+- **Should Be**: Using `StreamableHTTPServerTransport` from SDK
+- **Issue**: Custom legacy code that duplicates SDK functionality
+
+#### 5. **Static Resource Patterns** ⚠️
+- **Current**: Static resource URIs (`bamboo://prompts/system`)
+- **Should Be**: Using `ResourceTemplate` for dynamic resources
+- **Issue**: Not leveraging SDK's parameterized resource capabilities
+
+### Recommendations Summary
+
+#### ✅ **Keep Current Approach**
+- **Authentication Pattern**: Current JWT Bearer token + RLS approach is excellent and more sophisticated than typical MCP examples
+- **Database Architecture**: Current RLS implementation is production-ready
+
+#### 🔧 **Required Refactoring**
+1. **Replace `Server` → `McpServer`** and use high-level registration methods
+2. **Implement `StreamableHTTPServerTransport`** (following existing `docs/CODE_EXAMPLES.md`)
+3. **Remove legacy `handleMcpRequest` function** completely
+4. **Migrate to `ResourceTemplate`** for dynamic resources (ad accounts, campaigns)
+5. **Simplify response handling** - let SDK handle serialization
+
+#### 📋 **Migration Priority**
+1. **High**: Server class and registration methods (breaks protocol compliance)
+2. **High**: StreamableHTTP transport implementation
+3. **Medium**: ResourceTemplate migration for scalability
+4. **Low**: Legacy compatibility removal
+
 ---
 
 ## Dependencies
@@ -224,6 +274,104 @@ The MCP server provides complete coverage of the Facebook Business SDK, supporti
 - Migration Management: RLS policies versioned and tracked with schema changes
 - Connection Pooling: Uses PostgreSQL connection pooling with `prepare: false` for optimal performance
 - Database Agnostic: Works with any PostgreSQL database (Supabase, AWS RDS, Google Cloud SQL, etc.)
+
+## Implementation Status
+
+### ✅ Completed Components
+
+#### Core Infrastructure (2025-06-16)
+- **MCP Server Foundation**: Fully implemented secure MCP server with JSON-RPC 2.0 compliance
+- **Authentication System**: Complete OAuth 2.0 + PKCE flow with JWT token management
+- **Database Layer**: Drizzle ORM with PostgreSQL, user context management, connection pooling
+- **Security Implementation**: Parameter validation with Zod schemas, robust error handling
+- **Resource Handlers**: System prompts and best practices accessible via MCP protocol
+- **HTTP Integration**: Fastify server with secure `/mcp` endpoint and proper CORS configuration
+
+#### Security Features
+- **Input Validation**: Zod schema validation for all MCP tool parameters
+- **Error Handling**: Type-safe error handling with `instanceof` checks (not fragile `constructor.name`)
+- **Authentication**: JWT verification with proper token extraction and validation
+- **Authorization**: User context isolation with session-based RLS policies
+
+#### Testing & Quality Assurance
+- **TypeScript Compilation**: Passes without errors
+- **Runtime Testing**: Server starts successfully, health checks pass
+- **Error Response Testing**: Proper JSON-RPC error responses for auth failures
+- **Code Review**: Comprehensive security and robustness review completed
+
+### ✅ **MCP SDK Refactoring Completed**
+
+The server has been successfully refactored to use 2025 MCP SDK best practices:
+
+#### 1. **Critical Server Refactoring** ✅ **COMPLETED**
+- [x] **Migrate `Server` → `McpServer`**: Updated `src/mcp/server.ts` to use `McpServer` class
+- [x] **Replace `setRequestHandler` → `registerTool/Resource`**: Converted manual handlers to high-level registration
+- [x] **Implement `StreamableHTTPServerTransport`**: Created `src/mcp/http.ts` with modern transport
+- [x] **Remove Legacy Compatibility**: Deleted `handleMcpRequest` function entirely
+- [x] **Update HTTP Integration**: Modified `src/index.ts` to use new transport
+
+#### 2. **Resource Pattern Migration** ⚠️ **Phase 2 Planned**
+- [x] **Static Resource Registration**: Migrated to modern `server.resource()` API
+- [ ] **Static → ResourceTemplate**: Convert appropriate resources to use `ResourceTemplate`
+- [ ] **Dynamic Resource URIs**: Implement parameterized resources like `bamboo://ad-accounts/{accountId}`
+- [ ] **Resource Discovery**: Add proper resource listing with templates
+
+#### 3. **Meta Ads SDK Integration** (Sprint 2 - After Refactoring)
+- [ ] **`src/tools/metaTools.ts`**: Core Meta SDK integration module (using new patterns)
+- [ ] **`get_ad_accounts`**: Discover and list user's ad accounts with permissions
+- [ ] **`select_ad_account`**: Multi-account context management
+- [ ] **Account Manager**: Session persistence for selected account
+
+#### 2. Core Read Operations
+- [ ] **`get_campaigns`**: Retrieve existing campaigns
+- [ ] **`get_adsets`**: Retrieve ad sets within campaigns  
+- [ ] **`get_ads`**: Retrieve ads within ad sets
+- [ ] **`get_uploaded_assets`**: List available media assets
+
+#### 3. Core Write Operations  
+- [ ] **`create_campaign`**: Create new advertising campaigns
+- [ ] **`create_adset`**: Create ad sets with targeting and budgets
+- [ ] **`create_ad_creative`**: Create ad creatives with assets
+- [ ] **`create_ad`**: Create final ads linking creatives to ad sets
+
+#### 4. Performance Insights
+- [ ] **`get_campaign_insights`**: Campaign performance metrics
+- [ ] **`get_adset_insights`**: Ad set performance data
+- [ ] **`get_ad_insights`**: Individual ad performance metrics
+
+#### 5. Extended Features
+- [ ] **Asset Management**: Upload and management tools
+- [ ] **Audience Management**: Custom audience creation and management
+- [ ] **Page Management**: Facebook Page integration
+- [ ] **Commerce Tools**: Product catalog management
+
+### 🎯 Success Criteria for Refactoring Sprint ✅ **ACHIEVED**
+1. **MCP Compliance**: ✅ Server uses `McpServer` with proper `registerTool`/`registerResource` patterns
+2. **StreamableHTTP**: ✅ Implements modern `StreamableHTTPServerTransport` (not legacy HTTP)
+3. **Protocol Compliance**: ✅ Built with idiomatic SDK usage, ready for MCP Inspector validation
+4. **Authentication Preserved**: ✅ Current excellent JWT + RLS authentication remains intact
+5. **No Breaking Changes**: ✅ External API behavior remains the same for existing clients
+
+### 🎯 Success Criteria for Meta Integration Sprint (After Refactoring)
+1. **Meta SDK Integration**: Successfully authenticate and make API calls to Meta Graph API
+2. **Account Discovery**: Users can see and select their ad accounts  
+3. **Basic Campaign Visibility**: Users can view existing campaigns and their structure
+4. **Account Context**: Selected account persists throughout user session
+
+### 📋 Implementation Notes
+
+#### Refactoring Phase
+- **Breaking Changes**: Server class migration requires careful testing to maintain compatibility
+- **Authentication Preservation**: JWT + RLS patterns should be preserved exactly as-is
+- **Transport Migration**: StreamableHTTP must handle authentication metadata properly
+- **Resource Migration**: Only migrate resources that benefit from parameterization
+- **Testing Strategy**: Each refactored component must be validated with MCP Inspector
+
+#### Meta Integration Phase (Post-Refactoring)
+- **Security Priority**: All Meta tools will inherit the existing parameter validation and auth framework
+- **Error Handling**: Meta API errors will be properly wrapped in `MetaApiError` class
+- **Type Safety**: Full TypeScript support using existing `src/types/meta.ts` definitions
+- **SDK Patterns**: All tools will use the new `registerTool` pattern, not manual handlers
 
 ## Additional Documentation Files
 

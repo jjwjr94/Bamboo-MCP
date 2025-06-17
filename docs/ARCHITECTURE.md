@@ -19,8 +19,9 @@ Bamboo MCP is a stateless, production-ready Model Context Protocol server that e
 
 ### 3. MCP Protocol Layer
 - **Server Implementation**: @modelcontextprotocol/sdk v1.12.3
-- **Tool Registry**: Six core Meta Ads management tools
-- **Resource Management**: Static prompt resources from filesystem
+- **✅ MODERNIZED**: Now uses 2025 best practices with McpServer, registerTool, and StreamableHTTPServerTransport
+- **Tool Registry**: Core Meta Ads management tools with modern registration API
+- **Resource Management**: Static prompt resources with SDK-managed registration
 
 ### 4. Meta Ads Integration
 - **Facebook Business SDK**: v22.0.3 with TypeScript support
@@ -52,6 +53,44 @@ Auth    Tokens  Tools   Validation    API Calls      Ad Operations
 - **Fail-secure Defaults**: Restrictive policies by default
 - **Migration Versioning**: Policies tracked with schema changes
 - **Database Agnostic**: Works with any PostgreSQL database
+
+## Architecture Improvements Completed
+
+### MCP SDK Modernization ✅ **COMPLETED**
+
+#### 1. **Idiomatic MCP Implementation** ✅
+- **Completed**: Migrated from deprecated `Server` class to modern `McpServer`
+- **Completed**: Using high-level `registerTool`/`registerResource` instead of `setRequestHandler`
+- **Completed**: SDK now handles schema validation automatically
+- **Impact**: Full compliance with 2025 MCP SDK best practices, improved maintainability
+
+#### 2. **Modern HTTP Transport** ✅
+- **Completed**: Implemented `StreamableHTTPServerTransport` replacing custom `handleMcpRequest`
+- **Completed**: Proper request routing and response formatting via SDK
+- **Impact**: Modern streaming capabilities, reduced maintenance burden
+
+#### 3. **Static Resource Patterns** ⚠️ **Phase 2 Pending**
+- **Status**: Current static URIs work correctly with new registration API
+- **Next**: Migration to `ResourceTemplate` for dynamic resources planned for Phase 2
+- **Impact**: Foundation established for future scalability
+
+### Architecture Changes Completed
+
+#### Phase 1: MCP SDK Modernization ✅ **COMPLETED**
+1. **Server Class Migration**: `Server` → `McpServer` ✅
+2. **Registration Pattern**: `setRequestHandler` → `registerTool`/`registerResource` ✅
+3. **Transport Upgrade**: Custom HTTP → `StreamableHTTPServerTransport` ✅
+4. **Legacy Code Removal**: Removed deprecated patterns and custom handlers ✅
+
+#### Phase 2: Enhanced Capabilities 📋 **PLANNED**
+1. **Dynamic Resources**: Parameterized resources for ad accounts/campaigns
+2. **Resource Templates**: Implementation of `ResourceTemplate` for scalable URIs
+3. **Enhanced Discovery**: Improved resource and tool discovery capabilities
+
+### Architecture Strengths to Preserve ✅
+- **Authentication**: JWT + RLS pattern is excellent and more sophisticated than typical MCP examples
+- **Database**: Current RLS implementation is production-ready
+- **Security**: Multi-layer security architecture is well-designed
 
 ## Deployment Architecture
 

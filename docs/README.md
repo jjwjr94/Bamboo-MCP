@@ -2,6 +2,19 @@
 
 **Implementation documentation for Bamboo MCP - An MCP server for Meta Ads management.**
 
+## ✅ **MCP SDK Modernization Complete**
+
+**The MCP server has been successfully refactored to use 2025 MCP SDK best practices.**
+
+- **Completed**: Migration to `McpServer` with `registerTool`/`registerResource` methods
+- **Completed**: Modern `StreamableHTTPServerTransport` implementation
+- **Preserved**: Robust JWT + RLS authentication architecture
+- **Status**: Ready for Meta Ads integration development
+
+📋 **See**: [MCP Refactoring Plan](MCP_REFACTORING_PLAN.md) for implementation details
+
+---
+
 ## Documentation Overview
 
 This documentation covers implementation, deployment, and maintenance of Bamboo MCP.
@@ -10,6 +23,7 @@ This documentation covers implementation, deployment, and maintenance of Bamboo 
 
 | Document | Description | Key Topics |
 |----------|-------------|------------|
+| **[🚨 MCP Refactoring Plan](MCP_REFACTORING_PLAN.md)** | **URGENT: SDK Migration Guide** | **Anti-patterns, refactoring steps, timeline** |
 | **[Implementation Plan](IMPLEMENTATION_PLAN.md)** | Master implementation guide | Project overview, dependencies, structure |
 | **[Architecture](ARCHITECTURE.md)** | System design and architecture | Components, data flow, security layers |
 | **[Code Examples](CODE_EXAMPLES.md)** | Complete code implementations | TypeScript examples, configurations |
@@ -265,6 +279,85 @@ Claude ←→ Render.com ←→ Supabase ←→ Meta Ads API
    - Interactive testing: `pnpm test:ui`
    - MCP debugging: `pnpm mcp:inspect` (MCP Inspector)
 5. **Type Checking**: `pnpm lint`
+
+### Testing with MCP Inspector
+
+The MCP Inspector is a web-based tool for testing and debugging MCP servers interactively.
+
+#### Prerequisites for Inspector Testing
+1. **User Account Required**: You must have at least one user in your database for development mode authentication. Run the OAuth flow once by:
+   ```bash
+   pnpm dev  # Start the server
+   # Visit http://localhost:3000/authorize?client_id=test&redirect_uri=http://localhost:3000&code_challenge=test&code_challenge_method=S256
+   # Complete the Facebook OAuth flow
+   ```
+
+2. **Development Environment**: The server must be running in development mode (`NODE_ENV=development`) for automatic test user authentication.
+
+#### Running the Inspector
+
+**Option 1: HTTP Transport (Recommended)**
+```bash
+# Terminal 1: Start the main HTTP server
+pnpm dev
+
+# Terminal 2: Connect inspector via HTTP
+pnpm mcp:inspect:http
+```
+This connects the inspector to the existing HTTP server at `http://localhost:3000/mcp`. This approach avoids stdio issues and provides cleaner debugging.
+
+**Option 2: Stdio Transport**
+```bash
+pnpm mcp:inspect:stdio
+```
+This uses the included `mcp-inspector.config.json` to automatically start both the server and inspector using stdio communication.
+
+**Option 3: Manual Two-Terminal Setup**
+**Terminal 1: Start MCP Server (stdio mode)**
+```bash
+pnpm mcp:server:stdio
+```
+This starts the MCP server in stdio mode, listening for inspector connections.
+
+**Terminal 2: Launch MCP Inspector**
+```bash
+pnpm mcp:inspect
+```
+This opens the MCP Inspector web interface that connects to your server.
+
+#### Using the Inspector
+1. **List Available Resources**: Click "List Resources" to see all available MCP resources
+2. **Read Resources**: 
+   - Select a resource URI (e.g., `bamboo://prompts/system`, `bamboo://prompts/best-practices`)
+   - Click "Read Resource" to fetch the content
+3. **List Available Tools**: Click "List Tools" to see all registered MCP tools  
+4. **Test Tools**: 
+   - Select a tool from the dropdown (e.g., `get_ad_accounts`, `get_campaigns`)
+   - Fill in any required parameters
+   - Click "Call Tool" to execute
+5. **Review Results**: Resource content and tool responses appear in the response panel
+6. **Authentication**: In development mode, the server automatically uses the first user from your database - no manual token required
+
+#### Available Resources and Tools for Testing
+
+**Resources** (data/context access):
+- `bamboo://prompts/system`: System prompt for the AI agent (text/plain)
+- `bamboo://prompts/best-practices`: Meta Ads best practices document (text/markdown)
+
+**Tools** (executable actions):
+- `get_ad_accounts`: Lists user's ad accounts (no parameters)
+- `get_campaigns`: Lists campaigns (requires `adAccountId` parameter)
+
+#### Troubleshooting Inspector
+- **"No user found" error**: Complete the OAuth flow once to create a test user
+- **HTTP connection issues**: Ensure the main server is running (`pnpm dev`) before using HTTP transport
+- **Port conflicts**: The HTTP approach uses port 3000 - ensure it's available
+- **JSON parsing errors with stdio**: Use HTTP transport (`pnpm mcp:inspect:http`) instead of stdio
+- **Connection issues with stdio**: Ensure the stdio server is running in Terminal 1 (manual setup only)
+- **Environment variable errors**: Ensure your `.env` file exists and contains required variables
+- **Tool errors**: Check server logs for detailed error information  
+- **Authentication failures**: Verify `NODE_ENV=development` is set
+- **Database connection issues**: Verify `DATABASE_URL` is correctly configured in `.env`
 
 ### Production Deployment
 1. **GitHub Integration**: Push to connected repository

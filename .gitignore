@@ -186,3 +186,5 @@ dump.rdb
 # PostgreSQL
 *.sql.backup
 
+# Repomix
+*repomix*
