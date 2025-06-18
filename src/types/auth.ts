@@ -17,4 +17,5 @@ export interface SessionData {
   originalState?: string; // The state received from the client
   clientCodeChallenge?: string;
   clientCodeChallengeMethod?: string;
+  grantedScopes?: string[]; // The scopes that were granted during authorization
 }

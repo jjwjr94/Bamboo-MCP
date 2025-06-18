@@ -26,8 +26,9 @@ export const withUserContext = async <T>(
   operation: (tx: DbTransaction) => Promise<T>
 ): Promise<T> => {
   return db.transaction(async (tx) => {
-    // SET LOCAL is transaction-scoped and safe for concurrent requests
-    await tx.execute(sql`SET LOCAL app.current_user_id = ${userId}`);
+    // Use set_config() instead of SET LOCAL for custom variables
+    // This works in both standard PostgreSQL and Supabase
+    await tx.execute(sql`SELECT set_config('app.current_user_id', ${userId}, true)`);
     logger.dbOperation('SET_USER_CONTEXT', 'session', true, 0);
 
     // Execute the user operation within the scoped transaction

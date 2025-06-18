@@ -156,7 +156,7 @@ async function handleMCPRequest(
 
 export function setupMCPHttpTransport(fastify: FastifyInstance): void {
   fastify.post(
-    '/mcp',
+    '/',
     {
       // Tell Fastify we'll handle the response manually
       config: {
@@ -202,7 +202,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
   );
 
   // Method not allowed for MCP endpoint
-  fastify.get('/mcp', async (_request, reply) => {
+  fastify.get('/', async (_request, reply) => {
     return reply.status(405).send({
       jsonrpc: '2.0',
       error: {
@@ -213,7 +213,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
     });
   });
 
-  fastify.delete('/mcp', async (_request, reply) => {
+  fastify.delete('/', async (_request, reply) => {
     return reply.status(405).send({
       jsonrpc: '2.0',
       error: {

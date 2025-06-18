@@ -94,15 +94,40 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     params: AuthorizationParams,
     reply: FastifyReply
   ): Promise<void> {
-    logger.info('Starting OAuth authorization', { clientId: client.client_id });
+    logger.info('Starting OAuth authorization', {
+      clientId: client.client_id,
+      requestedScopes: params.scopes,
+    });
 
     try {
+      // Validate requested scopes against client's allowed scopes
+      const requestedScopes = params.scopes || env.FACEBOOK_OAUTH_SCOPES.split(',');
+      const clientAllowedScopes = client.scope?.split(' ') || [];
+      const serverSupportedScopes = env.FACEBOOK_OAUTH_SCOPES.split(',');
+
+      // Find intersection of requested, allowed, and supported scopes
+      const grantedScopes = requestedScopes.filter(
+        (scope) => clientAllowedScopes.includes(scope) && serverSupportedScopes.includes(scope)
+      );
+
+      if (grantedScopes.length === 0) {
+        throw new Error(
+          `No valid scopes requested. Client allowed: ${clientAllowedScopes.join(', ')}, Requested: ${requestedScopes.join(', ')}`
+        );
+      }
+
+      logger.info('Scope validation passed', {
+        requested: requestedScopes,
+        granted: grantedScopes,
+        clientId: client.client_id,
+      });
+
       const redirectUri = client.redirect_uris[0] as string;
 
       // Generate state parameter
       const state = crypto.randomBytes(32).toString('hex');
 
-      // Store session data
+      // Store session data including the granted scopes
       const sessionData: SessionData = {
         clientId: client.client_id,
         state: state,
@@ -110,16 +135,17 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         originalState: params.state as string,
         clientCodeChallenge: params.codeChallenge as string,
         clientCodeChallengeMethod: 'S256',
+        grantedScopes: grantedScopes, // Store the granted scopes for later use
       };
 
       this.sessionManager.storeSessionData(state, sessionData);
 
-      // Redirect to Meta OAuth
+      // Redirect to Meta OAuth with the granted scopes
       const metaAuthUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth');
       metaAuthUrl.searchParams.append('client_id', env.FACEBOOK_APP_ID);
       metaAuthUrl.searchParams.append('redirect_uri', env.FACEBOOK_CALLBACK_URL);
       metaAuthUrl.searchParams.append('state', state);
-      metaAuthUrl.searchParams.append('scope', env.FACEBOOK_OAUTH_SCOPES);
+      metaAuthUrl.searchParams.append('scope', grantedScopes.join(','));
       metaAuthUrl.searchParams.append('response_type', 'code');
 
       reply.redirect(metaAuthUrl.toString());
@@ -160,7 +186,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         this.dbService.storeMetaToken(
           user.id,
           accessToken,
-          env.FACEBOOK_OAUTH_SCOPES.split(','),
+          sessionData.grantedScopes || env.FACEBOOK_OAUTH_SCOPES.split(','),
           expiresIn
         ),
         MetaApiService.syncUserAdAccounts(user.id, accessToken),
@@ -170,7 +196,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       const jwt = createJWT({
         userId: user.id,
         clientId: sessionData.clientId,
-        scopes: env.FACEBOOK_OAUTH_SCOPES.split(','),
+        scopes: sessionData.grantedScopes || env.FACEBOOK_OAUTH_SCOPES.split(','),
       });
 
       const tempAuthCode = crypto.randomBytes(32).toString('hex');
