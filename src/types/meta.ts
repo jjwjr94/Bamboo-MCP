@@ -259,15 +259,16 @@ export interface MetaOAuthAdAccountsResponse {
   data: Array<{
     id: string;
     name: string;
-    account_status: string;
+    account_status: string | number;
     currency: string;
     timezone_name: string;
-    users?: {
-      data?: Array<{
-        role: string;
-      }>;
-    };
   }>;
+  paging?: {
+    cursors: {
+      after: string;
+    };
+    next?: string;
+  };
 }
 
 export interface MetaGraphApiError {

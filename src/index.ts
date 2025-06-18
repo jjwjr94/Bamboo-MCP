@@ -1,6 +1,10 @@
 import 'dotenv/config';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import fastifyExpress from '@fastify/express';
+import helmet from '@fastify/helmet';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, testConnection } from './db/client.js';
@@ -9,6 +13,10 @@ import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
 // Removed unused imports after refactoring to use MetaServerAuthProvider
 
+// ES module equivalent of __dirname (2025 standard)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 // Build Fastify app
 export async function build(opts = {}) {
   const app = Fastify({
@@ -16,8 +24,36 @@ export async function build(opts = {}) {
     ...opts,
   });
 
+  // Security headers first (2025 best practice)
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Disable if serving to iframes
+  });
+
   // Register Express compatibility layer
   await app.register(fastifyExpress);
+
+  // Register static file serving
+  await app.register(fastifyStatic, {
+    root: join(__dirname, '../public'),
+    prefix: '/',
+    decorateReply: false, // 2025 best practice for ESM/TypeScript
+    maxAge: process.env.NODE_ENV === 'production' ? '1y' : '1h',
+    setHeaders: (res, _pathName) => {
+      // Additional security headers for static files
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (process.env.NODE_ENV === 'production') {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  });
 
   // Register CORS
   app.register(cors, {

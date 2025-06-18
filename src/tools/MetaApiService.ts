@@ -115,49 +115,60 @@ export class MetaApiService {
    * @param accessToken The Meta access token
    */
   public static async syncUserAdAccounts(userId: string, accessToken: string): Promise<void> {
+    let nextUrl: string | undefined =
+      `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name&limit=100`;
+
     try {
-      const adAccountsResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name,users{role}`
-      );
+      while (nextUrl) {
+        const adAccountsResponse = await fetch(nextUrl);
 
-      if (!adAccountsResponse.ok) {
-        const errorData = (await adAccountsResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        logger.warn('Failed to fetch ad accounts during auth', {
-          userId,
-          status: adAccountsResponse.status,
-          error: errorData.error?.message,
-        });
-        return; // Non-critical error, continue the flow
-      }
-
-      const adAccountsData = (await adAccountsResponse.json()) as MetaOAuthAdAccountsResponse;
-      const accounts = adAccountsData.data || [];
-
-      for (const account of accounts) {
-        const permissions = account.users?.data?.[0]?.role
-          ? [account.users.data[0].role]
-          : ['VIEWER'];
-        await db
-          .insert(adAccounts)
-          .values({
-            id: account.id,
-            userId: userId,
-            name: account.name,
-            status: account.account_status,
-            currency: account.currency,
-            timezone: account.timezone_name,
-            permissions,
-          })
-          .onConflictDoUpdate({
-            target: [adAccounts.id, adAccounts.userId],
-            set: {
-              name: account.name,
-              status: account.account_status,
-              currency: account.currency,
-              timezone: account.timezone_name,
-              permissions,
-            },
+        if (!adAccountsResponse.ok) {
+          const errorData = (await adAccountsResponse
+            .json()
+            .catch(() => ({}))) as MetaGraphApiError;
+          logger.warn('Failed to fetch ad accounts page during auth', {
+            userId,
+            status: adAccountsResponse.status,
+            error: errorData.error?.message,
           });
+          return; // Stop sync on page failure
+        }
+
+        const adAccountsData = (await adAccountsResponse.json()) as MetaOAuthAdAccountsResponse;
+        const accounts = adAccountsData.data || [];
+
+        if (accounts.length > 0) {
+          // Process accounts in batches for better performance
+          for (const account of accounts) {
+            // Set default permissions since roles are not fetched during OAuth sync
+            // Actual permissions will be determined when accounts are accessed via getAdAccounts
+            const permissions = ['UNKNOWN'];
+            await db
+              .insert(adAccounts)
+              .values({
+                id: account.id,
+                userId: userId,
+                name: account.name,
+                status: String(account.account_status), // Cast to string for consistency
+                currency: account.currency,
+                timezone: account.timezone_name,
+                permissions,
+              })
+              .onConflictDoUpdate({
+                target: [adAccounts.id, adAccounts.userId],
+                set: {
+                  name: account.name,
+                  status: String(account.account_status), // Cast to string for consistency
+                  currency: account.currency,
+                  timezone: account.timezone_name,
+                  permissions,
+                },
+              });
+          }
+        }
+
+        // Check for next page
+        nextUrl = adAccountsData.paging?.next;
       }
     } catch (error) {
       logger.warn('Ad account sync failed during auth', {
