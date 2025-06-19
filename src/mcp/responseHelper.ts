@@ -1,4 +1,5 @@
 import type { CallToolResult, TextContent } from '@modelcontextprotocol/sdk/types.js';
+import type { Sanitized } from '../types/utils.js';
 import { removeUnderscoreProperties } from '../utils/objectUtils.js';
 
 /**
@@ -10,12 +11,12 @@ import { removeUnderscoreProperties } from '../utils/objectUtils.js';
  *
  * @param data - The successful result payload as an object
  * @param description - Optional description for the response's metadata
- * @returns A sanitized CallToolResult object
+ * @returns A sanitized CallToolResult object with type-safe structured content
  */
 export function createMcpSuccessResult<T>(
   data: T,
   description?: string
-): CallToolResult & { structuredContent: T } {
+): CallToolResult & { structuredContent: Sanitized<T> } {
   // Sanitize the data to remove internal properties (e.g., _api with access tokens)
   const sanitizedData = removeUnderscoreProperties(data);
 
@@ -28,7 +29,7 @@ export function createMcpSuccessResult<T>(
     content: [textContent],
     structuredContent: sanitizedData,
     isError: false,
-  } as CallToolResult & { structuredContent: T };
+  } as CallToolResult & { structuredContent: Sanitized<T> };
 
   if (description) {
     result._meta = {

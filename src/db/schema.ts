@@ -75,6 +75,9 @@ export const oauthTempAuthCodes = pgTable(
   (table) => [index('oauth_temp_auth_codes_expires_at_idx').on(table.expiresAt)]
 );
 
+// This table stores the long-lived Meta access token for a user.
+// The unique constraint on userId enforces a one-to-one relationship, meaning
+// each user has only one Meta token record, which is updated on re-authentication.
 export const oauthTokens = pgTable(
   'oauth_tokens',
   {

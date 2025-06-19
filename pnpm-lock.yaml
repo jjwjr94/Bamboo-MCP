@@ -21,8 +21,8 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0
       '@modelcontextprotocol/sdk':
-        specifier: https://github.com/modelcontextprotocol/typescript-sdk
-        version: https://codeload.github.com/modelcontextprotocol/typescript-sdk/tar.gz/2e119aaca2ee33ba57002e6a1e95500959b5cb2a
+        specifier: 1.13.0
+        version: 1.13.0
       cockatiel:
         specifier: ^3.2.1
         version: 3.2.1
@@ -517,9 +517,8 @@ packages:
     resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
     engines: {node: '>=8'}
 
-  '@modelcontextprotocol/sdk@https://codeload.github.com/modelcontextprotocol/typescript-sdk/tar.gz/2e119aaca2ee33ba57002e6a1e95500959b5cb2a':
-    resolution: {tarball: https://codeload.github.com/modelcontextprotocol/typescript-sdk/tar.gz/2e119aaca2ee33ba57002e6a1e95500959b5cb2a}
-    version: 1.12.3
+  '@modelcontextprotocol/sdk@1.13.0':
+    resolution: {integrity: sha512-P5FZsXU0kY881F6Hbk9GhsYx02/KgWK1DYf7/tyE/1lcFKhDYPQR9iYjhQXJn+Sg6hQleMo3DB7h7+p4wgp2Lw==}
     engines: {node: '>=18'}
 
   '@noble/hashes@1.8.0':
@@ -2295,7 +2294,7 @@ snapshots:
 
   '@lukeed/ms@2.0.2': {}
 
-  '@modelcontextprotocol/sdk@https://codeload.github.com/modelcontextprotocol/typescript-sdk/tar.gz/2e119aaca2ee33ba57002e6a1e95500959b5cb2a':
+  '@modelcontextprotocol/sdk@1.13.0':
     dependencies:
       ajv: 6.12.6
       content-type: 1.0.5

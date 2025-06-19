@@ -286,14 +286,14 @@ Claude ←→ Render.com ←→ Supabase ←→ Meta Ads API
 The MCP Inspector is a web-based tool for testing and debugging MCP servers interactively.
 
 #### Prerequisites for Inspector Testing
-1. **User Account Required**: You must have at least one user in your database for development mode authentication. Run the OAuth flow once by:
+1. **User Account Required**: You must have a valid user account with OAuth tokens in your database. Complete the OAuth flow by:
    ```bash
    pnpm dev  # Start the server
    # Visit http://localhost:3000/authorize?client_id=test&redirect_uri=http://localhost:3000&code_challenge=test&code_challenge_method=S256
-   # Complete the Facebook OAuth flow
+   # Complete the Facebook OAuth flow to create user and store tokens
    ```
 
-2. **Development Environment**: The server must be running in development mode (`NODE_ENV=development`) for automatic test user authentication.
+2. **Valid JWT Token**: All MCP requests require proper JWT authentication. The server enforces security in all environments.
 
 #### Running the Inspector
 
@@ -337,7 +337,7 @@ This opens the MCP Inspector web interface that connects to your server.
    - Fill in any required parameters
    - Click "Call Tool" to execute
 5. **Review Results**: Resource content and tool responses appear in the response panel
-6. **Authentication**: In development mode, the server automatically uses the first user from your database - no manual token required
+6. **Authentication**: All requests require valid JWT tokens obtained through the OAuth flow. Use proper authentication headers for all MCP requests
 
 #### Available Resources and Tools for Testing
 
@@ -357,7 +357,7 @@ This opens the MCP Inspector web interface that connects to your server.
 - **Connection issues with stdio**: Ensure the stdio server is running in Terminal 1 (manual setup only)
 - **Environment variable errors**: Ensure your `.env` file exists and contains required variables
 - **Tool errors**: Check server logs for detailed error information  
-- **Authentication failures**: Verify `NODE_ENV=development` is set
+- **Authentication failures**: Ensure valid JWT tokens are provided in Authorization headers
 - **Database connection issues**: Verify `DATABASE_URL` is correctly configured in `.env`
 
 ### Production Deployment

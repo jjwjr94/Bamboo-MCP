@@ -1,7 +1,9 @@
 import { desc, eq, sql } from 'drizzle-orm';
 import { AdAccount as MetaAdAccountSDK, User as MetaUserSDK } from 'facebook-nodejs-business-sdk';
+import type { z } from 'zod';
 import { db, withUserContext } from '../../db/client.js';
 import { adAccounts, oauthTokens, users } from '../../db/schema.js';
+import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { AuthenticationError } from '../../utils/errors.js';
@@ -10,6 +12,34 @@ import { MetaApiService } from './ApiService.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
 export class MetaAdAccountHandler {
+  private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
+    // Extract and validate required fields from the flexible schema
+    const id = typeof acc.id === 'string' ? acc.id : String(acc.id ?? '');
+    const name = typeof acc.name === 'string' ? acc.name : String(acc.name ?? '');
+    const accountStatus =
+      typeof acc.account_status === 'string' || typeof acc.account_status === 'number'
+        ? String(acc.account_status)
+        : 'UNKNOWN';
+    const currency = typeof acc.currency === 'string' ? acc.currency : 'USD';
+    const timezoneName = typeof acc.timezone_name === 'string' ? acc.timezone_name : 'UTC';
+
+    // Handle business object which might be complex
+    let businessId: string | undefined;
+    if (acc.business && typeof acc.business === 'object' && 'id' in acc.business) {
+      businessId =
+        typeof acc.business.id === 'string' ? acc.business.id : String(acc.business.id ?? '');
+    }
+
+    return {
+      id,
+      name,
+      status: accountStatus,
+      currency,
+      timezone: timezoneName,
+      businessId,
+    };
+  }
+
   async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
     logger.info('Executing get_ad_accounts', { userId: authPayload.userId, params });
 
@@ -46,49 +76,43 @@ export class MetaAdAccountHandler {
         MetaAdAccountSDK.Fields.business,
       ];
 
-      // The SDK does not ship with TypeScript definitions, so we cast here to a
-      // minimal interface capturing only the properties we care about.
+      // The SDK does not ship with TypeScript definitions, so we cast here to unknown
+      // and validate using Zod schemas
       const metaAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
-      const metaAccounts = metaAccountsCursor as unknown as Array<{
-        id: string;
-        name: string;
-        account_status: string | number;
-        currency: string;
-        timezone_name: string;
-        business?: { id: string; name?: string };
-      }>;
+      const rawAccounts = metaAccountsCursor as unknown;
+
+      // Validate each account using the auto-generated schema
+      const validatedAccounts: z.infer<typeof MetaAdAccountResponseSchema>[] = [];
+      if (Array.isArray(rawAccounts)) {
+        for (const account of rawAccounts) {
+          const result = MetaAdAccountResponseSchema.safeParse(account);
+          if (result.success) {
+            validatedAccounts.push(result.data);
+          } else {
+            logger.warn('Skipping invalid ad account data received from Meta API', {
+              accountId: (account as { id?: string }).id || 'Unknown ID',
+              errors: result.error.errors,
+            });
+          }
+        }
+      }
 
       const accountsToStore = await Promise.all(
-        metaAccounts.map(
-          async (acc: {
-            id: string;
-            name: string;
-            account_status: string | number;
-            currency: string;
-            timezone_name: string;
-            business?: { id: string; name?: string };
-          }) => {
-            // Business ID is already available from the initial API call
-            const businessId = acc.business?.id;
+        validatedAccounts.map(async (acc) => {
+          const accountData = this.extractAccountData(acc);
 
-            const permissions = await MetaApiService.fetchAdAccountPermissions(
-              acc.id,
-              accessToken,
-              metaUserId,
-              authPayload.userId
-            );
+          const permissions = await MetaApiService.fetchAdAccountPermissions(
+            accountData.id,
+            accessToken,
+            metaUserId,
+            authPayload.userId
+          );
 
-            return {
-              id: acc.id,
-              name: acc.name,
-              status: String(acc.account_status),
-              currency: acc.currency,
-              timezone: acc.timezone_name,
-              businessId,
-              permissions,
-            };
-          }
-        )
+          return {
+            ...accountData,
+            permissions,
+          };
+        })
       );
 
       // Store in database

@@ -131,6 +131,53 @@ const exchangeRefreshToken = async (refreshToken: string, clientId: string) => {
 }
 ```
 
+## API Response Sanitization
+
+### Automatic Response Sanitization
+To prevent the unintentional leakage of sensitive information, all successful responses from the Meta Graph API are automatically sanitized before being returned to the model or client. This is a critical security control implemented throughout the system.
+
+#### Mechanism
+- All successful tool responses are constructed using `createMcpSuccessResult` helper function
+- This function internally calls `removeUnderscoreProperties`, which recursively traverses the entire API response object
+- Any property whose key begins with an underscore (`_`) is removed from the final object
+- Sanitization includes depth protection to prevent stack overflow from circular references
+
+#### Security Impact
+- **Primary Goal**: Strip internal properties from the `facebook-nodejs-business-sdk`, particularly the `_api` object which contains the user's access token
+- **Automated Process**: Ensures that no sensitive SDK or internal implementation details are ever exposed in an MCP response
+- **Consistent Enforcement**: Applied uniformly across all tool implementations without requiring developer intervention
+
+#### Implementation Details
+```typescript
+// Automatic sanitization in response helper
+export function createMcpSuccessResult<T>(data: T): CallToolResult & { structuredContent: Sanitized<T> } {
+  // Sanitize the data to remove internal properties (e.g., _api with access tokens)
+  const sanitizedData = removeUnderscoreProperties(data);
+  
+  return {
+    content: [{ type: 'text', text: JSON.stringify(sanitizedData, null, 2) }],
+    structuredContent: sanitizedData,
+    isError: false,
+  };
+}
+
+// Recursive sanitization with depth protection
+export function removeUnderscoreProperties<T>(data: T, depth = 0): Sanitized<T> {
+  if (depth > MAX_SANITIZATION_DEPTH) {
+    throw new Error('Maximum sanitization depth exceeded, potential circular reference.');
+  }
+  
+  // Remove properties starting with underscore recursively
+  // Handles arrays, objects, and primitives appropriately
+}
+```
+
+**Key Features:**
+- **Type Safety**: Uses `Sanitized<T>` mapped type for compile-time type checking
+- **Depth Protection**: Prevents DoS attacks via deeply nested or circular objects
+- **Zero Configuration**: Works automatically without developer intervention
+- **Performance Optimized**: Efficient recursive algorithm with minimal overhead
+
 ## Database Security (RLS Implementation)
 
 ### Row Level Security Policies

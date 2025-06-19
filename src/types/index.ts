@@ -2,4 +2,4 @@
 export * from './api.js';
 export * from './auth.js';
 export * from './meta.js';
-export * from './models.js';
+export * from './utils.js';

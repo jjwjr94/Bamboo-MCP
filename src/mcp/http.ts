@@ -4,7 +4,6 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import pTimeout, { TimeoutError } from 'p-timeout';
 import { extractTokenFromHeader, verifyJWT } from '../auth/jwt.js';
-import { db } from '../db/client.js';
 import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { AuthenticationError } from '../utils/errors.js';
@@ -20,42 +19,6 @@ interface JsonRpcRequestBody {
   id?: string | number | null;
   method?: string;
   [key: string]: unknown;
-}
-
-async function authenticateRequest(authHeader: string | undefined): Promise<JWTPayload> {
-  if (authHeader) {
-    const token = extractTokenFromHeader(authHeader);
-    return verifyJWT(token);
-  }
-
-  if (env.NODE_ENV === 'development') {
-    return createMockAuthPayload();
-  }
-
-  throw new AuthenticationError('Authorization header with Bearer token is required.');
-}
-
-async function createMockAuthPayload(): Promise<JWTPayload> {
-  const testUser = await db.query.users.findFirst({
-    orderBy: (users, { asc }) => [asc(users.createdAt)],
-  });
-
-  if (!testUser) {
-    throw new AuthenticationError(
-      'For testing without a token, at least one user must exist in the database. Please run the OAuth flow once.'
-    );
-  }
-
-  return {
-    userId: testUser.id,
-    clientId: 'bamboo-mcp-client',
-    scopes: env.FACEBOOK_OAUTH_SCOPES.split(','),
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60 * 60,
-    iss: env.BASE_URL,
-    aud: 'bamboo-mcp-client',
-    jti: `dev-token-${Date.now()}`,
-  };
 }
 
 function setupTransportCleanup(
@@ -113,6 +76,7 @@ function sendInternalError(reply: FastifyReply, id: string | number | null): voi
 async function handleMCPRequest(
   request: FastifyRequest<{ Body: JsonRpcRequestBody }>,
   reply: FastifyReply,
+  token: string,
   authPayload: JWTPayload,
   method: string
 ): Promise<void> {
@@ -132,10 +96,8 @@ async function handleMCPRequest(
     });
 
     const authInfo: AuthInfo = {
-      token: request.headers.authorization
-        ? extractTokenFromHeader(request.headers.authorization)
-        : `dev-token-${Date.now()}`,
-      clientId: 'bamboo-mcp-client',
+      token: token,
+      clientId: authPayload.clientId,
       scopes: authPayload.scopes,
       expiresAt: authPayload.exp,
       extra: { authPayload },
@@ -173,10 +135,11 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
       reply.hijack();
 
       try {
-        authPayload = await authenticateRequest(request.headers.authorization);
-        logger.info(`HTTP MCP: Using auth payload for user ${authPayload.userId}`);
+        const token = extractTokenFromHeader(request.headers.authorization);
+        authPayload = verifyJWT(token);
+        logger.info(`HTTP MCP: Authenticated user ${authPayload.userId}`);
 
-        await handleMCPRequest(request, reply, authPayload, method);
+        await handleMCPRequest(request, reply, token, authPayload, method);
 
         const duration = Date.now() - startTime;
         logger.mcpRequest(method, authPayload.userId, true, duration);

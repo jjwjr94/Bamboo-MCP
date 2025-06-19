@@ -30,7 +30,7 @@ export class ToolRegistry {
           z.object({
             id: z.string(),
             name: z.string(),
-            status: z.union([z.number(), z.string()]),
+            status: z.string(),
             currency: z.string(),
             timezone: z.string(),
             permissions: z.array(z.string()),
@@ -50,21 +50,8 @@ export class ToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.getAdAccounts(authPayload, params);
-
-          if (result?.structuredContent) {
-            const validation = getAdAccountsOutputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for get_ad_accounts', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.getAdAccounts(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -109,16 +96,6 @@ export class ToolRegistry {
             selectedAccount: adAccountId,
             message: `Successfully selected ad account ${adAccountId}`,
           };
-
-          const validation = selectAdAccountOutputSchema.safeParse(result);
-          if (!validation.success) {
-            logger.error('Tool output validation failed for select_ad_account', {
-              errors: validation.error.format(),
-            });
-            return createMcpErrorResult(
-              new Error('Internal error: Tool output failed validation.')
-            );
-          }
 
           return createMcpSuccessResult(result);
         } catch (error) {

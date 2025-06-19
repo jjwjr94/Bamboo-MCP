@@ -3,14 +3,16 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
+import type { z } from 'zod';
+import {
+  MetaAdSetResponseSchema,
+  MetaCreateSuccessResponseSchema,
+  MetaDeleteSuccessResponseSchema,
+  MetaUpdateSuccessResponseSchema,
+} from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type {
-  CampaignStatus,
-  CreateAdSetRequest,
-  MetaAdSet,
-  MetaTargeting,
-} from '../../types/meta.js';
+import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
@@ -51,30 +53,29 @@ export class MetaAdSetHandler {
               (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId))
           ).getAdSets(fields);
 
-      const adSets = adSetsCursor as unknown as MetaAdSet[];
+      // Treat the response as unknown and validate it
+      const rawAdSets = adSetsCursor as unknown;
 
-      const adSetData = adSets.map((adSet) => ({
-        id: adSet.id,
-        name: adSet.name,
-        status: adSet.status,
-        effective_status: adSet.effective_status,
-        configured_status: adSet.configured_status,
-        created_time: adSet.created_time,
-        updated_time: adSet.updated_time,
-        start_time: adSet.start_time,
-        end_time: adSet.end_time,
-        daily_budget: adSet.daily_budget,
-        lifetime_budget: adSet.lifetime_budget,
-        budget_remaining: adSet.budget_remaining,
-        billing_event: adSet.billing_event,
-        optimization_goal: adSet.optimization_goal,
-        bid_amount: adSet.bid_amount ? Number(adSet.bid_amount) : null,
-        targeting: adSet.targeting,
-        attribution_spec: adSet.attribution_spec,
-        promoted_object: adSet.promoted_object,
-      }));
+      // Validate each ad set using the auto-generated schema
+      const validatedAdSets: z.infer<typeof MetaAdSetResponseSchema>[] = [];
+      if (Array.isArray(rawAdSets)) {
+        for (const adSet of rawAdSets) {
+          const result = MetaAdSetResponseSchema.safeParse(adSet);
+          if (result.success) {
+            validatedAdSets.push(result.data);
+          } else {
+            logger.warn('Skipping invalid ad set data received from Meta API', {
+              adSetId: (adSet as { id?: string }).id || 'Unknown ID',
+              errors: result.error.errors,
+            });
+          }
+        }
+      }
 
-      return createMcpSuccessResult({ adSets: adSetData }, `Retrieved ${adSetData.length} ad sets`);
+      return createMcpSuccessResult(
+        { adSets: validatedAdSets },
+        `Retrieved ${validatedAdSets.length} ad sets`
+      );
     });
   }
 
@@ -107,14 +108,25 @@ export class MetaAdSetHandler {
 
       const adSet = await new MetaAdAccountSDK(adAccountId).createAdSet([], adSetData);
 
-      logger.info('Ad set created successfully', { adSetId: adSet.id, name: params.name });
+      // Treat response as unknown and validate
+      const validationResult = MetaCreateSuccessResponseSchema.safeParse(adSet);
+      if (!validationResult.success) {
+        logger.warn('Invalid createAdSet response from Meta API', {
+          response: adSet,
+          errors: validationResult.error.errors,
+        });
+        throw new Error('Failed to create ad set: Invalid response from Meta API.');
+      }
+
+      const adSetId = validationResult.data.id;
+      logger.info('Ad set created successfully', { adSetId, name: params.name });
 
       const result = {
         success: true,
-        adSetId: adSet.id,
+        adSetId: adSetId,
         name: params.name,
         campaignId: params.campaignId,
-        message: `Ad set "${params.name}" created successfully with ID: ${adSet.id}`,
+        message: `Ad set "${params.name}" created successfully with ID: ${adSetId}`,
       };
 
       return createMcpSuccessResult(result, 'Ad set created successfully');
@@ -153,7 +165,17 @@ export class MetaAdSetHandler {
       removeUndefinedProperties(updateData);
 
       const adSet = new MetaAdSetSDK(params.adSetId);
-      await adSet.update([], updateData);
+      const updateResponse = await adSet.update([], updateData);
+
+      // Treat response as unknown and validate
+      const validationResult = MetaUpdateSuccessResponseSchema.safeParse(updateResponse);
+      if (!validationResult.success) {
+        logger.warn('Invalid updateAdSet response from Meta API', {
+          response: updateResponse,
+          errors: validationResult.error.errors,
+        });
+        throw new Error('Failed to update ad set: Invalid response from Meta API.');
+      }
 
       logger.info('Ad set updated successfully', { adSetId: params.adSetId });
 
@@ -175,7 +197,17 @@ export class MetaAdSetHandler {
 
     return await handleMetaApiCall(async () => {
       const adSet = new MetaAdSetSDK(params.adSetId);
-      await adSet.delete([]);
+      const deleteResponse = await adSet.delete([]);
+
+      // Treat response as unknown and validate
+      const validationResult = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
+      if (!validationResult.success) {
+        logger.warn('Invalid deleteAdSet response from Meta API', {
+          response: deleteResponse,
+          errors: validationResult.error.errors,
+        });
+        throw new Error('Failed to delete ad set: Invalid response from Meta API.');
+      }
 
       logger.info('Ad set deleted successfully', { adSetId: params.adSetId });
 

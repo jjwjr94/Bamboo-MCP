@@ -1,3 +1,6 @@
+import type { Sanitized } from '../types/utils.js';
+import { logger } from './logger.js';
+
 /**
  * Removes properties with `undefined` values from an object.
  * This is useful for preparing data payloads for APIs that
@@ -20,23 +23,28 @@ const MAX_SANITIZATION_DEPTH = 20;
  * such as access tokens that are stored in `_api` objects.
  *
  * Includes depth protection to prevent stack overflows from circular references or
- * excessively deep objects. Note: This function returns a structurally different
- * type if properties are removed. The generic <T> is for convenience but doesn't
- * fully represent the transformation at the type level.
+ * excessively deep objects. Returns a type-safe result that accurately reflects
+ * the structural transformation.
  *
  * @param data The data to sanitize (object, array, or primitive)
  * @param depth The current recursion depth (internal use)
  * @returns The sanitized data with underscore properties removed
  * @throws {Error} if the maximum recursion depth is exceeded
  */
-export function removeUnderscoreProperties<T>(data: T, depth = 0): T {
+export function removeUnderscoreProperties<T>(data: T, depth = 0): Sanitized<T> {
   if (depth > MAX_SANITIZATION_DEPTH) {
+    // Log details for debugging without exposing potentially sensitive data
+    logger.warn('Maximum sanitization depth exceeded. Potential circular reference in object.', {
+      objectType: typeof data,
+      keys: typeof data === 'object' && data !== null ? Object.keys(data).slice(0, 10) : undefined,
+      depth,
+    });
     throw new Error('Maximum sanitization depth exceeded, potential circular reference.');
   }
 
   if (Array.isArray(data)) {
     // Recursively sanitize each array element
-    return data.map((item) => removeUnderscoreProperties(item, depth + 1)) as unknown as T;
+    return data.map((item) => removeUnderscoreProperties(item, depth + 1)) as Sanitized<T>;
   }
 
   if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
@@ -49,9 +57,9 @@ export function removeUnderscoreProperties<T>(data: T, depth = 0): T {
       }
     }
 
-    return sanitized as T;
+    return sanitized as Sanitized<T>;
   }
 
   // Return primitives and null as-is
-  return data;
+  return data as Sanitized<T>;
 }

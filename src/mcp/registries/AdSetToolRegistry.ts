@@ -86,22 +86,8 @@ export class AdSetToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.getAdSets(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for get_adsets', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.getAdSets(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -190,22 +176,8 @@ export class AdSetToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.createAdSet(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for create_adset', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.createAdSet(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -251,51 +223,14 @@ export class AdSetToolRegistry {
           bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
           startTime: z.string().optional().describe('New start time in ISO format.'),
           endTime: z.string().optional().describe('New end time in ISO format.'),
-          targeting: z
-            .object({
-              geoLocations: z
-                .object({
-                  countries: z.array(z.string()).optional(),
-                  regions: z.array(z.object({ key: z.string() })).optional(),
-                  cities: z.array(z.object({ key: z.string() })).optional(),
-                })
-                .optional(),
-              ageMin: z.number().int().min(13).max(65).optional(),
-              ageMax: z.number().int().min(13).max(65).optional(),
-              genders: z.array(z.enum(['1', '2'])).optional(),
-              interests: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              behaviors: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              customAudiences: z.array(z.object({ id: z.string() })).optional(),
-              excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
-            })
-            .optional()
-            .describe('New targeting criteria for the ad set.'),
         },
         outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.updateAdSet(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for update_adset', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.updateAdSet(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -326,22 +261,8 @@ export class AdSetToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.deleteAdSet(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for delete_adset', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.deleteAdSet(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }

@@ -65,22 +65,8 @@ export class CampaignToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.getCampaigns(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for get_campaigns', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.getCampaigns(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -144,22 +130,8 @@ export class CampaignToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.createCampaign(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for create_campaign', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.createCampaign(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -205,22 +177,8 @@ export class CampaignToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.updateCampaign(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for update_campaign', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.updateCampaign(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
@@ -248,22 +206,8 @@ export class CampaignToolRegistry {
       async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.deleteCampaign(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = outputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for delete_campaign', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
+          // The handler validates raw API responses and sanitization is applied automatically
+          return await this.toolsHandler.deleteCampaign(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }
