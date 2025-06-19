@@ -1,133 +1,128 @@
 # Deployment Guide
 
-## Production Environment Setup
+## Production Setup
 
 ### Render.com Deployment
 
-#### Step 1: Repository Setup
-1. Push your code to GitHub repository
-2. Connect repository to Render.com
-3. Select **Web Service** deployment type
+#### Repository Setup
+1. Push code to GitHub
+2. Connect to Render.com
+3. Select Web Service
 
-#### Step 2: Build Configuration
+#### Build Configuration
 - **Environment**: Node
 - **Build Command**: `pnpm install && pnpm build`
 - **Start Command**: `pnpm start`
-- **Node Version**: 18+ (specified in package.json engines)
-- **Runtime**: Node.js with ES modules support
-- **Host Binding**: Fastify configured to bind to `0.0.0.0` in production (required for Render)
+- **Node Version**: 18+ (package.json engines)
+- **Runtime**: Node.js with ES modules
+- **Host Binding**: Fastify binds to `0.0.0.0` (required for Render)
+- **Note**: `pnpm prebuild` generates Zod schemas from Meta SDK before TypeScript compilation
 
-#### Step 3: Environment Variables
-Add the following environment variables in Render dashboard:
-
-**Important**: We use both `DATABASE_URL` and Supabase client variables because:
-- `DATABASE_URL`: Direct PostgreSQL connection for Drizzle ORM (database operations)
-- `SUPABASE_URL/KEYS`: Supabase client API for auth, storage, and RLS features
-
+#### Environment Variables
 ```env
 NODE_ENV=production
 PORT=3000
 
-# Database Configuration (Drizzle ORM)
-# Use Transaction pooler (port 6543) for serverless/Render deployment
+# Database (Drizzle ORM)
+# Use Transaction pooler (port 6543) for serverless deployment
 DATABASE_URL=postgres://postgres.[project_ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+DB_STATEMENT_TIMEOUT=10000
 
-# Alternative connection strings:
-# Direct connection (IPv6 only): postgresql://postgres:[password]@db.[project_ref].supabase.co:5432/postgres
-# Session pooler (IPv4): postgres://postgres.[project_ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
-
-# Supabase Configuration (Auth & API)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# Facebook OAuth Configuration
+# Facebook OAuth
 FACEBOOK_APP_ID=your-app-id
 FACEBOOK_APP_SECRET=your-app-secret
 FACEBOOK_CALLBACK_URL=https://yourdomain.com/auth/facebook/callback
 FACEBOOK_OAUTH_SCOPES=ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read
 
-# JWT Configuration
+# JWT
 JWT_SECRET=your-super-secure-secret-at-least-32-characters
 JWT_EXPIRES_IN=24h
 
-# Server Configuration
+# Server
 BASE_URL=https://yourdomain.com
+MCP_REQUEST_TIMEOUT=30000
+META_API_TIMEOUT=15000
+
+# Resilience Policy
+CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+CIRCUIT_BREAKER_RESET_TIMEOUT=30000
+RETRY_MAX_ATTEMPTS=3
+RETRY_BASE_DELAY=1000
+RETRY_MAX_DELAY=10000
 ```
 
-#### Step 4: Health Check Configuration
-- **Health Check Path**: `/health`
-- **Health Check Grace Period**: 300 seconds
+#### Health Check
+- **Path**: `/health`
+- **Grace Period**: 300 seconds
 
 ### Supabase Database Setup
 
-#### Step 1: Create Supabase Project
+#### Create Project
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
 2. Create new project
-3. Get connection details:
-   - **Settings → Database → Connection string**: Copy **Transaction** pooler for `DATABASE_URL`
-   - **Settings → API**: Copy `SUPABASE_URL` and API keys
+3. Get connection details (Transaction pooler for `DATABASE_URL`)
 
-#### Step 2: Database Schema Migration
-Database schema and RLS policies are managed by Drizzle ORM with native Supabase integration.
+#### Database Migration
+Managed by Drizzle ORM with native PostgreSQL integration.
 
-**Option A: Automatic Migration (Recommended)**
+**Automatic Migration (Recommended)**
 ```bash
-# Generate and run migrations
 pnpm db:generate
 pnpm db:migrate
 ```
 
-**Option B: Manual Verification (Optional)**
-If you want to verify the schema manually, the following tables and policies will be created:
-
+**Manual Verification (Optional)**
 ```sql
 -- Tables created by Drizzle migrations:
--- - users (with native RLS policies)
--- - oauth_tokens (with user isolation policies)  
--- - ad_accounts (with user isolation policies)
+-- - users
+-- - ad_accounts
+-- - oauth_clients
+-- - oauth_refresh_tokens
+-- - oauth_tokens
+-- - oauth_sessions
+-- - oauth_temp_auth_codes
 
--- Verify RLS is enabled:
+-- Verify RLS enabled
 SELECT schemaname, tablename, rowsecurity 
 FROM pg_tables 
 WHERE tablename IN ('users', 'oauth_tokens', 'ad_accounts');
 
--- View created policies:
+-- View policies
 SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual 
 FROM pg_policies 
 WHERE tablename IN ('users', 'oauth_tokens', 'ad_accounts');
 ```
 
-**Key Benefits of Standard PostgreSQL RLS:**
-- Type-safe policies: Policies defined alongside schema in TypeScript
-- Automatic RLS enabling: No manual `ALTER TABLE` commands needed
-- Standard PostgreSQL: Works with any PostgreSQL database (Supabase, AWS RDS, etc.)
-- Session-based isolation: Uses PostgreSQL session variables for user context
-- Migration management: Policies versioned with schema changes
-- Simplified setup: No additional client libraries or API keys required
+**Standard PostgreSQL RLS Benefits:**
+- Type-safe policies defined in TypeScript
+- No manual ALTER TABLE commands
+- Works with any PostgreSQL database
+- Session-based isolation
+- Migration versioning
+- No additional libraries required
 
 ### Facebook App Configuration
 
-#### Step 1: Create Facebook App
+#### Create App
 1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create new app for "Business"
-3. Add "Facebook Login" product
+2. Create new app for Business
+3. Add Facebook Login product
 
-#### Step 2: Configure OAuth Settings
+#### OAuth Settings
 - **Valid OAuth Redirect URIs**: `https://yourdomain.com/auth/facebook/callback`
 - **App Domains**: `yourdomain.com`
 
-**Required Permissions (Comprehensive Meta API Access):**
+**Required Permissions:**
 ```
 ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read
 ```
 
-**Core Advertising Permissions:**
-- `ads_management`: Manage ad accounts, campaigns, ad sets, and ads
+**Core Advertising:**
+- `ads_management`: Manage ad accounts, campaigns, ad sets, ads
 - `ads_read`: Access Ads Insights API and server-side events
 - `business_management`: Manage Business Manager assets and users
 
-**Page Management Permissions:**
+**Page Management:**
 - `pages_manage_ads`: Manage ads associated with Pages
 - `pages_show_list`: Retrieve list of managed Pages
 - `pages_read_engagement`: Read Page content and engagement
@@ -136,170 +131,99 @@ ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pag
 - `pages_manage_cta`: Manage call-to-action buttons
 - `pages_messaging`: Send and receive Page messages
 
-**Analytics Permissions:**
+**Analytics:**
 - `attribution_read`: Access Attribution API for reporting
 
-#### Step 3: App Review Process
-Submit for app review to access **all production permissions**:
+#### App Review Process
+Submit for production permissions:
 
 **Required Documentation:**
-- Detailed use case for each permission
-- Privacy policy covering data usage
+- Use case for each permission
+- Privacy policy
 - Terms of service
-- Video demonstration of app functionality
-- Business verification documents
+- Video demonstration
+- Business verification
 
 **Justification Examples:**
-- `ads_management`: "Autonomous AI assistant for campaign optimization"
+- `ads_management`: "AI assistant for campaign optimization"
 - `pages_manage_posts`: "Integrated social media content creation"
-- `pages_messaging`: "Customer service automation via Pages"
+- `pages_messaging`: "Customer service automation"
 - `attribution_read`: "Performance analytics and reporting"
 
-## Local Development Setup
+## Local Development
 
 ### Prerequisites
 - Node.js 18+
-- PNPM package manager
+- PNPM
 - Supabase CLI (optional)
 
 ### Installation
 ```bash
-# Clone repository
 git clone <your-repo-url>
 cd bamboo-mcp
-
-# Install dependencies
 pnpm install
-
-# Copy environment template
 cp .env.example .env
-
-# Edit environment variables
-nano .env
+# Edit .env
 ```
 
-### Environment Configuration (.env)
+### Environment Configuration
 ```env
 NODE_ENV=development
 PORT=3000
 
-# Database Configuration (Direct PostgreSQL)
-# Use Supabase PostgreSQL or any PostgreSQL instance
+# Database
 DATABASE_URL=postgres://postgres.[project_ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
 
-# Facebook App (development)
+# Facebook (development app)
 FACEBOOK_APP_ID=your-dev-app-id
 FACEBOOK_APP_SECRET=your-dev-app-secret
 FACEBOOK_CALLBACK_URL=http://localhost:3000/auth/facebook/callback
 FACEBOOK_OAUTH_SCOPES=ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read
 
-# JWT Configuration
+# JWT
 JWT_SECRET=your-development-secret-key-32-chars-min
 JWT_EXPIRES_IN=24h
 
-# Server Configuration
+# Server
 BASE_URL=http://localhost:3000
 ```
 
 ### Development Commands
 ```bash
-# Start development server with hot reload (uses Streamable HTTP transport)
+pnpm dev              # Start development server
+pnpm checks           # Run lint, format, TypeScript check
+pnpm test             # Run tests
+pnpm db:generate      # Generate database migrations
+pnpm db:migrate       # Run migrations
+pnpm mcp:inspect:http # MCP Inspector
+```
+
+### Database Setup
+```bash
+# Auto-migration
+pnpm db:generate
+pnpm db:migrate
+
+# Manual setup (if needed)
+# Create tables and RLS policies via Drizzle schema
+# See src/db/schema.ts for complete schema
+```
+
+### MCP Testing
+```bash
+# Start server
 pnpm dev
 
-# Run MCP server in stdio mode for local testing
-node dist/mcp/server.js
+# Complete OAuth flow (create test user)
+# Visit: http://localhost:3000/authorize?client_id=test&redirect_uri=http://localhost:3000&code_challenge=test&code_challenge_method=S256
 
-# Run tests
-pnpm test
-
-# Run tests with UI
-pnpm test:ui
-
-# Run MCP Inspector for debugging
-pnpm mcp:inspect
-
-# Build for production
-pnpm build
-
-# Start production server (uses Streamable HTTP transport)
-pnpm start
-
-# Database operations
-pnpm db:generate  # Generate migrations
-pnpm db:migrate   # Run migrations
-
-# Type checking
-pnpm lint
+# Run MCP Inspector
+pnpm mcp:inspect:http
 ```
 
-### MCP Transport Usage
-- **Development**: Both stdio (for MCP Inspector) and HTTP (for web testing) supported
-- **Production**: Streamable HTTP transport via `/mcp` endpoint
-- **Local Testing**: Use `StdioServerTransport` for direct MCP client integration
-- **Web Integration**: Use `StreamableHTTPServerTransport` for HTTP-based clients
+## Production Monitoring
 
-## Testing & Debugging
-
-### MCP Inspector
-The MCP Inspector is an interactive tool for testing and debugging MCP servers:
-
-```bash
-# Install globally
-npm install -g @modelcontextprotocol/inspector
-
-# Run inspector (will connect to your server)
-pnpm mcp:inspect
-
-# Or run directly
-npx @modelcontextprotocol/inspector
-```
-
-**Inspector Features:**
-- Visual exploration of resources and tools
-- Interactive tool testing with live results
-- Real-time log monitoring
-- Protocol message inspection
-- Error debugging and stack traces
-
-### Testing Strategy
-1. **Unit Tests**: Test individual functions and modules
-2. **Integration Tests**: Test MCP server interactions
-3. **Manual Testing**: Use MCP Inspector for exploratory testing
-4. **E2E Tests**: Test complete OAuth + MCP workflows
-
-### Debugging Best Practices
-- All logs go to `stderr` (not `stdout`) to avoid protocol interference
-- Use structured JSON logging for easier parsing
-- Include request IDs for tracing across systems
-- Monitor both server and client logs during integration
-
----
-
-## Production Checklist
-
-### Security
-- [ ] Environment variables set securely in Render dashboard
-- [ ] JWT_SECRET is 32+ characters and cryptographically secure
-- [ ] Facebook app configured with production callback URLs
-- [ ] RLS policies enabled and tested
-- [ ] HTTPS enforced for all endpoints
-
-### Performance
-- [ ] Health checks configured
-- [ ] Structured logging implemented
-- [ ] Database connection pooling configured
-- [ ] Error monitoring set up
-
-### Compliance
-- [ ] PKCE implementation verified
-- [ ] OAuth 2.1 compliance confirmed
-- [ ] Data retention policies implemented
-- [ ] GDPR compliance measures in place
-
-## Monitoring & Maintenance
-
-### Health Monitoring
-The `/health` endpoint provides system status:
+### Health Check
 ```json
 {
   "status": "healthy",
@@ -310,38 +234,35 @@ The `/health` endpoint provides system status:
 }
 ```
 
-### Log Analysis
-- Application logs available in Render dashboard
-- Structured JSON logging for parsing
-- Error tracking with stack traces
-- Request/response logging for debugging
+### Logs
+- Structured JSON logging
+- Authentication events
+- API errors
+- Performance metrics
 
-### Database Maintenance
-- Regular backups via Supabase
-- Monitor connection pool usage
-- Optimize queries based on usage patterns
-- Archive old tokens and audit logs periodically
+### Alerts
+- Health check failures
+- Database connection issues
+- API rate limits
+- Security events
 
 ## Troubleshooting
 
 ### Common Issues
+- **OAuth failures**: Check callback URLs and PKCE
+- **Database errors**: Verify RLS policies and user context
+- **API rate limits**: Implement backoff, monitor usage
+- **Token issues**: Validate JWT format and expiration
 
-**OAuth Flow Failures**
-- Verify callback URLs match exactly
-- Check Facebook app permissions
-- Validate PKCE implementation
+### Debugging
+1. Check logs for detailed error information
+2. Verify environment variables
+3. Test OAuth flow manually
+4. Validate database connection
+5. Check MCP Inspector output
 
-**Database Connection Issues**
-- Verify Supabase credentials
-- Check RLS policy implementation
-- Monitor connection pool limits
-
-**MCP Integration Problems**
-- Validate JWT token format
-- Check tool schema compliance
-- Verify resource endpoint accessibility
-
-**Meta API Rate Limits**
-- Implement exponential backoff
-- Monitor API usage quotas
-- Use batch operations where possible 
+### Performance Optimization
+- Use connection pooling (transaction pooler)
+- Enable query caching where appropriate
+- Monitor API response times
+- Set appropriate timeouts 
