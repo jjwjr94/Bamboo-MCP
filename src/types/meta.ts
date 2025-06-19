@@ -8,6 +8,7 @@ import type {
   AdsInsightsDatePreset,
   AssetType,
   CampaignObjective,
+  CampaignSpecialAdCategories,
   CampaignStatus,
   CustomAudienceCustomerFileSource,
   CustomAudienceSubtype,
@@ -46,7 +47,18 @@ export interface CreateCampaignRequest {
   adAccountId?: string; // Optional to support intelligent account selection
   dailyBudget?: number; // in cents
   lifetimeBudget?: number; // in cents
-  specialAdCategories?: string[];
+  /**
+   * An array of special ad categories for the campaign. Required by Meta policy.
+   * For standard campaigns, this should be set to `['NONE']`.
+   * Using other categories may restrict targeting options.
+   */
+  specialAdCategories: CampaignSpecialAdCategories[];
+  /**
+   * Required when specialAdCategories is not ['NONE'].
+   * A list of ISO 3166-1 alpha-2 country codes (e.g., ['US', 'CA']).
+   * This parameter is mandatory for special ad categories like HOUSING, CREDIT, EMPLOYMENT, or ISSUES_ELECTIONS_POLITICS.
+   */
+  specialAdCategoryCountry?: string[];
 }
 
 export interface CreateAdSetRequest {
@@ -427,6 +439,7 @@ export interface MetaApiNodeList extends Array<MetaApiNode> {
 // Re-export key auto-generated types for convenience
 export type {
   CampaignObjective,
+  CampaignSpecialAdCategories,
   CampaignStatus,
   AdSetBillingEvent,
   AdSetOptimizationGoal,

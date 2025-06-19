@@ -15,6 +15,9 @@ import { logger } from './logger.js';
  * Gets the business ID for an ad account from the database with proper RLS enforcement.
  * Returns null if the ad account is not business-managed or user doesn't have access.
  *
+ * This function is enhanced with better error handling and debug logging for
+ * troubleshooting business context resolution issues.
+ *
  * @param userId - The user ID for security context
  * @param adAccountId - The Meta ad account ID
  * @returns Business ID if available, null otherwise
@@ -24,6 +27,11 @@ export async function getBusinessIdForAdAccount(
   adAccountId: string
 ): Promise<string | null> {
   try {
+    logger.debug('Looking up business ID for ad account', {
+      userId,
+      adAccountId,
+    });
+
     // Use withUserContext to enforce RLS and prevent unauthorized access
     const businessId = await withUserContext(userId, async (tx) => {
       const result = await tx
@@ -31,7 +39,24 @@ export async function getBusinessIdForAdAccount(
         .from(adAccounts)
         .where(eq(adAccounts.id, adAccountId))
         .limit(1);
-      return result[0]?.businessId || null;
+
+      if (result.length === 0) {
+        logger.debug('Ad account not found in database', {
+          userId,
+          adAccountId,
+        });
+        return null;
+      }
+
+      const foundBusinessId = result[0]?.businessId || null;
+      logger.debug('Business ID lookup result', {
+        userId,
+        adAccountId,
+        businessId: foundBusinessId,
+        isBusinessManaged: foundBusinessId !== null,
+      });
+
+      return foundBusinessId;
     });
 
     return businessId;
@@ -40,6 +65,7 @@ export async function getBusinessIdForAdAccount(
       userId,
       adAccountId,
       error: error instanceof Error ? error.message : 'Unknown error',
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
     });
     return null;
   }

@@ -15,7 +15,6 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
-import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
@@ -63,14 +62,8 @@ export class MetaAdHandler {
           (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
         logger.info('Fetching ads for ad account', { adAccountId });
 
-        // Add business context if account is business-managed
-        const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-        const apiParams: Record<string, any> = {};
-        if (businessId) {
-          apiParams.business_id = businessId;
-        }
-
-        adsCursor = await new MetaAdAccountSDK(adAccountId).getAds(fields, apiParams);
+        // Meta API handles business context automatically via ad account
+        adsCursor = await new MetaAdAccountSDK(adAccountId).getAds(fields);
       }
 
       // The Meta SDK cursor is an array-like object for the first page.
@@ -129,12 +122,7 @@ export class MetaAdHandler {
         [MetaAdSDK.Fields.status]: params.status || 'PAUSED',
       };
 
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      if (businessId) {
-        adData.business_id = businessId;
-      }
-
+      // Meta API handles business context automatically via ad account
       removeUndefinedProperties(adData);
 
       const ad = await new MetaAdAccountSDK(adAccountId).createAd([], adData);

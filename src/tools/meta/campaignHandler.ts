@@ -13,7 +13,6 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
-import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
@@ -27,7 +26,6 @@ export class MetaCampaignHandler {
     await initializeMetaApi(authPayload.userId);
 
     return await handleMetaApiCall(async () => {
-      // Handle account selection intelligently
       const adAccountId =
         params.adAccountId ||
         (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
@@ -36,7 +34,6 @@ export class MetaCampaignHandler {
         MetaCampaignSDK.Fields.id,
         MetaCampaignSDK.Fields.name,
         MetaCampaignSDK.Fields.status,
-        MetaCampaignSDK.Fields.effective_status,
         MetaCampaignSDK.Fields.objective,
         MetaCampaignSDK.Fields.created_time,
         MetaCampaignSDK.Fields.updated_time,
@@ -50,17 +47,7 @@ export class MetaCampaignHandler {
         MetaCampaignSDK.Fields.stop_time,
       ];
 
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      const apiParams: Record<string, any> = {};
-      if (businessId) {
-        apiParams.business_id = businessId;
-      }
-
-      const campaignsCursor = await new MetaAdAccountSDK(adAccountId).getCampaigns(
-        fields,
-        apiParams
-      );
+      const campaignsCursor = await new MetaAdAccountSDK(adAccountId).getCampaigns(fields);
 
       // Handle pagination - fetch all pages with safety limit
       let currentCursor = campaignsCursor as any; // Cast to access pagination methods
@@ -110,6 +97,20 @@ export class MetaCampaignHandler {
   async createCampaign(authPayload: JWTPayload, params: CreateCampaignRequest) {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
+    // Validate special_ad_category_country requirement (business rule)
+    const isSpecialCategory =
+      params.specialAdCategories.length > 1 ||
+      (params.specialAdCategories.length === 1 && params.specialAdCategories[0] !== 'NONE');
+
+    if (
+      isSpecialCategory &&
+      (!params.specialAdCategoryCountry || params.specialAdCategoryCountry.length === 0)
+    ) {
+      throw new Error(
+        "The 'specialAdCategoryCountry' parameter is required when a special ad category is selected."
+      );
+    }
+
     await initializeMetaApi(authPayload.userId);
 
     return await handleMetaApiCall(async () => {
@@ -117,21 +118,24 @@ export class MetaCampaignHandler {
         params.adAccountId ||
         (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
 
+      // Safeguard: Default to ['NONE'] if specialAdCategories is null, undefined, or empty.
+      // This ensures the parameter is always a valid array with at least one item for the Meta API call.
+      const specialCategories =
+        params.specialAdCategories && params.specialAdCategories.length > 0
+          ? params.specialAdCategories
+          : ['NONE'];
+
       const campaignData: Record<string, unknown> = {
         [MetaCampaignSDK.Fields.name]: params.name,
         [MetaCampaignSDK.Fields.objective]: params.objective,
         [MetaCampaignSDK.Fields.status]: params.status,
         [MetaCampaignSDK.Fields.daily_budget]: params.dailyBudget,
         [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
-        [MetaCampaignSDK.Fields.special_ad_categories]: params.specialAdCategories,
+        [MetaCampaignSDK.Fields.special_ad_categories]: specialCategories,
+        special_ad_category_country: params.specialAdCategoryCountry,
       };
 
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      if (businessId) {
-        campaignData.business_id = businessId;
-      }
-
+      // Meta API handles business context automatically via ad account
       removeUndefinedProperties(campaignData);
 
       const campaign = await new MetaAdAccountSDK(adAccountId).createCampaign([], campaignData);

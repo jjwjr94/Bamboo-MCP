@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { withUserContext } from '../../db/client.js';
 import { adAccounts } from '../../db/schema.js';
 import type {
@@ -7,7 +8,7 @@ import type {
   MetaOAuthTokenResponse,
   MetaOAuthUserInfoResponse,
 } from '../../types/meta.js';
-import { buildMetaApiUrl } from '../../utils/businessContextManager.js';
+import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
 import { MetaApiError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
@@ -153,6 +154,9 @@ export class MetaApiService {
         if (accounts.length > 0) {
           // Wrap database operations in withUserContext for RLS compliance
           await withUserContext(userId, async (tx) => {
+            // Prepare an array to hold all account data for the batch
+            const accountsToUpsert = [];
+
             // Process accounts in batches for better performance
             for (const account of accounts) {
               // Dynamically fetch permissions or use fallback
@@ -169,27 +173,34 @@ export class MetaApiService {
                 // Fallback if Meta User ID could not be fetched initially
                 permissions = ['UNKNOWN'];
               }
+
+              // Push the complete account object into the array
+              accountsToUpsert.push({
+                id: account.id,
+                userId: userId,
+                name: account.name,
+                status: String(account.account_status), // Cast to string for consistency
+                currency: account.currency,
+                timezone: account.timezone_name,
+                businessId: account.business?.id || null, // Store business_id if available
+                permissions,
+              });
+            }
+
+            // If we have accounts, perform a single bulk insert/update operation
+            if (accountsToUpsert.length > 0) {
               await tx
                 .insert(adAccounts)
-                .values({
-                  id: account.id,
-                  userId: userId,
-                  name: account.name,
-                  status: String(account.account_status), // Cast to string for consistency
-                  currency: account.currency,
-                  timezone: account.timezone_name,
-                  businessId: account.business?.id || null, // Store business_id if available
-                  permissions,
-                })
+                .values(accountsToUpsert)
                 .onConflictDoUpdate({
                   target: [adAccounts.id, adAccounts.userId],
                   set: {
-                    name: account.name,
-                    status: String(account.account_status), // Cast to string for consistency
-                    currency: account.currency,
-                    timezone: account.timezone_name,
-                    businessId: account.business?.id || null, // Update business_id
-                    permissions,
+                    name: sql`excluded.name`,
+                    status: sql`excluded.status`,
+                    currency: sql`excluded.currency`,
+                    timezone: sql`excluded.timezone`,
+                    businessId: sql`excluded.business_id`,
+                    permissions: sql`excluded.permissions`,
                   },
                 });
             }
@@ -214,14 +225,14 @@ export class MetaApiService {
   /**
    * Fetches the permissions (tasks) for a specific user on a given ad account.
    *
-   * This is a non-critical operation; if it fails, it logs a warning and returns
-   * default permissions to avoid blocking other processes.
+   * This method implements a multi-strategy approach to handle business-managed
+   * ad accounts correctly, with intelligent error recovery and fallback mechanisms.
    *
    * @param adAccountId The ID of the ad account
    * @param accessToken The user's Meta access token
    * @param currentUserId The user's Meta ID
    * @param userId The local user ID for business context lookup
-   * @param businessId Optional business ID to use directly (avoids database lookup during sync)
+   * @param businessId Optional business ID - undefined: lookup from DB, null: non-business account, string: business account
    * @returns An array of permission strings (tasks). Returns ['UNKNOWN'] on failure
    */
   public static async fetchAdAccountPermissions(
@@ -232,31 +243,61 @@ export class MetaApiService {
     businessId?: string | null
   ): Promise<string[]> {
     const defaultPermissions = ['UNKNOWN'];
-    try {
-      let url: string;
 
-      if (businessId !== undefined) {
-        // Use provided business ID directly (typically during sync)
-        const params = new URLSearchParams({
-          access_token: accessToken,
-          fields: 'id,tasks',
-        });
-        if (businessId) {
-          params.set('business', businessId);
-        }
-        url = `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?${params.toString()}`;
-      } else {
-        // Fall back to database lookup for business context (used by other operations)
-        url = await buildMetaApiUrl(
-          `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users`,
-          userId,
-          adAccountId,
-          {
-            access_token: accessToken,
-            fields: 'id,tasks',
-          }
-        );
-      }
+    try {
+      return await MetaApiService._fetchAdAccountPermissionsWithRetry(
+        adAccountId,
+        accessToken,
+        currentUserId,
+        userId,
+        businessId
+      );
+    } catch (error) {
+      logger.error('All permission fetch strategies failed', {
+        adAccountId,
+        currentUserId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return defaultPermissions;
+    }
+  }
+
+  /**
+   * Internal method that implements retry logic with different business context strategies.
+   */
+  private static async _fetchAdAccountPermissionsWithRetry(
+    adAccountId: string,
+    accessToken: string,
+    currentUserId: string,
+    userId: string,
+    businessId?: string | null,
+    attempt = 1
+  ): Promise<string[]> {
+    const maxAttempts = 2;
+    const defaultPermissions = ['UNKNOWN'];
+
+    try {
+      // Strategy 1: Use provided business context or lookup from database
+      const resolvedBusinessId = await MetaApiService._resolveBusinessContext(
+        businessId,
+        userId,
+        adAccountId
+      );
+
+      const url = MetaApiService._buildAssignedUsersUrl(
+        adAccountId,
+        accessToken,
+        resolvedBusinessId
+      );
+
+      logger.debug('Fetching ad account permissions', {
+        adAccountId,
+        attempt,
+        businessIdStrategy: businessId !== undefined ? 'provided' : 'database_lookup',
+        resolvedBusinessId: resolvedBusinessId || 'none',
+        hasBusinessContext: resolvedBusinessId !== null,
+      });
 
       const response = await handleMetaApiCall(async () => {
         return await fetch(url, {
@@ -267,18 +308,55 @@ export class MetaApiService {
       if (!response.ok) {
         const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
 
-        // Special handling for business parameter requirement
+        // Handle business parameter requirement error with retry
         if (
           errorData.error?.code === 100 &&
-          errorData.error?.message?.includes('business is required')
+          errorData.error?.message?.includes('business is required') &&
+          attempt === 1
         ) {
-          logger.warn('Ad account requires business parameter but none provided', {
+          logger.warn(
+            'Business parameter required, attempting retry with enhanced business lookup',
+            {
+              adAccountId,
+              currentUserId,
+              userId,
+              originalBusinessContext: resolvedBusinessId,
+              attempt,
+            }
+          );
+
+          // Strategy 2: Force business ID lookup with enhanced method
+          return await MetaApiService._fetchAdAccountPermissionsWithRetry(
             adAccountId,
+            accessToken,
             currentUserId,
             userId,
-            businessIdProvided: businessId !== undefined,
-            message: 'This ad account is business-managed but business ID was not available',
-          });
+            undefined, // Force database lookup
+            attempt + 1
+          );
+        }
+
+        // Log specific error types for debugging
+        if (errorData.error?.code === 100) {
+          if (errorData.error?.message?.includes('business is required')) {
+            logger.warn('Ad account requires business parameter but context unavailable', {
+              adAccountId,
+              currentUserId,
+              userId,
+              businessIdResolved: resolvedBusinessId,
+              message: 'This ad account is business-managed but business ID could not be resolved',
+              suggestion: 'Verify ad account is properly synced with business information',
+            });
+          } else {
+            logger.warn('Meta API parameter error', {
+              adAccountId,
+              currentUserId,
+              userId,
+              status: response.status,
+              error: errorData.error?.message,
+              code: errorData.error?.code,
+            });
+          }
         } else {
           logger.warn('Failed to fetch ad account permissions', {
             adAccountId,
@@ -286,11 +364,13 @@ export class MetaApiService {
             userId,
             status: response.status,
             error: errorData.error?.message,
+            code: errorData.error?.code,
           });
         }
         return defaultPermissions;
       }
 
+      // Parse successful response
       const permissionsData = (await response.json()) as MetaAdAccountAssignedUsersResponse;
       const userPermissions = permissionsData.data?.find((user) => user.id === currentUserId);
 
@@ -299,30 +379,118 @@ export class MetaApiService {
           adAccountId,
           currentUserId,
           userId,
+          totalUsersInResponse: permissionsData.data?.length || 0,
+          suggestion:
+            'User may not have permissions on this ad account or business context may be incorrect',
         });
         return defaultPermissions;
       }
 
-      if (userPermissions.tasks) {
-        return userPermissions.tasks;
+      if (!userPermissions.tasks || userPermissions.tasks.length === 0) {
+        logger.warn('User found but no tasks/permissions assigned', {
+          adAccountId,
+          currentUserId,
+          userId,
+          userPermissions,
+        });
+        return defaultPermissions;
       }
-      logger.warn('User found, but tasks property is missing in permissions response', {
+
+      logger.info('Successfully fetched ad account permissions', {
         adAccountId,
         currentUserId,
         userId,
+        permissions: userPermissions.tasks,
+        businessContext: resolvedBusinessId || 'none',
       });
-      return defaultPermissions;
+
+      return userPermissions.tasks;
     } catch (error) {
-      // handleMetaApiCall will retry appropriate errors, but if it ultimately fails,
-      // we still want to return default permissions for this non-critical operation
-      logger.warn('Error fetching ad account permissions', {
+      if (attempt < maxAttempts) {
+        logger.warn('Permission fetch attempt failed, retrying', {
+          adAccountId,
+          currentUserId,
+          userId,
+          attempt,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+
+        // Exponential backoff for retry
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+
+        return await MetaApiService._fetchAdAccountPermissionsWithRetry(
+          adAccountId,
+          accessToken,
+          currentUserId,
+          userId,
+          businessId,
+          attempt + 1
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Resolves business context with multiple strategies.
+   *
+   * @param businessId - undefined: lookup from DB, null: non-business account, string: business account
+   * @param userId - Local user ID for database queries
+   * @param adAccountId - Ad account ID for business lookup
+   * @returns Resolved business ID or null for non-business accounts
+   */
+  private static async _resolveBusinessContext(
+    businessId: string | null | undefined,
+    userId: string,
+    adAccountId: string
+  ): Promise<string | null> {
+    // Strategy 1: Use explicitly provided business context
+    if (businessId !== undefined) {
+      // businessId is either a string (business-managed) or null (non-business)
+      return businessId;
+    }
+
+    // Strategy 2: Lookup from database
+    try {
+      const dbBusinessId = await getBusinessIdForAdAccount(userId, adAccountId);
+      logger.debug('Business ID resolved from database', {
         adAccountId,
-        currentUserId,
+        userId,
+        businessId: dbBusinessId,
+      });
+      return dbBusinessId;
+    } catch (error) {
+      logger.warn('Failed to resolve business context from database', {
+        adAccountId,
         userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      return defaultPermissions;
+      // Return null as fallback (treat as non-business account)
+      return null;
     }
+  }
+
+  /**
+   * Builds the assigned_users API URL with proper business parameter handling.
+   */
+  private static _buildAssignedUsersUrl(
+    adAccountId: string,
+    accessToken: string,
+    businessId: string | null
+  ): string {
+    const params = new URLSearchParams({
+      access_token: accessToken,
+      fields: 'id,tasks',
+    });
+
+    // Only add business parameter if we have a non-null business ID
+    // null means "non-business account", undefined would mean "unknown"
+    if (businessId !== null && businessId !== '') {
+      params.set('business', businessId);
+    }
+
+    return `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?${params.toString()}`;
   }
 
   /**

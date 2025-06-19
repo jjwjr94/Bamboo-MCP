@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   CampaignObjectiveSchema,
+  CampaignSpecialAdCategoriesSchema,
   CampaignStatusSchema,
   MetaCampaignResponseSchema,
 } from '../../generated/schemas.js';
@@ -66,7 +67,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params, extra) => {
+      async (params: any, extra: any) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically
@@ -116,9 +117,17 @@ export class CampaignToolRegistry {
             .optional()
             .describe('Lifetime budget in cents (e.g., 10000 = $100.00).'),
           specialAdCategories: z
-            .array(z.string())
+            .array(CampaignSpecialAdCategoriesSchema)
+            .default(['NONE'])
+            .describe(
+              "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
+            ),
+          specialAdCategoryCountry: z
+            .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
             .optional()
-            .describe('Special ad categories if applicable.'),
+            .describe(
+              "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when specialAdCategories is not ['NONE']."
+            ),
         },
         outputSchema: outputSchema.shape,
       },
@@ -169,7 +178,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params, extra) => {
+      async (params: any, extra: any) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically
@@ -199,7 +208,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params, extra) => {
+      async (params: any, extra: any) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically

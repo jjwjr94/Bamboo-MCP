@@ -13,7 +13,6 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
-import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
@@ -42,17 +41,7 @@ export class MetaAdCreativeHandler {
         MetaAdCreativeSDK.Fields.link_url,
       ];
 
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      const apiParams: Record<string, any> = {};
-      if (businessId) {
-        apiParams.business_id = businessId;
-      }
-
-      const creativesCursor = await new MetaAdAccountSDK(adAccountId).getAdCreatives(
-        fields,
-        apiParams
-      );
+      const creativesCursor = await new MetaAdAccountSDK(adAccountId).getAdCreatives(fields);
 
       // Handle pagination - fetch all pages with safety limit
       let currentCursor = creativesCursor as any; // Cast to access pagination methods
@@ -111,12 +100,6 @@ export class MetaAdCreativeHandler {
         [MetaAdCreativeSDK.Fields.name]: params.name,
         [MetaAdCreativeSDK.Fields.object_story_spec]: params.objectStorySpec,
       };
-
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      if (businessId) {
-        creativeData.business_id = businessId;
-      }
 
       const creative = await new MetaAdAccountSDK(adAccountId).createAdCreative([], creativeData);
 

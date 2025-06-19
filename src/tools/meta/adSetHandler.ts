@@ -14,7 +14,6 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
-import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
@@ -50,7 +49,6 @@ export class MetaAdSetHandler {
       ];
 
       let adSetsCursor: any;
-      let businessId: string | null = null;
 
       if (params.campaignId) {
         // Get ad sets from a specific campaign
@@ -61,14 +59,8 @@ export class MetaAdSetHandler {
           params.adAccountId ||
           (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
 
-        // Add business context if account is business-managed
-        businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-        const apiParams: Record<string, any> = {};
-        if (businessId) {
-          apiParams.business_id = businessId;
-        }
-
-        adSetsCursor = await new MetaAdAccountSDK(adAccountId).getAdSets(fields, apiParams);
+        // Meta API handles business context automatically via ad account
+        adSetsCursor = await new MetaAdAccountSDK(adAccountId).getAdSets(fields);
       }
 
       // Handle pagination - fetch all pages with safety limit
@@ -139,12 +131,7 @@ export class MetaAdSetHandler {
         [MetaAdSetSDK.Fields.status]: params.status || 'PAUSED',
       };
 
-      // Add business context if account is business-managed
-      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
-      if (businessId) {
-        adSetData.business_id = businessId;
-      }
-
+      // Meta API handles business context automatically via ad account
       removeUndefinedProperties(adSetData);
 
       const adSet = await new MetaAdAccountSDK(adAccountId).createAdSet([], adSetData);
