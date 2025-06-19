@@ -34,8 +34,11 @@ FACEBOOK_APP_SECRET=your-app-secret
 FACEBOOK_CALLBACK_URL=https://yourdomain.com/auth/facebook/callback
 FACEBOOK_OAUTH_SCOPES=ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read
 
-# JWT
-JWT_SECRET=your-super-secure-secret-at-least-32-characters
+# JWT - EdDSA (Ed25519) Keys
+# Generate with: openssl genpkey -algorithm Ed25519 -out private.pem
+# Extract public: openssl pkey -in private.pem -pubout -out public.pem
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEI...\n-----END PRIVATE KEY-----"
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA...\n-----END PUBLIC KEY-----"
 JWT_EXPIRES_IN=24h
 
 # Server
@@ -180,8 +183,11 @@ FACEBOOK_APP_SECRET=your-dev-app-secret
 FACEBOOK_CALLBACK_URL=http://localhost:3000/auth/facebook/callback
 FACEBOOK_OAUTH_SCOPES=ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read
 
-# JWT
-JWT_SECRET=your-development-secret-key-32-chars-min
+# JWT - EdDSA (Ed25519) Keys  
+# Generate with: openssl genpkey -algorithm Ed25519 -out private.pem
+# Extract public: openssl pkey -in private.pem -pubout -out public.pem
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEI...\n-----END PRIVATE KEY-----"
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA...\n-----END PUBLIC KEY-----"
 JWT_EXPIRES_IN=24h
 
 # Server

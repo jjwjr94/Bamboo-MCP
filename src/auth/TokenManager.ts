@@ -84,12 +84,12 @@ export class TokenManager {
       });
       const defaultScopes = env.FACEBOOK_OAUTH_SCOPES.split(',');
 
-      const newAccessToken = createJWT({
+      const newAccessToken = await createJWT({
         userId: storedToken.userId,
         clientId: client.client_id,
         scopes: defaultScopes,
       });
-      const newPayload = verifyJWT(newAccessToken);
+      const newPayload = await verifyJWT(newAccessToken);
       const newRefreshToken = crypto.randomBytes(64).toString('hex');
       const newHashedRefreshToken = crypto
         .createHash('sha256')
@@ -117,12 +117,12 @@ export class TokenManager {
     const originallyGrantedScopes = userOAuthToken.scopes;
 
     // Generate new tokens with preserved scopes
-    const newAccessToken = createJWT({
+    const newAccessToken = await createJWT({
       userId: storedToken.userId,
       clientId: client.client_id,
       scopes: originallyGrantedScopes, // FIXED: Use preserved scopes, not all scopes
     });
-    const newPayload = verifyJWT(newAccessToken);
+    const newPayload = await verifyJWT(newAccessToken);
     const newRefreshToken = crypto.randomBytes(64).toString('hex');
     const newHashedRefreshToken = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
 
@@ -178,7 +178,7 @@ export class TokenManager {
       // If an access token is revoked, we revoke the entire family of refresh tokens
       // for that user/client pair since JWTs are stateless
       try {
-        const payload = verifyJWT(token);
+        const payload = await verifyJWT(token);
         await this.dbService.revokeActiveTokensForUser(payload.userId, client.client_id);
         logger.info('Revoked active refresh tokens for user due to access token revocation', {
           userId: payload.userId,

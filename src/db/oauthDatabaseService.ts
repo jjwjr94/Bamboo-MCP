@@ -2,7 +2,7 @@ import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/share
 import { and, eq, isNull } from 'drizzle-orm';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
-import { db } from './client.js';
+import { db, withUserContext } from './client.js';
 import { oauthClients, oauthRefreshTokens, oauthTokens, users } from './schema.js';
 
 // Type for the full refresh token record from the DB
@@ -123,28 +123,32 @@ export class OAuthDatabaseService {
   ): Promise<void> {
     const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
 
-    await db
-      .insert(oauthTokens)
-      .values({
-        userId,
-        accessToken,
-        expiresAt,
-        scopes,
-      })
-      .onConflictDoUpdate({
-        target: oauthTokens.userId,
-        set: {
+    return withUserContext(userId, async (tx) => {
+      await tx
+        .insert(oauthTokens)
+        .values({
+          userId,
           accessToken,
           expiresAt,
-          updatedAt: new Date(),
-        },
-      });
+          scopes,
+        })
+        .onConflictDoUpdate({
+          target: oauthTokens.userId,
+          set: {
+            accessToken,
+            expiresAt,
+            updatedAt: new Date(),
+          },
+        });
+    });
   }
 
   public async getLatestUserOAuthToken(userId: string): Promise<OAuthToken | undefined> {
-    return db.query.oauthTokens.findFirst({
-      where: eq(oauthTokens.userId, userId),
-      orderBy: (tokens, { desc }) => [desc(tokens.createdAt)],
+    return withUserContext(userId, async (tx) => {
+      return tx.query.oauthTokens.findFirst({
+        where: eq(oauthTokens.userId, userId),
+        orderBy: (tokens, { desc }) => [desc(tokens.createdAt)],
+      });
     });
   }
 

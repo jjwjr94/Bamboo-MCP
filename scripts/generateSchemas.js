@@ -1,101 +1,134 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AdAccount, AdSet, Campaign } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
+import {
+  Ad,
+  AdAccount,
+  AdCreative,
+  AdSet,
+  AdsInsights,
+  Business,
+  BusinessUser,
+  Campaign,
+  CustomAudience,
+  Page,
+  PagePost,
+  ProductCatalog,
+} from 'facebook-nodejs-business-sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputPath = path.resolve(__dirname, '../src/generated/schemas.ts');
 
+// Configuration for constants to auto-generate from Meta SDK
+const constantsToGenerate = [
+  { name: 'CampaignObjective', constant: Campaign.Objective },
+  { name: 'CampaignStatus', constant: Campaign.Status },
+  { name: 'CampaignConfiguredStatus', constant: Campaign.ConfiguredStatus },
+  { name: 'CampaignEffectiveStatus', constant: Campaign.EffectiveStatus },
+  { name: 'CampaignBidStrategy', constant: Campaign.BidStrategy },
+  { name: 'CampaignSpecialAdCategories', constant: Campaign.SpecialAdCategories },
+  { name: 'AdSetBillingEvent', constant: AdSet.BillingEvent },
+  { name: 'AdSetOptimizationGoal', constant: AdSet.OptimizationGoal },
+  { name: 'AdSetBidStrategy', constant: AdSet.BidStrategy },
+  { name: 'AdSetConfiguredStatus', constant: AdSet.ConfiguredStatus },
+  { name: 'AdSetEffectiveStatus', constant: AdSet.EffectiveStatus },
+  { name: 'AdSetStatus', constant: AdSet.Status },
+  { name: 'AdStatus', constant: Ad.Status },
+  { name: 'AdConfiguredStatus', constant: Ad.ConfiguredStatus },
+  { name: 'AdEffectiveStatus', constant: Ad.EffectiveStatus },
+  { name: 'AdCreativeCallToActionType', constant: AdCreative.CallToActionType },
+  { name: 'AdCreativeObjectType', constant: AdCreative.ObjectType },
+  { name: 'CustomAudienceSubtype', constant: CustomAudience.Subtype },
+  { name: 'CustomAudienceCustomerFileSource', constant: CustomAudience.CustomerFileSource },
+  { name: 'AdsInsightsDatePreset', constant: AdsInsights.DatePreset },
+  { name: 'AdsInsightsLevel', constant: AdsInsights.Level },
+  { name: 'AdsInsightsBreakdowns', constant: AdsInsights.Breakdowns },
+  { name: 'ProductCatalogVertical', constant: ProductCatalog.Vertical },
+];
+
+// Manual constants for enums not available in SDK
+const manualConstants = [
+  {
+    name: 'ProductAvailability',
+    values: ['in stock', 'out of stock', 'preorder', 'available for order', 'discontinued'],
+  },
+  {
+    name: 'ProductCondition',
+    values: ['new', 'refurbished', 'used'],
+  },
+  {
+    name: 'AssetType',
+    values: ['image', 'video'],
+  },
+  {
+    name: 'HttpMethod',
+    values: ['GET', 'POST', 'PUT', 'DELETE'],
+  },
+  {
+    name: 'InsightLevel',
+    values: ['account', 'campaign', 'adset', 'ad'],
+  },
+];
+
 /**
- * Creates a Zod schema from a Meta SDK field definition object.
- * Since Meta API fields can be strings, numbers, objects, arrays, or null,
- * we use a flexible union type for each field.
- *
- * @param {object} fields - The .Fields object from a Meta SDK class (e.g., Campaign.Fields).
- * @returns {z.ZodObject} - The generated Zod schema.
+ * Generate Zod schema and TypeScript type for an enum
  */
-const generateSchemaFromFields = (fields) => {
-  const shape = {};
+function generateEnumSchemaAndType(name, constant) {
+  let values;
 
-  // Flexible field type that can handle various Meta API response types
-  const flexibleField = z
-    .union([
-      z.string(),
-      z.number(),
-      z.boolean(),
-      z.object({}).passthrough(),
-      z.array(z.unknown()),
-      z.null(),
-    ])
-    .optional();
-
-  for (const fieldName of Object.values(fields)) {
-    shape[fieldName] = flexibleField;
+  if (Array.isArray(constant)) {
+    values = constant;
+  } else if (constant && typeof constant === 'object') {
+    values = Object.values(constant).filter((value) => typeof value === 'string');
+  } else {
+    console.warn(`Warning: Could not extract values for ${name}, skipping`);
+    return '';
   }
 
-  return z.object(shape).passthrough();
-};
+  if (values.length === 0) {
+    console.warn(`Warning: No valid values found for ${name}, skipping`);
+    return '';
+  }
 
-// Generate base Zod schemas from Meta SDK field definitions
-const MetaCampaignResponseSchema = generateSchemaFromFields(Campaign.Fields);
-const MetaAdSetResponseSchema = generateSchemaFromFields(AdSet.Fields);
-const MetaAdAccountResponseSchema = generateSchemaFromFields(AdAccount.Fields);
+  // Sort values for consistent output
+  values.sort();
 
-// Create list response schemas
-const _CampaignListResponseSchema = z.object({
-  campaigns: z.array(MetaCampaignResponseSchema),
-  paging: z
-    .object({
-      cursors: z
-        .object({
-          before: z.string().optional(),
-          after: z.string().optional(),
-        })
-        .optional(),
-      next: z.string().optional(),
-      previous: z.string().optional(),
-    })
-    .optional(),
-});
+  const enumValues = values.map((value) => `'${value}'`).join(', ');
 
-const _AdSetListResponseSchema = z.object({
-  adSets: z.array(MetaAdSetResponseSchema),
-  paging: z
-    .object({
-      cursors: z
-        .object({
-          before: z.string().optional(),
-          after: z.string().optional(),
-        })
-        .optional(),
-      next: z.string().optional(),
-      previous: z.string().optional(),
-    })
-    .optional(),
-});
+  return `
+// ${name} enum from Meta SDK
+export const ${name}Schema = z.enum([${enumValues}]);
+export type ${name} = z.infer<typeof ${name}Schema>;
+`;
+}
 
-const _AdAccountListResponseSchema = z.object({
-  accounts: z.array(MetaAdAccountResponseSchema),
-  paging: z
-    .object({
-      cursors: z
-        .object({
-          before: z.string().optional(),
-          after: z.string().optional(),
-        })
-        .optional(),
-      next: z.string().optional(),
-      previous: z.string().optional(),
-    })
-    .optional(),
-});
+// Generate all enum schemas
+let generatedEnumsContent = '';
+
+// Generate from SDK constants
+for (const { name, constant } of constantsToGenerate) {
+  generatedEnumsContent += generateEnumSchemaAndType(name, constant);
+}
+
+// Generate from manual constants
+for (const { name, values } of manualConstants) {
+  generatedEnumsContent += generateEnumSchemaAndType(name, values);
+}
+
+// Check if AdsInsights.Fields is available for conditional generation
+const hasAdsInsightsFields = AdsInsights?.Fields && Object.keys(AdsInsights.Fields).length > 0;
+
+// Check if Business and BusinessUser fields are available
+const hasBusinessFields = Business?.Fields && Object.keys(Business.Fields).length > 0;
+const hasBusinessUserFields = BusinessUser?.Fields && Object.keys(BusinessUser.Fields).length > 0;
 
 // Generate the TypeScript file content
 const fileContent = `// Auto-generated by scripts/generateSchemas.js - DO NOT EDIT MANUALLY
 // Generated from Meta SDK field definitions at ${new Date().toISOString()}
 
 import { z } from 'zod';
+
+${generatedEnumsContent}
 
 // Flexible field type for Meta API responses
 const MetaFlexibleField = z.union([
@@ -106,6 +139,16 @@ const MetaFlexibleField = z.union([
   z.array(z.unknown()),
   z.null()
 ]).optional();
+
+// Reusable Paging Schema
+const PagingSchema = z.object({
+  cursors: z.object({
+    before: z.string().optional(),
+    after: z.string().optional()
+  }).optional(),
+  next: z.string().optional(),
+  previous: z.string().optional()
+}).optional();
 
 // Campaign fields: ${Object.keys(Campaign.Fields).length} total
 export const MetaCampaignResponseSchema = z.object({
@@ -128,42 +171,153 @@ ${Object.values(AdAccount.Fields)
   .join('\n')}
 }).passthrough();
 
+// AdCreative fields: ${Object.keys(AdCreative.Fields).length} total
+export const MetaAdCreativeResponseSchema = z.object({
+${Object.values(AdCreative.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+
+// Ad fields: ${Object.keys(Ad.Fields).length} total
+export const MetaAdResponseSchema = z.object({
+${Object.values(Ad.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+
+// CustomAudience fields: ${Object.keys(CustomAudience.Fields).length} total
+export const MetaCustomAudienceResponseSchema = z.object({
+${Object.values(CustomAudience.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+
+// Page fields: ${Object.keys(Page.Fields).length} total
+export const MetaPageResponseSchema = z.object({
+${Object.values(Page.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+
+// PagePost fields: ${Object.keys(PagePost.Fields).length} total
+export const MetaPagePostResponseSchema = z.object({
+${Object.values(PagePost.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+
+${
+  hasBusinessFields
+    ? `
+// Business fields: ${Object.keys(Business.Fields).length} total
+export const MetaBusinessResponseSchema = z.object({
+${Object.values(Business.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+`
+    : '// Business schema skipped - SDK fields not available'
+}
+
+${
+  hasBusinessUserFields
+    ? `
+// BusinessUser fields: ${Object.keys(BusinessUser.Fields).length} total
+export const MetaBusinessUserResponseSchema = z.object({
+${Object.values(BusinessUser.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+`
+    : '// BusinessUser schema skipped - SDK fields not available'
+}
+
+${
+  hasAdsInsightsFields
+    ? `
+// AdsInsights fields: ${Object.keys(AdsInsights.Fields).length} total
+export const MetaAdsInsightsResponseSchema = z.object({
+${Object.values(AdsInsights.Fields)
+  .map((field) => `  ${field}: MetaFlexibleField,`)
+  .join('\n')}
+}).passthrough();
+`
+    : '// AdsInsights schema skipped - SDK fields not available'
+}
+
 // List response schemas
 export const CampaignListResponseSchema = z.object({
   campaigns: z.array(MetaCampaignResponseSchema),
-  paging: z.object({
-    cursors: z.object({
-      before: z.string().optional(),
-      after: z.string().optional()
-    }).optional(),
-    next: z.string().optional(),
-    previous: z.string().optional()
-  }).optional()
+  paging: PagingSchema
 });
 
 export const AdSetListResponseSchema = z.object({
   adSets: z.array(MetaAdSetResponseSchema),
-  paging: z.object({
-    cursors: z.object({
-      before: z.string().optional(),
-      after: z.string().optional()
-    }).optional(),
-    next: z.string().optional(),
-    previous: z.string().optional()
-  }).optional()
+  paging: PagingSchema
 });
 
 export const AdAccountListResponseSchema = z.object({
   accounts: z.array(MetaAdAccountResponseSchema),
-  paging: z.object({
-    cursors: z.object({
-      before: z.string().optional(),
-      after: z.string().optional()
-    }).optional(),
-    next: z.string().optional(),
-    previous: z.string().optional()
-  }).optional()
+  paging: PagingSchema
 });
+
+export const AdCreativeListResponseSchema = z.object({
+  adCreatives: z.array(MetaAdCreativeResponseSchema),
+  paging: PagingSchema
+});
+
+export const AdListResponseSchema = z.object({
+  ads: z.array(MetaAdResponseSchema),
+  paging: PagingSchema
+});
+
+export const CustomAudienceListResponseSchema = z.object({
+  customAudiences: z.array(MetaCustomAudienceResponseSchema),
+  paging: PagingSchema
+});
+
+export const PageListResponseSchema = z.object({
+  pages: z.array(MetaPageResponseSchema),
+  paging: PagingSchema
+});
+
+export const PagePostListResponseSchema = z.object({
+  posts: z.array(MetaPagePostResponseSchema),
+  paging: PagingSchema
+});
+
+${
+  hasBusinessFields
+    ? `
+export const BusinessListResponseSchema = z.object({
+  businesses: z.array(MetaBusinessResponseSchema),
+  paging: PagingSchema
+});
+`
+    : ''
+}
+
+${
+  hasBusinessUserFields
+    ? `
+export const BusinessUserListResponseSchema = z.object({
+  users: z.array(MetaBusinessUserResponseSchema),
+  paging: PagingSchema
+});
+`
+    : ''
+}
+
+${
+  hasAdsInsightsFields
+    ? `
+export const AdsInsightsListResponseSchema = z.object({
+  insights: z.array(MetaAdsInsightsResponseSchema),
+  paging: PagingSchema
+});
+`
+    : ''
+}
 
 // Meta API operation response schemas
 export const MetaCreateSuccessResponseSchema = z.object({
@@ -181,3 +335,23 @@ export const MetaDeleteSuccessResponseSchema = z.object({
 
 // Write the generated schemas to the output file
 fs.writeFileSync(outputPath, fileContent, 'utf8');
+
+const totalFields =
+  Object.keys(Campaign.Fields).length +
+  Object.keys(AdSet.Fields).length +
+  Object.keys(AdAccount.Fields).length +
+  Object.keys(AdCreative.Fields).length +
+  Object.keys(Ad.Fields).length +
+  Object.keys(CustomAudience.Fields).length +
+  Object.keys(Page.Fields).length +
+  Object.keys(PagePost.Fields).length +
+  (hasBusinessFields ? Object.keys(Business.Fields).length : 0) +
+  (hasBusinessUserFields ? Object.keys(BusinessUser.Fields).length : 0);
+
+console.info(`✅ Generated schemas written to ${outputPath}`);
+console.info(
+  `📊 Generated ${constantsToGenerate.length + manualConstants.length} enum types and schemas`
+);
+console.info(
+  `📋 Generated ${totalFields}${hasAdsInsightsFields ? ` + ${Object.keys(AdsInsights.Fields).length}` : ''} response schema fields`
+);

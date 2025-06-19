@@ -7,20 +7,39 @@ import { accountManager } from '../../utils/accountManager.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
 import { createMcpSuccessResult } from '../responseHelper.js';
+import { AdCreativeToolRegistry } from './AdCreativeToolRegistry.js';
+
 import { AdSetToolRegistry } from './AdSetToolRegistry.js';
+import { AdToolRegistry } from './AdToolRegistry.js';
+import { BusinessManagerToolRegistry } from './BusinessManagerToolRegistry.js';
 import { CampaignToolRegistry } from './CampaignToolRegistry.js';
+import { CustomAudienceToolRegistry } from './CustomAudienceToolRegistry.js';
+import { InsightsToolRegistry } from './InsightsToolRegistry.js';
+import { PagesToolRegistry } from './PagesToolRegistry.js';
 
 export class ToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
   private campaignToolRegistry: CampaignToolRegistry;
   private adSetToolRegistry: AdSetToolRegistry;
+  private adCreativeToolRegistry: AdCreativeToolRegistry;
+  private adToolRegistry: AdToolRegistry;
+  private insightsToolRegistry: InsightsToolRegistry;
+  private customAudienceToolRegistry: CustomAudienceToolRegistry;
+  private pagesToolRegistry: PagesToolRegistry;
+  private businessManagerToolRegistry: BusinessManagerToolRegistry;
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
     this.campaignToolRegistry = new CampaignToolRegistry(server, toolsHandler);
     this.adSetToolRegistry = new AdSetToolRegistry(server, toolsHandler);
+    this.adCreativeToolRegistry = new AdCreativeToolRegistry(server, toolsHandler);
+    this.adToolRegistry = new AdToolRegistry(server, toolsHandler);
+    this.insightsToolRegistry = new InsightsToolRegistry(server, toolsHandler);
+    this.customAudienceToolRegistry = new CustomAudienceToolRegistry(server, toolsHandler);
+    this.pagesToolRegistry = new PagesToolRegistry(server, toolsHandler);
+    this.businessManagerToolRegistry = new BusinessManagerToolRegistry(server, toolsHandler);
   }
 
   public register() {
@@ -61,6 +80,18 @@ export class ToolRegistry {
     this.campaignToolRegistry.register();
 
     this.adSetToolRegistry.register();
+
+    this.adCreativeToolRegistry.register();
+
+    this.adToolRegistry.register();
+
+    this.insightsToolRegistry.register();
+
+    this.customAudienceToolRegistry.register();
+
+    this.pagesToolRegistry.register();
+
+    this.businessManagerToolRegistry.register();
 
     const selectAdAccountOutputSchema = z.object({
       success: z.boolean(),

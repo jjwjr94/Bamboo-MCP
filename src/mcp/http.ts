@@ -6,7 +6,7 @@ import pTimeout, { TimeoutError } from 'p-timeout';
 import { extractTokenFromHeader, verifyJWT } from '../auth/jwt.js';
 import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
-import { AuthenticationError } from '../utils/errors.js';
+import { AuthenticationError, TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { BambooMCPServer } from './server.js';
 
@@ -136,7 +136,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
 
       try {
         const token = extractTokenFromHeader(request.headers.authorization);
-        authPayload = verifyJWT(token);
+        authPayload = await verifyJWT(token);
         logger.info(`HTTP MCP: Authenticated user ${authPayload.userId}`);
 
         await handleMCPRequest(request, reply, token, authPayload, method);
@@ -155,6 +155,12 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
             error: error.message,
           });
           sendInternalError(reply, id);
+          return;
+        }
+
+        // Handle TokenError as authentication error
+        if (error instanceof TokenError) {
+          sendAuthError(reply, new AuthenticationError(error.message), id);
           return;
         }
 

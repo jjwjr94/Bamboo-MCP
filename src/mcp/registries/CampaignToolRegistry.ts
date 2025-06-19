@@ -2,7 +2,11 @@ import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
-import { MetaCampaignResponseSchema } from '../../generated/schemas.js';
+import {
+  CampaignObjectiveSchema,
+  CampaignStatusSchema,
+  MetaCampaignResponseSchema,
+} from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
@@ -97,17 +101,8 @@ export class CampaignToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
           name: z.string().describe('The name of the campaign.'),
-          objective: z
-            .enum([
-              'OUTCOME_TRAFFIC',
-              'OUTCOME_ENGAGEMENT',
-              'OUTCOME_LEADS',
-              'OUTCOME_SALES',
-              'OUTCOME_APP_PROMOTION',
-              'OUTCOME_AWARENESS',
-            ])
-            .describe('The campaign objective.'),
-          status: z.enum(['ACTIVE', 'PAUSED']).default('PAUSED').describe('The campaign status.'),
+          objective: CampaignObjectiveSchema.describe('The campaign objective.'),
+          status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
           dailyBudget: z
             .number()
             .int()
@@ -197,7 +192,8 @@ export class CampaignToolRegistry {
       'delete_campaign',
       {
         title: 'Delete Campaign',
-        description: 'Deletes a campaign (sets status to DELETED).',
+        description:
+          'Archives a campaign by setting its status to DELETED. The campaign data is preserved but the campaign becomes inactive.',
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to delete.'),
         },

@@ -14,9 +14,12 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
+
+const MAX_ADSETS_TO_FETCH = 1000;
 
 export class MetaAdSetHandler {
   async getAdSets(authPayload: JWTPayload, params: { campaignId?: string; adAccountId?: string }) {
@@ -46,29 +49,61 @@ export class MetaAdSetHandler {
         MetaAdSetSDK.Fields.promoted_object,
       ];
 
-      const adSetsCursor = params.campaignId
-        ? await new MetaCampaignSDK(params.campaignId).getAdSets(fields)
-        : await new MetaAdAccountSDK(
-            params.adAccountId ||
-              (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId))
-          ).getAdSets(fields);
+      let adSetsCursor: any;
+      let businessId: string | null = null;
 
-      // Treat the response as unknown and validate it
-      const rawAdSets = adSetsCursor as unknown;
+      if (params.campaignId) {
+        // Get ad sets from a specific campaign
+        adSetsCursor = await new MetaCampaignSDK(params.campaignId).getAdSets(fields);
+      } else {
+        // Get ad sets from an ad account
+        const adAccountId =
+          params.adAccountId ||
+          (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
+
+        // Add business context if account is business-managed
+        businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
+        const apiParams: Record<string, any> = {};
+        if (businessId) {
+          apiParams.business_id = businessId;
+        }
+
+        adSetsCursor = await new MetaAdAccountSDK(adAccountId).getAdSets(fields, apiParams);
+      }
+
+      // Handle pagination - fetch all pages with safety limit
+      let currentCursor = adSetsCursor as any; // Cast to access pagination methods
+      const allRawAdSets: any[] = [];
+
+      while (currentCursor && currentCursor.length > 0) {
+        allRawAdSets.push(...currentCursor);
+
+        // Safety limit to prevent resource exhaustion
+        if (allRawAdSets.length >= MAX_ADSETS_TO_FETCH) {
+          logger.warn('Reached maximum ad sets limit, truncating results', {
+            limit: MAX_ADSETS_TO_FETCH,
+          });
+          break;
+        }
+
+        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
+          currentCursor = await currentCursor.next();
+        } else {
+          break;
+        }
+      }
 
       // Validate each ad set using the auto-generated schema
       const validatedAdSets: z.infer<typeof MetaAdSetResponseSchema>[] = [];
-      if (Array.isArray(rawAdSets)) {
-        for (const adSet of rawAdSets) {
-          const result = MetaAdSetResponseSchema.safeParse(adSet);
-          if (result.success) {
-            validatedAdSets.push(result.data);
-          } else {
-            logger.warn('Skipping invalid ad set data received from Meta API', {
-              adSetId: (adSet as { id?: string }).id || 'Unknown ID',
-              errors: result.error.errors,
-            });
-          }
+      for (const adSet of allRawAdSets) {
+        const result = MetaAdSetResponseSchema.safeParse(adSet);
+        if (result.success) {
+          validatedAdSets.push(result.data);
+        } else {
+          logger.warn('Skipping invalid ad set data received from Meta API', {
+            adSetId: (adSet as { id?: string }).id || 'Unknown ID',
+            errors: result.error.errors,
+          });
         }
       }
 
@@ -103,6 +138,12 @@ export class MetaAdSetHandler {
         [MetaAdSetSDK.Fields.end_time]: params.endTime,
         [MetaAdSetSDK.Fields.status]: params.status || 'PAUSED',
       };
+
+      // Add business context if account is business-managed
+      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
+      if (businessId) {
+        adSetData.business_id = businessId;
+      }
 
       removeUndefinedProperties(adSetData);
 

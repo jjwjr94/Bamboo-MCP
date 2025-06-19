@@ -25,7 +25,7 @@ const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('b
 - **Scope**: Least privilege principle
 
 ### Token Security
-- **JWT Algorithm**: HS256 for internal access tokens (TODO: upgrade to RS256/ES256 for production)
+- **JWT Algorithm**: EdDSA (Ed25519) for internal access tokens with public/private key pair
 - **Token Lifetime**: Configurable via `JWT_EXPIRES_IN`, defaults to 24 hours
 - **Refresh Tokens**: Stored as SHA-256 hashes, automatic rotation on use
 - **Breach Detection**: Token family revocation on invalid token replay
@@ -36,11 +36,15 @@ const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('b
 ### Configuration
 ```typescript
 const jwtConfig = {
-  algorithm: 'HS256' as const,
-  expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-  issuer: process.env.BASE_URL,
-  audience: 'bamboo-mcp-client'
+  algorithm: 'EdDSA' as const,
+  expiresIn: env.JWT_EXPIRES_IN,
+  issuer: env.BASE_URL,
+  audience: 'bamboo-mcp-client',
 };
+
+// Asymmetric key loading at startup
+const privateKeyPromise = importPKCS8(env.JWT_PRIVATE_KEY, 'EdDSA');
+const publicKeyPromise = importSPKI(env.JWT_PUBLIC_KEY, 'EdDSA');
 ```
 
 ### Refresh Token Security
@@ -287,9 +291,10 @@ const corsOptions = {
 ### Environment Validation
 ```typescript
 const envSchema = z.object({
-  JWT_SECRET: z.string()
-    .min(32, 'JWT secret must be at least 32 characters')
-    .regex(/^[A-Za-z0-9+/=]+$/, 'Invalid JWT secret format'),
+  JWT_PRIVATE_KEY: z.string()
+    .regex(/^-----BEGIN PRIVATE KEY-----[\s\r\n]+([A-Za-z0-9+/=\s\r\n]+)[\s\r\n]+-----END PRIVATE KEY-----[\s\r\n]*$/, 'Invalid EdDSA private key PEM format'),
+  JWT_PUBLIC_KEY: z.string()
+    .regex(/^-----BEGIN PUBLIC KEY-----[\s\r\n]+([A-Za-z0-9+/=\s\r\n]+)[\s\r\n]+-----END PUBLIC KEY-----[\s\r\n]*$/, 'Invalid EdDSA public key PEM format'),
   FACEBOOK_APP_SECRET: z.string()
     .min(32, 'Facebook app secret required'),
   DATABASE_URL: z.string()

@@ -1,30 +1,22 @@
 // Meta Ads API type definitions
 
-export type CampaignObjective =
-  | 'OUTCOME_TRAFFIC'
-  | 'OUTCOME_ENGAGEMENT'
-  | 'OUTCOME_LEADS'
-  | 'OUTCOME_SALES'
-  | 'OUTCOME_APP_PROMOTION'
-  | 'OUTCOME_AWARENESS';
-
-export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'DELETED';
-
-export type AdSetBillingEvent =
-  | 'LINK_CLICKS'
-  | 'IMPRESSIONS'
-  | 'REACH'
-  | 'THRUPLAY'
-  | 'LANDING_PAGE_VIEWS';
-
-export type AdSetOptimizationGoal =
-  | 'LINK_CLICKS'
-  | 'IMPRESSIONS'
-  | 'REACH'
-  | 'LANDING_PAGE_VIEWS'
-  | 'LEAD_GENERATION'
-  | 'CONVERSIONS'
-  | 'THRUPLAY';
+// Import auto-generated types from schemas
+import type {
+  AdSetBillingEvent,
+  AdSetOptimizationGoal,
+  AdsInsightsBreakdowns,
+  AdsInsightsDatePreset,
+  AssetType,
+  CampaignObjective,
+  CampaignStatus,
+  CustomAudienceCustomerFileSource,
+  CustomAudienceSubtype,
+  HttpMethod,
+  InsightLevel,
+  ProductAvailability,
+  ProductCatalogVertical,
+  ProductCondition,
+} from '../generated/schemas.js';
 
 export interface MetaTargeting {
   geoLocations?: {
@@ -110,14 +102,7 @@ export interface CreateAdCreativeRequest {
 }
 
 export interface MetaInsightsParams {
-  datePreset?:
-    | 'today'
-    | 'yesterday'
-    | 'this_week'
-    | 'last_week'
-    | 'this_month'
-    | 'last_month'
-    | 'lifetime';
+  datePreset?: AdsInsightsDatePreset;
   timeRange?: {
     since: string; // YYYY-MM-DD
     until: string; // YYYY-MM-DD
@@ -125,7 +110,7 @@ export interface MetaInsightsParams {
   fields?: string[];
   breakdowns?: string[];
   limit?: number;
-  level?: 'account' | 'campaign' | 'adset' | 'ad';
+  level?: InsightLevel;
 }
 
 export interface MetaInsights {
@@ -149,75 +134,84 @@ export interface MetaInsights {
   dateStop?: string;
 }
 
+// Enhanced insights types for better API support
+export type InsightMetric =
+  | 'spend'
+  | 'impressions'
+  | 'clicks'
+  | 'ctr'
+  | 'cpc'
+  | 'cpm'
+  | 'reach'
+  | 'frequency'
+  | 'conversions'
+  | 'cost_per_conversion'
+  | 'actions';
+
+export type InsightBreakdown = AdsInsightsBreakdowns;
+
+export interface GetAdInsightsRequest {
+  adAccountId?: string;
+  campaignId?: string;
+  adSetId?: string;
+  adId?: string;
+  metrics: InsightMetric[];
+  breakdowns?: InsightBreakdown[];
+  datePreset?: AdsInsightsDatePreset;
+  timeRange?: {
+    since: string; // YYYY-MM-DD
+    until: string; // YYYY-MM-DD
+  };
+  limit?: number;
+}
+
+export interface MetaInsight {
+  [key: string]: string | number | undefined | unknown;
+  date_start?: string;
+  date_stop?: string;
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  ctr?: string;
+  cpc?: string;
+  cpm?: string;
+  reach?: string;
+  frequency?: string;
+  conversions?: string;
+  cost_per_conversion?: string;
+  actions?: Array<{
+    action_type: string;
+    value: string;
+  }>;
+  // Breakdown fields
+  age?: string;
+  gender?: string;
+  country?: string;
+  region?: string;
+  impression_device?: string;
+  placement?: string;
+  action_type?: string;
+  action_device?: string;
+  conversion_destination?: string;
+}
+
 export interface CustomAudienceRequest {
   name: string;
-  subtype:
-    | 'CUSTOM'
-    | 'WEBSITE'
-    | 'APP'
-    | 'OFFLINE_CONVERSION'
-    | 'CLAIM'
-    | 'PARTNER'
-    | 'MANAGED'
-    | 'VIDEO'
-    | 'LOOKALIKE'
-    | 'ENGAGEMENT'
-    | 'DATA_SET'
-    | 'BAG_OF_ACCOUNTS'
-    | 'STUDY_RULE_AUDIENCE'
-    | 'FOX';
+  subtype: CustomAudienceSubtype;
   description?: string;
-  customerFileSource?:
-    | 'USER_PROVIDED_ONLY'
-    | 'PARTNER_PROVIDED_ONLY'
-    | 'BOTH_USER_AND_PARTNER_PROVIDED';
+  customerFileSource?: CustomAudienceCustomerFileSource;
 }
 
 export interface ProductCatalogRequest {
   name: string;
-  vertical?:
-    | 'commerce'
-    | 'destinations'
-    | 'flights'
-    | 'home_listings'
-    | 'hotels'
-    | 'media'
-    | 'offline_commerce'
-    | 'automotive'
-    | 'boats'
-    | 'education'
-    | 'events'
-    | 'jobs'
-    | 'motorbikes'
-    | 'pet_supplies'
-    | 'real_estate'
-    | 'software_apps'
-    | 'travel'
-    | 'vehicles'
-    | 'womens_apparel'
-    | 'mens_apparel'
-    | 'kids_apparel'
-    | 'home_goods'
-    | 'jewelry'
-    | 'electronics'
-    | 'sports'
-    | 'beauty'
-    | 'fitness'
-    | 'baby_products'
-    | 'food'
-    | 'toys'
-    | 'books'
-    | 'music'
-    | 'games'
-    | 'outdoor'
-    | 'generic';
+  vertical?: ProductCatalogVertical;
 }
 
 export interface ProductRequest {
   name: string;
   description?: string;
-  availability: 'in stock' | 'out of stock' | 'preorder' | 'available for order' | 'discontinued';
-  condition: 'new' | 'refurbished' | 'used';
+  availability: ProductAvailability;
+  condition: ProductCondition;
   price: string; // e.g., "19.99 USD"
   link: string;
   imageUrl?: string;
@@ -232,13 +226,13 @@ export interface ProductRequest {
 export interface UploadAssetRequest {
   filename: string;
   data: string; // base64 encoded
-  type: 'image' | 'video';
+  type: AssetType;
   adAccountId: string;
 }
 
 export interface MetaApiRequest {
   endpoint: string;
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: HttpMethod;
   params?: Record<string, unknown>;
   data?: Record<string, unknown>;
 }
@@ -278,14 +272,8 @@ export interface MetaOAuthAdAccountsResponse {
 export interface MetaAdAccountAssignedUsersResponse {
   data?: Array<{
     id: string;
-    tasks: string[];
+    tasks?: string[];
   }>;
-  paging?: {
-    cursors: {
-      after: string;
-    };
-    next?: string;
-  };
 }
 
 export interface MetaGraphApiError {
@@ -360,7 +348,7 @@ export interface MetaAd {
 export interface MetaAsset {
   id: string;
   filename: string;
-  type: 'image' | 'video';
+  type: AssetType;
   dimensions?: string;
   hash?: string;
   url: string;
@@ -371,3 +359,84 @@ export interface MetaAsset {
     alt: string;
   };
 }
+
+// Business Manager types
+export interface BusinessAccount {
+  id: string;
+  name: string;
+  created_time?: string;
+  link?: string;
+  verification_status?: string;
+  vertical?: string;
+  timezone_id?: number;
+}
+
+export interface BusinessUser {
+  id: string;
+  name?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  title?: string;
+  finance_permission?: string;
+  ip_permission?: string;
+  two_fac_status?: string;
+  pending_email?: string;
+}
+
+export interface MetaBusinessAccountsResponse {
+  data: BusinessAccount[];
+  paging?: {
+    cursors: {
+      after: string;
+    };
+    next?: string;
+  };
+}
+
+export interface MetaBusinessUsersResponse {
+  data: BusinessUser[];
+  paging?: {
+    cursors: {
+      before?: string;
+      after?: string;
+    };
+    next?: string;
+    previous?: string;
+  };
+}
+
+// SDK API Node List types for better type safety
+export interface MetaApiNode {
+  _data: any;
+  _fields: string[];
+}
+
+export interface MetaApiNodeList extends Array<MetaApiNode> {
+  _paging?: {
+    cursors: {
+      before?: string;
+      after?: string;
+    };
+    next?: string;
+    previous?: string;
+  };
+}
+
+// Re-export key auto-generated types for convenience
+export type {
+  CampaignObjective,
+  CampaignStatus,
+  AdSetBillingEvent,
+  AdSetOptimizationGoal,
+  CustomAudienceSubtype,
+  CustomAudienceCustomerFileSource,
+  ProductCatalogVertical,
+  ProductAvailability,
+  ProductCondition,
+  AssetType,
+  HttpMethod,
+  AdsInsightsDatePreset,
+  InsightLevel,
+};

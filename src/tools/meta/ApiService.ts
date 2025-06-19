@@ -1,4 +1,4 @@
-import { db } from '../../db/client.js';
+import { withUserContext } from '../../db/client.js';
 import { adAccounts } from '../../db/schema.js';
 import type {
   MetaAdAccountAssignedUsersResponse,
@@ -152,45 +152,48 @@ export class MetaApiService {
         const accounts = adAccountsData.data || [];
 
         if (accounts.length > 0) {
-          // Process accounts in batches for better performance
-          for (const account of accounts) {
-            // Dynamically fetch permissions or use fallback
-            let permissions: string[];
-            if (metaUserId) {
-              permissions = await MetaApiService.fetchAdAccountPermissions(
-                account.id,
-                accessToken,
-                metaUserId,
-                userId
-              );
-            } else {
-              // Fallback if Meta User ID could not be fetched initially
-              permissions = ['UNKNOWN'];
-            }
-            await db
-              .insert(adAccounts)
-              .values({
-                id: account.id,
-                userId: userId,
-                name: account.name,
-                status: String(account.account_status), // Cast to string for consistency
-                currency: account.currency,
-                timezone: account.timezone_name,
-                businessId: account.business?.id || null, // Store business_id if available
-                permissions,
-              })
-              .onConflictDoUpdate({
-                target: [adAccounts.id, adAccounts.userId],
-                set: {
+          // Wrap database operations in withUserContext for RLS compliance
+          await withUserContext(userId, async (tx) => {
+            // Process accounts in batches for better performance
+            for (const account of accounts) {
+              // Dynamically fetch permissions or use fallback
+              let permissions: string[];
+              if (metaUserId) {
+                permissions = await MetaApiService.fetchAdAccountPermissions(
+                  account.id,
+                  accessToken,
+                  metaUserId,
+                  userId
+                );
+              } else {
+                // Fallback if Meta User ID could not be fetched initially
+                permissions = ['UNKNOWN'];
+              }
+              await tx
+                .insert(adAccounts)
+                .values({
+                  id: account.id,
+                  userId: userId,
                   name: account.name,
                   status: String(account.account_status), // Cast to string for consistency
                   currency: account.currency,
                   timezone: account.timezone_name,
-                  businessId: account.business?.id || null, // Update business_id
+                  businessId: account.business?.id || null, // Store business_id if available
                   permissions,
-                },
-              });
-          }
+                })
+                .onConflictDoUpdate({
+                  target: [adAccounts.id, adAccounts.userId],
+                  set: {
+                    name: account.name,
+                    status: String(account.account_status), // Cast to string for consistency
+                    currency: account.currency,
+                    timezone: account.timezone_name,
+                    businessId: account.business?.id || null, // Update business_id
+                    permissions,
+                  },
+                });
+            }
+          });
         }
 
         nextUrl = adAccountsData.paging?.next;

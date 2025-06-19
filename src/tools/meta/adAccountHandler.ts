@@ -11,6 +11,8 @@ import { logger } from '../../utils/logger.js';
 import { MetaApiService } from './ApiService.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
+const MAX_AD_ACCOUNTS_TO_FETCH = 100; // Most users have limited ad accounts
+
 export class MetaAdAccountHandler {
   private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
     // Extract and validate required fields from the flexible schema
@@ -76,24 +78,43 @@ export class MetaAdAccountHandler {
         MetaAdAccountSDK.Fields.business,
       ];
 
-      // The SDK does not ship with TypeScript definitions, so we cast here to unknown
-      // and validate using Zod schemas
-      const metaAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
-      const rawAccounts = metaAccountsCursor as unknown;
+      // Get ad accounts using the SDK with proper pagination
+      const adAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
+
+      // Handle pagination - fetch all pages with safety limit
+      let currentCursor = adAccountsCursor as any; // Cast to access pagination methods
+      const allRawAccounts: any[] = [];
+
+      while (currentCursor && currentCursor.length > 0) {
+        allRawAccounts.push(...currentCursor);
+
+        // Safety limit to prevent resource exhaustion
+        if (allRawAccounts.length >= MAX_AD_ACCOUNTS_TO_FETCH) {
+          logger.warn('Reached maximum ad accounts limit, truncating results', {
+            limit: MAX_AD_ACCOUNTS_TO_FETCH,
+            userId: authPayload.userId,
+          });
+          break;
+        }
+
+        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
+          currentCursor = await currentCursor.next();
+        } else {
+          break;
+        }
+      }
 
       // Validate each account using the auto-generated schema
       const validatedAccounts: z.infer<typeof MetaAdAccountResponseSchema>[] = [];
-      if (Array.isArray(rawAccounts)) {
-        for (const account of rawAccounts) {
-          const result = MetaAdAccountResponseSchema.safeParse(account);
-          if (result.success) {
-            validatedAccounts.push(result.data);
-          } else {
-            logger.warn('Skipping invalid ad account data received from Meta API', {
-              accountId: (account as { id?: string }).id || 'Unknown ID',
-              errors: result.error.errors,
-            });
-          }
+      for (const account of allRawAccounts) {
+        const result = MetaAdAccountResponseSchema.safeParse(account);
+        if (result.success) {
+          validatedAccounts.push(result.data);
+        } else {
+          logger.warn('Skipping invalid ad account data received from Meta API', {
+            accountId: (account as { id?: string }).id || 'Unknown ID',
+            errors: result.error.errors,
+          });
         }
       }
 

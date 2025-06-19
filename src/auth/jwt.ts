@@ -1,16 +1,20 @@
-import jwt from 'jsonwebtoken';
+import { SignJWT, decodeJwt, importPKCS8, importSPKI, errors as joseErrors, jwtVerify } from 'jose';
 import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
-// JWT Configuration
+// JWT Configuration for EdDSA
 const jwtConfig = {
-  algorithm: 'HS256' as const, // TODO: Use RS256/ES256 in production with proper key pairs
+  algorithm: 'EdDSA' as const,
   expiresIn: env.JWT_EXPIRES_IN,
   issuer: env.BASE_URL,
   audience: 'bamboo-mcp-client',
 };
+
+// Key import promises - loaded once at module startup for performance
+const privateKeyPromise = importPKCS8(env.JWT_PRIVATE_KEY, 'EdDSA');
+const publicKeyPromise = importSPKI(env.JWT_PUBLIC_KEY, 'EdDSA');
 
 export interface CreateTokenOptions {
   userId: string;
@@ -19,23 +23,25 @@ export interface CreateTokenOptions {
   scopes: string[];
 }
 
-export function createJWT(options: CreateTokenOptions): string {
+export async function createJWT(options: CreateTokenOptions): Promise<string> {
   const { userId, clientId, adAccountId, scopes } = options;
 
-  const payload = {
-    userId,
-    clientId,
-    ...(adAccountId && { adAccountId }),
-    scopes,
-    jti: generateJTI(), // Unique token identifier
-  };
-
   try {
-    const token = jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: jwtConfig.expiresIn,
-      issuer: jwtConfig.issuer,
-      audience: jwtConfig.audience,
-    } as jwt.SignOptions);
+    const privateKey = await privateKeyPromise;
+
+    const token = await new SignJWT({
+      userId,
+      clientId,
+      ...(adAccountId && { adAccountId }),
+      scopes,
+    })
+      .setProtectedHeader({ alg: jwtConfig.algorithm })
+      .setIssuedAt()
+      .setExpirationTime(jwtConfig.expiresIn)
+      .setIssuer(jwtConfig.issuer)
+      .setAudience(jwtConfig.audience)
+      .setJti(generateJTI())
+      .sign(privateKey);
 
     logger.info('JWT created', { userId, adAccountId, scopes: scopes.length });
     return token;
@@ -45,35 +51,42 @@ export function createJWT(options: CreateTokenOptions): string {
   }
 }
 
-export function verifyJWT(token: string): JWTPayload {
+export async function verifyJWT(token: string): Promise<JWTPayload> {
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET, {
-      algorithms: [jwtConfig.algorithm],
+    const publicKey = await publicKeyPromise;
+
+    const { payload } = await jwtVerify(token, publicKey, {
       issuer: jwtConfig.issuer,
       audience: jwtConfig.audience,
-    }) as JWTPayload;
+      algorithms: [jwtConfig.algorithm],
+    });
 
     // Validate required fields
-    if (!decoded.userId || !decoded.scopes || !Array.isArray(decoded.scopes)) {
+    if (!payload.userId || !payload.clientId || !payload.scopes || !Array.isArray(payload.scopes)) {
       throw new TokenError('Invalid JWT payload structure');
     }
 
-    logger.tokenUsage(decoded.userId, 'JWT_VERIFY', true);
-    return decoded;
+    logger.tokenUsage(payload.userId as string, 'JWT_VERIFY', true);
+    return payload as JWTPayload;
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
+    if (error instanceof joseErrors.JWTExpired) {
+      logger.warn('JWT expired', { expiredAt: error.payload?.exp });
+      throw new TokenError('JWT token has expired');
+    }
+
+    if (error instanceof joseErrors.JWTClaimValidationFailed) {
       logger.warn('JWT verification failed', { error: error.message });
       throw new TokenError(`Invalid JWT: ${error.message}`);
     }
 
-    if (error instanceof jwt.TokenExpiredError) {
-      logger.warn('JWT expired', { expiredAt: error.expiredAt });
-      throw new TokenError('JWT token has expired');
+    if (error instanceof joseErrors.JWSSignatureVerificationFailed) {
+      logger.warn('JWT signature verification failed');
+      throw new TokenError('Invalid JWT: signature verification failed');
     }
 
-    if (error instanceof jwt.NotBeforeError) {
-      logger.warn('JWT not yet valid', { date: error.date });
-      throw new TokenError('JWT token not yet valid');
+    if (error instanceof joseErrors.JWTInvalid) {
+      logger.warn('JWT format invalid', { error: error.message });
+      throw new TokenError(`Invalid JWT: ${error.message}`);
     }
 
     logger.error('JWT verification error', { error });
@@ -100,7 +113,7 @@ export function extractTokenFromHeader(authHeader: string | undefined): string {
 
 export function decodeJWTWithoutVerification(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.decode(token) as JWTPayload;
+    const decoded = decodeJwt(token) as JWTPayload;
     return decoded;
   } catch (error) {
     logger.warn('JWT decode failed', { error });

@@ -1,13 +1,15 @@
-export interface JWTPayload {
+import type { JWTPayload as JoseJWTPayload } from 'jose';
+
+export interface JWTPayload extends JoseJWTPayload {
   userId: string;
   clientId: string;
   adAccountId?: string;
   scopes: string[];
-  iat: number;
+  // Override optional fields from jose that we always set
   exp: number;
+  iat: number;
   iss: string;
   aud: string;
-  jti?: string;
 }
 
 export interface SessionData {

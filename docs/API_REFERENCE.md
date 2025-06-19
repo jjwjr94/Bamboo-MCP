@@ -1,322 +1,430 @@
-# API Reference
+# Meta Ads MCP Server API Reference
 
-## Server Information
+This document provides comprehensive reference documentation for all 28 tools available in the Meta Ads MCP server. The server provides secure, production-ready access to Meta's Marketing API through the Model Context Protocol.
 
-- **Name**: Bamboo MCP
-- **Version**: 0.1.0
-- **MCP SDK**: v1.13.0
-- **Server Class**: McpServer
-- **Endpoint**: `/` (root)
-- **Transport**: StreamableHTTPServerTransport
+## Overview
+
+The Meta Ads MCP server implements 28 tools across 5 core categories:
+- **Ad Account Management** (1 tool)
+- **Campaign Management** (4 tools) 
+- **Ad Set Management** (4 tools)
+- **Ad Management** (4 tools)
+- **Ad Creative Management** (4 tools)
+- **Insights & Analytics** (2 tools)
+- **Custom Audience Management** (3 tools)
+- **Pages Management** (3 tools)
+- **Business Manager** (2 tools)
+
+All tools implement enterprise-grade features including:
+- **Pagination Safety**: Automatic limits prevent resource exhaustion
+- **Business Context**: Seamless handling of business-managed accounts
+- **Delete Protection**: Confirmation flags for destructive operations
+- **Schema Validation**: Comprehensive input/output validation
+- **Error Resilience**: Circuit breakers and intelligent retry logic
 
 ## Authentication
 
-### OAuth 2.0 Flow
+All tools require valid OAuth 2.1 authentication with appropriate Meta permissions. The server handles token management, refresh rotation, and security automatically.
 
-**Authorization URL**: `/authorize`
-```
-GET /authorize?client_id={id}&redirect_uri={uri}&code_challenge={challenge}&code_challenge_method=S256&state={state}&scope={scopes}
-```
+## Ad Account Management
 
-**Token Exchange**: `/token`
-```
-POST /token
-Content-Type: application/x-www-form-urlencoded
+### get_ad_accounts
 
-grant_type=authorization_code&code={code}&client_id={id}&code_verifier={verifier}&redirect_uri={uri}
-```
+Retrieves all Meta ad accounts accessible to the authenticated user.
 
-**Token Refresh**: `/token`
-```
-POST /token
-Content-Type: application/x-www-form-urlencoded
+**Input Parameters:**
+- None required
 
-grant_type=refresh_token&refresh_token={token}&client_id={id}
-```
-
-### JWT Tokens
-
-**Format**: Bearer token in Authorization header
-**Expiration**: 86400 seconds (24 hours)
-**Algorithm**: HS256
-
-**Payload Structure**:
+**Output:**
 ```json
 {
-  "userId": "uuid",
-  "clientId": "string",
-  "adAccountId": "act_123456789",
-  "scopes": ["ads_management"],
-  "iat": 1640995200,
-  "exp": 1641081600,
-  "iss": "https://yourdomain.com",
-  "aud": "bamboo-mcp-client"
-}
-```
-
-## Resources
-
-### Prompt Resources
-
-**System Prompt**
-```
-URI: bamboo://prompts/system
-Content-Type: text/plain
-Description: System prompt for AI agent
-```
-
-**Best Practices**
-```
-URI: bamboo://prompts/best-practices
-Content-Type: text/markdown
-Description: Meta Ads best practices guide
-```
-
-## Tools
-
-### Account Management
-
-#### get_ad_accounts
-List all ad accounts accessible to the user.
-
-**Parameters**: None
-
-**Response**:
-```json
-{
-  "content": [{"type": "text", "text": "..."}],
-  "structuredContent": [
+  "accounts": [
     {
       "id": "act_123456789",
       "name": "My Ad Account",
-      "account_status": 1,
-      "currency": "USD",
-      "timezone_name": "America/Los_Angeles",
-      "business_name": "My Business"
-    }
-  ]
-}
-```
-
-#### select_ad_account
-Set default ad account for current session.
-
-**Parameters**:
-- `adAccountId` (string, required): Ad account ID (e.g., "act_123456789")
-
-**Response**:
-```json
-{
-  "content": [{"type": "text", "text": "Selected ad account: act_123456789"}]
-}
-```
-
-### Campaign Management
-
-#### get_campaigns
-List campaigns in ad account.
-
-**Parameters**:
-- `adAccountId` (string, optional): Ad account ID. Uses selected account if not provided.
-
-**Response**:
-```json
-{
-  "structuredContent": [
-    {
-      "id": "123456789",
-      "name": "My Campaign",
-      "objective": "OUTCOME_TRAFFIC",
       "status": "ACTIVE",
-      "daily_budget": 1000,
-      "created_time": "2025-01-01T00:00:00Z"
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "businessId": "business_123",
+      "permissions": ["MANAGE", "ADVERTISE"]
     }
   ]
 }
 ```
 
-#### create_campaign
-Create new advertising campaign.
+**Features:**
+- Automatic pagination with safety limits (max 100 accounts)
+- Business context detection and storage
+- Permission validation and caching
+- Real-time sync with Meta API
 
-**Parameters**:
-- `adAccountId` (string, optional): Ad account ID
-- `name` (string, required): Campaign name
-- `objective` (enum, required): Campaign objective
-  - `OUTCOME_TRAFFIC`
-  - `OUTCOME_ENGAGEMENT`
-  - `OUTCOME_LEADS`
-  - `OUTCOME_SALES`
-  - `OUTCOME_APP_PROMOTION`
-  - `OUTCOME_AWARENESS`
-- `status` (enum, optional): Campaign status (default: "PAUSED")
-  - `ACTIVE`
-  - `PAUSED`
-- `dailyBudget` (integer, optional): Daily budget in cents
+## Campaign Management
 
-**Response**:
+### get_campaigns
+
+Retrieves campaigns for a specified ad account with comprehensive pagination.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account ID
+
+**Output:**
 ```json
 {
-  "structuredContent": {
-    "id": "123456789",
-    "name": "My Campaign",
-    "objective": "OUTCOME_TRAFFIC",
-    "status": "PAUSED"
+  "campaigns": [
+    {
+      "id": "campaign_123",
+      "name": "Summer Sale Campaign",
+      "status": "ACTIVE",
+      "objective": "CONVERSIONS",
+      "daily_budget": "5000",
+      "lifetime_budget": null,
+      "created_time": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+**Features:**
+- Pagination safety (max 1000 campaigns)
+- Business context handling for enterprise accounts
+- Comprehensive field coverage
+- Status filtering support
+
+### create_campaign
+
+Creates a new advertising campaign with full validation.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `name` (required): Campaign name
+- `objective` (required): Campaign objective (CONVERSIONS, TRAFFIC, etc.)
+- `status` (optional): Initial status (default: PAUSED)
+- `dailyBudget` (optional): Daily budget in cents
+- `lifetimeBudget` (optional): Lifetime budget in cents
+- `specialAdCategories` (optional): Special category compliance
+
+**Output:**
+```json
+{
+  "success": true,
+  "campaignId": "campaign_123",
+  "name": "Summer Sale Campaign",
+  "message": "Campaign created successfully"
+}
+```
+
+### update_campaign
+
+Updates an existing campaign with selective field modification.
+
+**Input Parameters:**
+- `campaignId` (required): Campaign to update
+- `name` (optional): New campaign name
+- `status` (optional): New status
+- `dailyBudget` (optional): New daily budget
+- `lifetimeBudget` (optional): New lifetime budget
+
+### delete_campaign
+
+Archives a campaign by setting status to DELETED. Campaign data is preserved.
+
+**Input Parameters:**
+- `campaignId` (required): Campaign to archive
+
+**Note:** This performs a soft delete (archival) and does not require confirmation.
+
+## Ad Set Management
+
+### get_adsets
+
+Retrieves ad sets with flexible filtering and comprehensive pagination.
+
+**Input Parameters:**
+- `adAccountId` (optional): Filter by ad account
+- `campaignId` (optional): Filter by campaign
+
+**Features:**
+- Pagination safety (max 1000 ad sets)
+- Multi-level filtering (account and campaign)
+- Business context support
+- Complete targeting information
+
+### create_adset
+
+Creates a new ad set with advanced targeting options.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `campaignId` (required): Parent campaign
+- `name` (required): Ad set name
+- `status` (optional): Initial status
+- `dailyBudget` (optional): Daily budget
+- `lifetimeBudget` (optional): Lifetime budget
+- `bidAmount` (optional): Bid amount
+- `targeting` (required): Targeting specification
+- `startTime` (optional): Start time
+- `endTime` (optional): End time
+
+### update_adset
+
+Updates ad set configuration including targeting and budget.
+
+### delete_adset
+
+Archives an ad set by setting status to DELETED. Ad set data is preserved.
+
+## Ad Management
+
+### get_ads
+
+Retrieves ads with multi-level filtering capabilities.
+
+**Input Parameters:**
+- `adAccountId` (optional): Filter by ad account
+- `adSetId` (optional): Filter by ad set
+- `campaignId` (optional): Filter by campaign
+
+**Features:**
+- Pagination safety (max 1000 ads)
+- Hierarchical filtering
+- Business context integration
+- Complete ad metadata
+
+### create_ad
+
+Creates a new ad linking creative and ad set.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `name` (required): Ad name
+- `adSetId` (required): Parent ad set
+- `creativeId` (required): Ad creative to use
+- `status` (optional): Initial status
+
+### update_ad
+
+Updates ad configuration and creative assignment.
+
+### delete_ad
+
+**⚠️ DESTRUCTIVE OPERATION**
+
+Permanently deletes an ad. This action cannot be undone.
+
+**Input Parameters:**
+- `adId` (required): Ad to delete
+- `confirmPermanentDelete` (required): Must be `true` to confirm
+
+**Safety Features:**
+- Explicit confirmation required
+- Validation prevents accidental deletion
+- Comprehensive error handling
+
+## Ad Creative Management
+
+### get_ad_creatives
+
+Retrieves ad creatives with comprehensive metadata.
+
+**Features:**
+- Pagination safety (max 1000 creatives)
+- Business context support
+- Rich creative metadata
+- Thumbnail and preview URLs
+
+### create_ad_creative
+
+Creates new ad creative with flexible content options.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `name` (required): Creative name
+- `objectStorySpec` (required): Creative content specification
+
+### update_ad_creative
+
+Updates creative properties and metadata.
+
+### delete_ad_creative
+
+**⚠️ DESTRUCTIVE OPERATION**
+
+Permanently deletes an ad creative. This action cannot be undone.
+
+**Input Parameters:**
+- `adCreativeId` (required): Creative to delete
+- `confirmPermanentDelete` (required): Must be `true` to confirm
+
+## Insights & Analytics
+
+### get_ad_insights
+
+Retrieves detailed performance insights for ads, ad sets, or campaigns.
+
+**Input Parameters:**
+- `campaignId` (optional): Campaign-level insights
+- `adSetId` (optional): Ad set-level insights  
+- `adId` (optional): Ad-level insights
+- `metrics` (required): Performance metrics to retrieve
+- `breakdowns` (optional): Data breakdown dimensions
+- `datePreset` (optional): Predefined date range
+- `timeRange` (optional): Custom date range
+- `limit` (optional): Results per page
+
+**Features:**
+- Pagination safety (max 10,000 insights)
+- Flexible metric selection
+- Multiple breakdown options
+- Custom date range support
+
+### get_ad_account_insights
+
+Retrieves account-level performance insights and aggregated metrics.
+
+## Custom Audience Management
+
+### get_custom_audiences
+
+Retrieves custom audiences with metadata and size estimates.
+
+**Features:**
+- Pagination safety (max 1000 audiences)
+- Size approximations
+- Retention information
+- Source tracking
+
+### create_custom_audience
+
+Creates new custom audience for targeted advertising.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `name` (required): Audience name
+- `subtype` (required): Audience type
+- `description` (optional): Audience description
+- `customerFileSource` (optional): Data source
+
+### delete_custom_audience
+
+**⚠️ DESTRUCTIVE OPERATION**
+
+Permanently deletes a custom audience. This action cannot be undone.
+
+**Input Parameters:**
+- `customAudienceId` (required): Audience to delete
+- `confirmPermanentDelete` (required): Must be `true` to confirm
+
+## Pages Management
+
+### get_pages
+
+Retrieves Facebook Pages accessible to the authenticated user.
+
+**Features:**
+- Pagination safety (max 100 pages)
+- Complete page metadata
+- Permission information
+- Verification status
+
+### get_page_posts
+
+Retrieves posts from a specific Facebook Page.
+
+**Input Parameters:**
+- `pageId` (required): Target page ID
+
+**Features:**
+- Pagination safety (max 1000 posts)
+- Post metadata and engagement
+- Media attachment information
+
+### create_page_post_ad
+
+Creates an ad using an existing page post as creative.
+
+**Input Parameters:**
+- `adAccountId` (optional): Target ad account
+- `name` (required): Ad name
+- `adSetId` (required): Parent ad set
+- `postId` (required): Page post to promote
+- `status` (optional): Initial status
+
+## Business Manager
+
+### get_business_accounts
+
+Retrieves business accounts owned by the authenticated user.
+
+**Features:**
+- Pagination safety (max 100 businesses)
+- Verification status
+- Business metadata
+- Timezone information
+
+### get_business_users
+
+Retrieves users associated with a specific business account.
+
+**Input Parameters:**
+- `businessId` (required): Target business ID
+
+**Features:**
+- Pagination safety (max 1000 users)
+- Role and permission information
+- Contact details
+- Security status (2FA, etc.)
+
+## Error Handling
+
+All tools implement comprehensive error handling with structured responses:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid parameter: adAccountId is required",
+    "retryable": false,
+    "details": {
+      "field": "adAccountId",
+      "constraint": "required"
+    }
   }
 }
 ```
 
-#### update_campaign
-Update existing campaign.
+**Error Types:**
+- `VALIDATION_ERROR`: Invalid input parameters
+- `AUTHENTICATION_ERROR`: Auth token issues
+- `AUTHORIZATION_ERROR`: Insufficient permissions
+- `RATE_LIMIT_ERROR`: API rate limiting (retryable)
+- `META_API_ERROR`: Meta API failures
+- `INTERNAL_ERROR`: Server-side issues
 
-**Parameters**:
-- `campaignId` (string, required): Campaign ID
-- `name` (string, optional): New campaign name
-- `status` (enum, optional): New status
-- `dailyBudget` (integer, optional): New daily budget in cents
+## Rate Limiting & Resilience
 
-**Response**: Updated campaign object
+The server implements sophisticated resilience patterns:
 
-#### delete_campaign
-Delete campaign.
+- **Circuit Breakers**: Automatic failure detection and recovery
+- **Exponential Backoff**: Intelligent retry timing
+- **Request Isolation**: Per-user resilience policies
+- **Error Classification**: Smart retry decisions
+- **Resource Protection**: Pagination safety limits
 
-**Parameters**:
-- `campaignId` (string, required): Campaign ID
+## Security Features
 
-**Response**:
-```json
-{
-  "content": [{"type": "text", "text": "Campaign deleted successfully"}]
-}
-```
+- **OAuth 2.1 + PKCE**: Modern authentication standard
+- **JWT with EdDSA**: Cryptographically secure tokens
+- **Refresh Token Rotation**: Enhanced security
+- **Row-Level Security**: Database-level isolation
+- **Business Context Validation**: Secure multi-tenant access
+- **Input Sanitization**: Comprehensive validation
+- **Output Sanitization**: Sensitive data protection
 
-### Ad Set Management
+## Performance Optimizations
 
-#### get_adsets
-List ad sets.
-
-**Parameters**:
-- `adAccountId` (string, optional): Ad account ID
-- `campaignId` (string, optional): Campaign ID to filter by
-
-**Response**:
-```json
-{
-  "structuredContent": [
-    {
-      "id": "123456789",
-      "name": "My Ad Set",
-      "campaign_id": "987654321",
-      "status": "ACTIVE",
-      "daily_budget": 500,
-      "bid_amount": 100,
-      "optimization_goal": "LINK_CLICKS"
-    }
-  ]
-}
-```
-
-#### create_adset
-Create new ad set.
-
-**Parameters**:
-- `campaignId` (string, required): Parent campaign ID
-- `name` (string, required): Ad set name
-- `status` (enum, optional): Status (default: "PAUSED")
-- `dailyBudget` (integer, optional): Daily budget in cents
-- `bidAmount` (integer, optional): Bid amount in cents
-- `optimizationGoal` (enum, optional): Optimization goal
-- `targeting` (object, optional): Targeting options
-
-**Response**: Created ad set object
-
-#### update_adset
-Update existing ad set.
-
-**Parameters**:
-- `adSetId` (string, required): Ad set ID
-- `name` (string, optional): New name
-- `status` (enum, optional): New status
-- `dailyBudget` (integer, optional): New daily budget
-- `bidAmount` (integer, optional): New bid amount
-
-**Response**: Updated ad set object
-
-#### delete_adset
-Delete ad set.
-
-**Parameters**:
-- `adSetId` (string, required): Ad set ID
-
-**Response**:
-```json
-{
-  "content": [{"type": "text", "text": "Ad set deleted successfully"}]
-}
-```
-
-## Error Handling
-
-### Error Response Format
-```json
-{
-  "content": [{"type": "text", "text": "Error message"}],
-  "isError": true
-}
-```
-
-### Common Error Types
-
-**Authentication Errors**:
-- `MISSING_TOKEN`: Authorization header required
-- `INVALID_TOKEN`: JWT token invalid or expired
-- `INSUFFICIENT_SCOPE`: Token lacks required permissions
-
-**Account Errors**:
-- `NO_ACCOUNT_SELECTED`: Must select ad account first
-- `ACCOUNT_NOT_FOUND`: Ad account not accessible
-- `ACCOUNT_ACCESS_DENIED`: Insufficient permissions
-
-**Validation Errors**:
-- `INVALID_PARAMETERS`: Required parameters missing or invalid
-- `INVALID_ENUM_VALUE`: Enum parameter has invalid value
-
-**API Errors**:
-- `META_API_ERROR`: Facebook Graph API error
-- `RATE_LIMIT_EXCEEDED`: API rate limit reached
-- `CIRCUIT_BREAKER_OPEN`: Circuit breaker protecting against failures
-
-## Rate Limits
-
-- **OAuth Endpoints**: Standard rate limiting per IP
-- **MCP Tools**: Limited by Meta Graph API quotas
-- **Circuit Breaker**: Opens after 5 consecutive failures, resets after 30 seconds
-
-## Health Check
-
-**Endpoint**: `/health`
-**Method**: GET
-
-**Response**:
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-01-01T00:00:00.000Z",
-  "version": "0.1.0",
-  "database": "connected",
-  "mcp": "ready"
-}
-```
-
-## Data Sanitization
-
-All tool responses automatically sanitize Facebook SDK internal properties:
-- Removes properties starting with underscore (`_`)
-- Strips `_api` objects containing access tokens
-- Prevents sensitive data leakage
-
-## CORS Policy
-
-- **Allowed Origins**: Configurable via environment
-- **Allowed Methods**: GET, POST, OPTIONS
-- **Allowed Headers**: Content-Type, Authorization
-- **Credentials**: Supported 
+- **Pagination Limits**: Prevent resource exhaustion
+- **Efficient Queries**: Optimized database access
+- **Connection Pooling**: Database performance
+- **Request Caching**: Reduced API calls
+- **Batch Operations**: Efficient bulk processing
+- **Memory Management**: Controlled resource usage 

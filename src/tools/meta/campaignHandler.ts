@@ -13,9 +13,12 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
+
+const MAX_CAMPAIGNS_TO_FETCH = 1000;
 
 export class MetaCampaignHandler {
   async getCampaigns(authPayload: JWTPayload, params: { adAccountId?: string }) {
@@ -47,24 +50,51 @@ export class MetaCampaignHandler {
         MetaCampaignSDK.Fields.stop_time,
       ];
 
-      const campaignsCursor = await new MetaAdAccountSDK(adAccountId).getCampaigns(fields);
+      // Add business context if account is business-managed
+      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
+      const apiParams: Record<string, any> = {};
+      if (businessId) {
+        apiParams.business_id = businessId;
+      }
 
-      // Treat the response as unknown and validate it
-      const rawCampaigns = campaignsCursor as unknown;
+      const campaignsCursor = await new MetaAdAccountSDK(adAccountId).getCampaigns(
+        fields,
+        apiParams
+      );
+
+      // Handle pagination - fetch all pages with safety limit
+      let currentCursor = campaignsCursor as any; // Cast to access pagination methods
+      const allRawCampaigns: any[] = [];
+
+      while (currentCursor && currentCursor.length > 0) {
+        allRawCampaigns.push(...currentCursor);
+
+        // Safety limit to prevent resource exhaustion
+        if (allRawCampaigns.length >= MAX_CAMPAIGNS_TO_FETCH) {
+          logger.warn('Reached maximum campaigns limit, truncating results', {
+            limit: MAX_CAMPAIGNS_TO_FETCH,
+          });
+          break;
+        }
+
+        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
+          currentCursor = await currentCursor.next();
+        } else {
+          break;
+        }
+      }
 
       // Validate each campaign using the auto-generated schema
       const validatedCampaigns: z.infer<typeof MetaCampaignResponseSchema>[] = [];
-      if (Array.isArray(rawCampaigns)) {
-        for (const campaign of rawCampaigns) {
-          const result = MetaCampaignResponseSchema.safeParse(campaign);
-          if (result.success) {
-            validatedCampaigns.push(result.data);
-          } else {
-            logger.warn('Skipping invalid campaign data received from Meta API', {
-              campaignId: (campaign as { id?: string }).id || 'Unknown ID',
-              errors: result.error.errors,
-            });
-          }
+      for (const campaign of allRawCampaigns) {
+        const result = MetaCampaignResponseSchema.safeParse(campaign);
+        if (result.success) {
+          validatedCampaigns.push(result.data);
+        } else {
+          logger.warn('Skipping invalid campaign data received from Meta API', {
+            campaignId: (campaign as { id?: string }).id || 'Unknown ID',
+            errors: result.error.errors,
+          });
         }
       }
 
@@ -95,6 +125,12 @@ export class MetaCampaignHandler {
         [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
         [MetaCampaignSDK.Fields.special_ad_categories]: params.specialAdCategories,
       };
+
+      // Add business context if account is business-managed
+      const businessId = await getBusinessIdForAdAccount(authPayload.userId, adAccountId);
+      if (businessId) {
+        campaignData.business_id = businessId;
+      }
 
       removeUndefinedProperties(campaignData);
 

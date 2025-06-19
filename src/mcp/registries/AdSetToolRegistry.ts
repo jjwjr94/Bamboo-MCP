@@ -2,6 +2,12 @@ import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
+import {
+  AdSetBillingEventSchema,
+  AdSetOptimizationGoalSchema,
+  AdSetStatusSchema,
+  MetaAdSetResponseSchema,
+} from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
@@ -41,30 +47,7 @@ export class AdSetToolRegistry {
    */
   private registerGetAdSets(): void {
     const outputSchema = z.object({
-      adSets: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            status: z.string(),
-            effective_status: z.string().optional(),
-            configured_status: z.string().optional(),
-            created_time: z.string().optional(),
-            updated_time: z.string().optional(),
-            start_time: z.string().optional().nullable(),
-            end_time: z.string().optional().nullable(),
-            daily_budget: z.string().optional(),
-            lifetime_budget: z.string().optional(),
-            budget_remaining: z.string().optional(),
-            billing_event: z.string().optional(),
-            optimization_goal: z.string().optional(),
-            bid_amount: z.number().optional().nullable(),
-            targeting: z.unknown().optional(),
-            attribution_spec: z.unknown().optional(),
-            promoted_object: z.unknown().optional(),
-          })
-        )
-        .describe('A list of ad sets.'),
+      adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
     });
 
     this.server.registerTool(
@@ -152,24 +135,14 @@ export class AdSetToolRegistry {
               excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
             })
             .describe('Targeting criteria for the ad set.'),
-          billingEvent: z
-            .enum(['LINK_CLICKS', 'IMPRESSIONS', 'REACH', 'THRUPLAY', 'LANDING_PAGE_VIEWS'])
-            .describe('Billing event for the ad set.'),
-          optimizationGoal: z
-            .enum([
-              'LINK_CLICKS',
-              'IMPRESSIONS',
-              'REACH',
-              'LANDING_PAGE_VIEWS',
-              'LEAD_GENERATION',
-              'CONVERSIONS',
-              'THRUPLAY',
-            ])
-            .describe('Optimization goal for the ad set.'),
+          billingEvent: AdSetBillingEventSchema.describe('Billing event for the ad set.'),
+          optimizationGoal: AdSetOptimizationGoalSchema.describe(
+            'Optimization goal for the ad set.'
+          ),
           bidAmount: z.number().int().positive().optional().describe('Bid amount in cents.'),
           startTime: z.string().optional().describe('Start time in ISO format.'),
           endTime: z.string().optional().describe('End time in ISO format.'),
-          status: z.enum(['ACTIVE', 'PAUSED']).default('PAUSED').describe('The ad set status.'),
+          status: AdSetStatusSchema.default('PAUSED').describe('The ad set status.'),
         },
         outputSchema: outputSchema.shape,
       },
@@ -204,10 +177,7 @@ export class AdSetToolRegistry {
         inputSchema: {
           adSetId: z.string().describe('The ID of the ad set to update.'),
           name: z.string().optional().describe('New name for the ad set.'),
-          status: z
-            .enum(['ACTIVE', 'PAUSED', 'DELETED'])
-            .optional()
-            .describe('New status for the ad set.'),
+          status: AdSetStatusSchema.optional().describe('New status for the ad set.'),
           dailyBudget: z
             .number()
             .int()
@@ -252,7 +222,8 @@ export class AdSetToolRegistry {
       'delete_adset',
       {
         title: 'Delete Ad Set',
-        description: 'Deletes an ad set (sets status to DELETED).',
+        description:
+          'Archives an ad set by setting its status to DELETED. The ad set data is preserved but the ad set becomes inactive.',
         inputSchema: {
           adSetId: z.string().describe('The ID of the ad set to delete.'),
         },

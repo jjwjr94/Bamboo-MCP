@@ -12,7 +12,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { eq } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
-import { db } from '../db/client.js';
+import { withUserContext } from '../db/client.js';
 import { OAuthDatabaseService } from '../db/oauthDatabaseService.js';
 import { oauthTokens } from '../db/schema.js';
 import { MetaApiService } from '../tools/meta/ApiService.js';
@@ -193,7 +193,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       ]);
 
       // 4. Create internal auth code and prepare redirect
-      const jwt = createJWT({
+      const jwt = await createJWT({
         userId: user.id,
         clientId: sessionData.clientId,
         scopes: sessionData.grantedScopes || env.FACEBOOK_OAUTH_SCOPES.split(','),
@@ -253,7 +253,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     // Single-use temporary code is now guaranteed by the atomic database operation.
 
     const sessionToken = tempCodeData.sessionToken;
-    const payload = verifyJWT(sessionToken);
+    const payload = await verifyJWT(sessionToken);
 
     // 1. Create refresh token using TokenManager
     const refreshToken = await this.tokenManager.createInitialRefreshToken(
@@ -274,10 +274,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     try {
-      const payload = verifyJWT(token);
-      const oauthToken = await db.query.oauthTokens.findFirst({
-        where: eq(oauthTokens.userId, payload.userId),
-        orderBy: (tokens, { desc }) => [desc(tokens.createdAt)],
+      const payload = await verifyJWT(token);
+      const oauthToken = await withUserContext(payload.userId, async (tx) => {
+        return tx.query.oauthTokens.findFirst({
+          where: eq(oauthTokens.userId, payload.userId),
+          orderBy: (tokens, { desc }) => [desc(tokens.createdAt)],
+        });
       });
 
       if (!oauthToken) {
