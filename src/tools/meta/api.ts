@@ -28,7 +28,6 @@ async function fetchUserToken(userId: string) {
 export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi> {
   const token = await fetchUserToken(userId);
 
-  // Check token expiration
   if (token.expiresAt && new Date() >= new Date(token.expiresAt)) {
     logger.warn('Meta access token has expired', { userId, expiresAt: token.expiresAt });
     throw new AuthenticationError('Meta access token has expired. Please re-authenticate.');

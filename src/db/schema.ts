@@ -129,6 +129,7 @@ export const adAccounts = pgTable(
     currency: text('currency'),
     timezone: text('timezone'),
     permissions: text('permissions').array(),
+    businessId: text('business_id'), // Business Manager ID (null if not business-managed)
     createdAt: timestamp('created_at').defaultNow(),
   },
   (table) => [

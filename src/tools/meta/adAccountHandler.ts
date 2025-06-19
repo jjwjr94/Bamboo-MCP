@@ -4,7 +4,6 @@ import { db, withUserContext } from '../../db/client.js';
 import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { MetaAdAccount } from '../../types/meta.js';
 import { AuthenticationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { MetaApiService } from './ApiService.js';
@@ -30,7 +29,6 @@ export class MetaAdAccountHandler {
         .limit(1);
     });
 
-    // Validate that the required information was found
     if (!tokenAndMetaId.length || !tokenAndMetaId[0].accessToken || !tokenAndMetaId[0].metaUserId) {
       throw new AuthenticationError(
         'Could not find a valid Meta access token or Meta User ID for the user.'
@@ -45,14 +43,21 @@ export class MetaAdAccountHandler {
         MetaAdAccountSDK.Fields.account_status,
         MetaAdAccountSDK.Fields.currency,
         MetaAdAccountSDK.Fields.timezone_name,
+        MetaAdAccountSDK.Fields.business,
       ];
 
       // The SDK does not ship with TypeScript definitions, so we cast here to a
       // minimal interface capturing only the properties we care about.
       const metaAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
-      const metaAccounts = metaAccountsCursor as unknown as MetaAdAccount[];
+      const metaAccounts = metaAccountsCursor as unknown as Array<{
+        id: string;
+        name: string;
+        account_status: string | number;
+        currency: string;
+        timezone_name: string;
+        business?: { id: string; name?: string };
+      }>;
 
-      // Fetch permissions for each account
       const accountsToStore = await Promise.all(
         metaAccounts.map(
           async (acc: {
@@ -61,12 +66,16 @@ export class MetaAdAccountHandler {
             account_status: string | number;
             currency: string;
             timezone_name: string;
+            business?: { id: string; name?: string };
           }) => {
-            // Fetch real permissions using the new MetaApiService method
+            // Business ID is already available from the initial API call
+            const businessId = acc.business?.id;
+
             const permissions = await MetaApiService.fetchAdAccountPermissions(
               acc.id,
               accessToken,
-              metaUserId
+              metaUserId,
+              authPayload.userId
             );
 
             return {
@@ -75,6 +84,7 @@ export class MetaAdAccountHandler {
               status: String(acc.account_status),
               currency: acc.currency,
               timezone: acc.timezone_name,
+              businessId,
               permissions,
             };
           }
@@ -98,6 +108,7 @@ export class MetaAdAccountHandler {
               status: sql`excluded.status`,
               currency: sql`excluded.currency`,
               timezone: sql`excluded.timezone`,
+              businessId: sql`excluded.businessId`,
               permissions: sql`excluded.permissions`,
             },
           });

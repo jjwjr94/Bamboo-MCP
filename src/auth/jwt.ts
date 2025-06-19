@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
 
 // JWT Configuration
 const jwtConfig = {
-  algorithm: 'HS256' as const, // Will use RS256/ES256 in production with proper key pairs
+  algorithm: 'HS256' as const, // TODO: Use RS256/ES256 in production with proper key pairs
   expiresIn: env.JWT_EXPIRES_IN,
   issuer: env.BASE_URL,
   audience: 'bamboo-mcp-client',
@@ -108,12 +108,10 @@ export function decodeJWTWithoutVerification(token: string): JWTPayload | null {
   }
 }
 
-// Helper function to generate unique token identifier
 function generateJTI(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2)}`;
 }
 
-// Helper function to get token expiration time
 export function getTokenExpiration(token: string): Date | null {
   const decoded = decodeJWTWithoutVerification(token);
   if (!decoded?.exp) {
@@ -122,7 +120,6 @@ export function getTokenExpiration(token: string): Date | null {
   return new Date(decoded.exp * 1000);
 }
 
-// Helper function to check if token is close to expiring
 export function isTokenExpiringSoon(token: string, minutesThreshold = 5): boolean {
   const expiration = getTokenExpiration(token);
   if (!expiration) {

@@ -17,16 +17,13 @@ export class BambooMCPServer {
     );
     this.toolsHandler = new MetaToolsHandler();
 
-    // Use the new ResourceRegistry
     const resourceRegistry = new ResourceRegistry(this.server);
     resourceRegistry.register();
 
-    // Use the new ToolRegistry
     const toolRegistry = new ToolRegistry(this.server, this.toolsHandler);
     toolRegistry.register();
   }
 
-  // --- Server Management ---
   public getServer(): McpServer {
     return this.server;
   }
@@ -39,7 +36,6 @@ export class BambooMCPServer {
   }
 }
 
-// --- Stdio entry point ---
 if (import.meta.url === `file://${process.argv[1]}`) {
   const bambooServer = new BambooMCPServer();
   bambooServer.runStdio().catch((error) => {

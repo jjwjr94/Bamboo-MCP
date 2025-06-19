@@ -1,4 +1,3 @@
-// Structured logger utility
 // All logs go to stderr to avoid MCP protocol interference
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -37,7 +36,6 @@ class Logger {
       ...meta,
     };
 
-    // Send to stderr to avoid protocol interference
     console.error(JSON.stringify(logEntry));
   }
 
@@ -57,7 +55,6 @@ class Logger {
     this.log('error', message, meta);
   }
 
-  // Helper methods for common logging patterns
   authAttempt(userId: string, success: boolean, ip: string, userAgent?: string): void {
     this.info('AUTH_ATTEMPT', {
       userId,
@@ -101,8 +98,6 @@ class Logger {
   }
 }
 
-// Export singleton instance
 export const logger = new Logger(process.env.NODE_ENV === 'development' ? 'debug' : 'info');
 
-// Export class for custom instances
 export { Logger };

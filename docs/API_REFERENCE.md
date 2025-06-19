@@ -516,25 +516,6 @@ Retrieves products from a catalog.
 ### `create_product`
 Creates a new product in a catalog.
 
-### **Generic API Tool**
-
-### `call_meta_api`
-Makes a generic call to any Meta API endpoint not covered by specific tools.
-
-**Input Schema:**
-```json
-{
-  "endpoint": "/v22.0/act_123456789/campaigns",
-  "method": "GET",
-  "params": {
-    "fields": "name,status,objective",
-    "limit": 10
-  }
-}
-```
-
-**Note:** This tool provides access to the complete Meta API surface area, including new endpoints not yet wrapped in specific tools.
-
 ## MCP Resources
 
 ### `prompt://system`

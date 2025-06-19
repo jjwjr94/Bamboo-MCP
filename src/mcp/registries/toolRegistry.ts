@@ -10,21 +10,6 @@ import { createMcpSuccessResult } from '../responseHelper.js';
 import { AdSetToolRegistry } from './AdSetToolRegistry.js';
 import { CampaignToolRegistry } from './CampaignToolRegistry.js';
 
-// Define the schema for the call_meta_api tool
-const CallMetaApiSchema = z.object({
-  endpoint: z.string().describe("API endpoint (e.g., 'me/adaccounts', 'act_123/campaigns')"),
-  method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET').describe('HTTP method'),
-  fields: z.array(z.string()).optional().describe('Fields to retrieve (for GET requests)'),
-  parameters: z
-    .record(
-      z
-        .union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.unknown())])
-        .optional()
-    )
-    .optional()
-    .describe('Parameters or data to send'),
-});
-
 export class ToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
@@ -38,9 +23,7 @@ export class ToolRegistry {
     this.adSetToolRegistry = new AdSetToolRegistry(server, toolsHandler);
   }
 
-  // --- Tool Registration ---
   public register() {
-    // Register get_ad_accounts tool
     const getAdAccountsOutputSchema = z.object({
       accounts: z
         .array(
@@ -69,7 +52,6 @@ export class ToolRegistry {
           const authPayload = extractAuthPayload(extra);
           const result = await this.toolsHandler.getAdAccounts(authPayload, params);
 
-          // Validate output schema
           if (result?.structuredContent) {
             const validation = getAdAccountsOutputSchema.safeParse(result.structuredContent);
             if (!validation.success) {
@@ -89,51 +71,10 @@ export class ToolRegistry {
       }
     );
 
-    // Delegate campaign tool registration to specialized registry
     this.campaignToolRegistry.register();
 
-    // Delegate ad set tool registration to specialized registry
     this.adSetToolRegistry.register();
 
-    // Register generic Meta API call tool
-    const callMetaApiOutputSchema = z.object({
-      responseData: z.unknown().describe('The JSON response from the Meta Graph API.'),
-    });
-
-    this.server.registerTool(
-      'call_meta_api',
-      {
-        title: 'Call Meta API',
-        description: 'Make a generic call to the Meta Graph API for complete API coverage.',
-        inputSchema: CallMetaApiSchema.shape,
-        outputSchema: callMetaApiOutputSchema.shape,
-      },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          const result = await this.toolsHandler.callMetaApi(authPayload, params);
-
-          // Validate output schema
-          if (result?.structuredContent) {
-            const validation = callMetaApiOutputSchema.safeParse(result.structuredContent);
-            if (!validation.success) {
-              logger.error('Tool output validation failed for call_meta_api', {
-                errors: validation.error.format(),
-              });
-              return createMcpErrorResult(
-                new Error('Internal error: Tool output failed validation.')
-              );
-            }
-          }
-
-          return result;
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
-    );
-
-    // Register account selection tool
     const selectAdAccountOutputSchema = z.object({
       success: z.boolean(),
       selectedAccount: z.string().optional(),
@@ -169,7 +110,6 @@ export class ToolRegistry {
             message: `Successfully selected ad account ${adAccountId}`,
           };
 
-          // Validate output schema
           const validation = selectAdAccountOutputSchema.safeParse(result);
           if (!validation.success) {
             logger.error('Tool output validation failed for select_ad_account', {
@@ -187,8 +127,6 @@ export class ToolRegistry {
       }
     );
 
-    logger.info('Registered main MCP tools', { count: 3 });
+    logger.info('Registered main MCP tools', { count: 2 });
   }
-
-  // --- Helper Methods ---
 }

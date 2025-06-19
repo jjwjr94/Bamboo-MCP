@@ -24,7 +24,6 @@ export class SessionManager {
       throw new ValidationError('Cannot store session data: state parameter is missing');
     }
 
-    // Set an expiration for the session state (10 minutes)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     try {
@@ -51,11 +50,9 @@ export class SessionManager {
       throw new ValidationError('Cannot store temp auth code: code parameter is missing');
     }
 
-    // Use the expires timestamp from the data for expiration
     const expiresAt = new Date(data.expires);
 
     try {
-      // Use the new, type-safe table. No 'as any' cast needed.
       await db.insert(oauthTempAuthCodes).values({
         code: authCode,
         data: data,
@@ -75,14 +72,12 @@ export class SessionManager {
    */
   public async getTempAuthCode(authCode: string): Promise<TempAuthCodeData | undefined> {
     try {
-      // Query the new table directly.
       const result = await db.query.oauthTempAuthCodes.findFirst({
         where: eq(oauthTempAuthCodes.code, authCode),
       });
 
       if (result && result.expiresAt > new Date()) {
         logger.debug('Temp auth code retrieved from database', { authCode, found: true });
-        // The 'data' property is already correctly typed as TempAuthCodeData.
         return result.data;
       }
 
@@ -100,13 +95,10 @@ export class SessionManager {
    */
   public async clearTempAuthCode(authCode: string): Promise<void> {
     try {
-      // Delete from the correct table.
       await db.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
       logger.debug('Temp auth code cleared from database', { authCode });
     } catch (error) {
       logger.error('Failed to clear temp auth code from database', { authCode, error });
-      // This is a cleanup step, so we log the error but don't throw,
-      // to avoid interrupting the user flow.
     }
   }
 
@@ -117,12 +109,10 @@ export class SessionManager {
    */
   public async getSessionData(state: string): Promise<SessionData | undefined> {
     try {
-      // Find the session and ensure it has not expired
       const result = await db.query.oauthSessions.findFirst({
         where: eq(oauthSessions.state, state),
       });
 
-      // Check for expiration
       if (result && result.expiresAt > new Date()) {
         logger.debug('Session data retrieved from database', { state, found: true });
         return result.sessionData as SessionData;
@@ -146,8 +136,6 @@ export class SessionManager {
       logger.debug('Session data cleared from database', { state });
     } catch (error) {
       logger.error('Failed to clear session data from database', { state, error });
-      // This is a cleanup step, so we log the error but don't throw,
-      // to avoid interrupting the user flow.
     }
   }
 
@@ -160,31 +148,25 @@ export class SessionManager {
   public async getAndClearTempAuthCode(authCode: string): Promise<TempAuthCodeData | undefined> {
     try {
       const result = await db.transaction(async (tx) => {
-        // Step 1: Find the auth code record within the transaction.
         const record = await tx.query.oauthTempAuthCodes.findFirst({
           where: eq(oauthTempAuthCodes.code, authCode),
         });
 
         if (!record) {
           logger.debug('Temp auth code not found in database transaction', { authCode });
-          return null; // Return null to indicate not found within the transaction.
+          return null;
         }
 
-        // Step 2: Immediately delete the record within the same transaction.
         await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
 
-        // Step 3: Return the retrieved record for post-transaction validation.
         return record;
       });
 
-      // Log success only after transaction commits successfully
       if (result) {
         logger.debug('Atomically retrieved and deleted temp auth code', { authCode });
       }
 
-      // Step 4: After the transaction, validate the retrieved data.
       if (result && result.expiresAt > new Date()) {
-        // The 'data' property is already correctly typed as TempAuthCodeData.
         return result.data;
       }
 
@@ -211,7 +193,6 @@ export class SessionManager {
       logger.info('Successfully cleaned up expired OAuth data.');
     } catch (error) {
       logger.error('Failed to clean up expired OAuth data', { error });
-      // Do not throw, as this is a background maintenance task.
     }
   }
 }

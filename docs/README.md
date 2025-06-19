@@ -142,7 +142,6 @@ graph TB
 ### MCP Protocol Support
 - 40+ specialized tools covering Meta APIs (Ads, Pages, Commerce, Business)
 - Multi-account management with intelligent selection
-- Generic API access via `call_meta_api` for any Meta endpoint
 - System prompts and best practices as resources
 - Structured JSON-RPC error responses
 - Bearer token authentication
@@ -198,7 +197,6 @@ graph TB
 - Page Management (3 tools): Facebook Page operations
 - Business Management (2 tools): Business account operations
 - Commerce & Catalog (6 tools): Product catalog management
-- Generic API Access (1 tool): Direct Meta API calls
 
 ### Multi-Account Handling
 - Automatic selection for single account users

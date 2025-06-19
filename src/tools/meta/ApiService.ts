@@ -7,6 +7,7 @@ import type {
   MetaOAuthTokenResponse,
   MetaOAuthUserInfoResponse,
 } from '../../types/meta.js';
+import { buildMetaApiUrl } from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
 import { MetaApiError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
@@ -105,6 +106,7 @@ export class MetaApiService {
    * @param userId The local user ID
    * @param accessToken The Meta access token
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This method handles multiple scenarios and error cases for robustness
   public static async syncUserAdAccounts(userId: string, accessToken: string): Promise<void> {
     // Fetch Meta User ID with robust error handling
     let metaUserId: string | undefined;
@@ -123,7 +125,7 @@ export class MetaApiService {
     }
 
     let nextUrl: string | undefined =
-      `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name&limit=100`;
+      `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name,business&limit=100`;
 
     try {
       while (nextUrl) {
@@ -155,11 +157,11 @@ export class MetaApiService {
             // Dynamically fetch permissions or use fallback
             let permissions: string[];
             if (metaUserId) {
-              // This method handles its own errors and returns ['UNKNOWN'] on failure
               permissions = await MetaApiService.fetchAdAccountPermissions(
                 account.id,
                 accessToken,
-                metaUserId
+                metaUserId,
+                userId
               );
             } else {
               // Fallback if Meta User ID could not be fetched initially
@@ -174,6 +176,7 @@ export class MetaApiService {
                 status: String(account.account_status), // Cast to string for consistency
                 currency: account.currency,
                 timezone: account.timezone_name,
+                businessId: account.business?.id || null, // Store business_id if available
                 permissions,
               })
               .onConflictDoUpdate({
@@ -183,17 +186,16 @@ export class MetaApiService {
                   status: String(account.account_status), // Cast to string for consistency
                   currency: account.currency,
                   timezone: account.timezone_name,
+                  businessId: account.business?.id || null, // Update business_id
                   permissions,
                 },
               });
           }
         }
 
-        // Check for next page
         nextUrl = adAccountsData.paging?.next;
       }
     } catch (error) {
-      // Handle timeout errors
       if (error instanceof Error && error.name === 'TimeoutError') {
         logger.warn('Ad account sync timed out during auth', { userId });
         return; // Exit on timeout as per existing error handling logic
@@ -215,16 +217,27 @@ export class MetaApiService {
    * @param adAccountId The ID of the ad account
    * @param accessToken The user's Meta access token
    * @param currentUserId The user's Meta ID
+   * @param userId The local user ID for business context lookup
    * @returns An array of permission strings (tasks). Returns ['UNKNOWN'] on failure
    */
   public static async fetchAdAccountPermissions(
     adAccountId: string,
     accessToken: string,
-    currentUserId: string
+    currentUserId: string,
+    userId: string
   ): Promise<string[]> {
     const defaultPermissions = ['UNKNOWN'];
     try {
-      const url = `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?access_token=${accessToken}&fields=id,tasks`;
+      // Use centralized URL builder for consistent business parameter handling
+      const url = await buildMetaApiUrl(
+        `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users`,
+        userId,
+        adAccountId,
+        {
+          access_token: accessToken,
+          fields: 'id,tasks',
+        }
+      );
 
       const response = await handleMetaApiCall(async () => {
         return await fetch(url, {
@@ -237,6 +250,7 @@ export class MetaApiService {
         logger.warn('Failed to fetch ad account permissions', {
           adAccountId,
           currentUserId,
+          userId,
           status: response.status,
           error: errorData.error?.message,
         });
@@ -250,6 +264,7 @@ export class MetaApiService {
         logger.warn('User not found in ad account permissions response', {
           adAccountId,
           currentUserId,
+          userId,
         });
         return defaultPermissions;
       }
@@ -260,6 +275,7 @@ export class MetaApiService {
       logger.warn('User found, but tasks property is missing in permissions response', {
         adAccountId,
         currentUserId,
+        userId,
       });
       return defaultPermissions;
     } catch (error) {
@@ -268,6 +284,7 @@ export class MetaApiService {
       logger.warn('Error fetching ad account permissions', {
         adAccountId,
         currentUserId,
+        userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       return defaultPermissions;

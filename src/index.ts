@@ -11,20 +11,15 @@ import { closeDatabase, testConnection } from './db/client.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
 import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
-// Removed unused imports after refactoring to use MetaServerAuthProvider
-
-// ES module equivalent of __dirname (2025 standard)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Build Fastify app
 export async function build(opts = {}) {
   const app = Fastify({
-    logger: true, // Use our custom logger instead
+    logger: true,
     ...opts,
   });
 
-  // Security headers first (2025 best practice)
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -34,24 +29,20 @@ export async function build(opts = {}) {
         imgSrc: ["'self'", 'data:', 'https:'],
       },
     },
-    crossOriginEmbedderPolicy: false, // Disable if serving to iframes
+    crossOriginEmbedderPolicy: false,
   });
 
-  // Register Express compatibility layer
   await app.register(fastifyExpress);
 
   // Configure trust proxy for Render hosting (single proxy hop)
-  // This fixes the express-rate-limit ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error
   app.express.set('trust proxy', 1);
 
-  // Register static file serving
   await app.register(fastifyStatic, {
     root: join(__dirname, '../public'),
     prefix: '/',
-    decorateReply: false, // 2025 best practice for ESM/TypeScript
+    decorateReply: false,
     maxAge: process.env.NODE_ENV === 'production' ? '1y' : '1h',
     setHeaders: (res, _pathName) => {
-      // Additional security headers for static files
       res.setHeader('X-Content-Type-Options', 'nosniff');
       if (process.env.NODE_ENV === 'production') {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -59,7 +50,6 @@ export async function build(opts = {}) {
     },
   });
 
-  // Register CORS
   app.register(cors, {
     origin: process.env.ALLOWED_ORIGINS?.split(',') || true,
     credentials: true,
@@ -67,7 +57,6 @@ export async function build(opts = {}) {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Health check endpoint
   app.get('/health', async (_request, reply) => {
     const dbConnected = await testConnection();
 
@@ -86,7 +75,6 @@ export async function build(opts = {}) {
     return reply.send(healthStatus);
   });
 
-  // Add Meta OAuth callback handler for our custom provider
   app.get('/oauth/callback', async (request, reply) => {
     const { code, state } = request.query as { code?: string; state?: string };
 
@@ -105,15 +93,11 @@ export async function build(opts = {}) {
     return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
   });
 
-  // MCP OAuth router (MCP SDK implementation with Facebook OAuth proxy)
-  // Mount at /oauth to avoid conflicts with our manual /register endpoint
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
 
-  // Setup MCP HTTP transport (stateless pattern)
   setupMCPHttpTransport(app);
 
-  // Global error handler
   app.setErrorHandler(async (error, request, reply) => {
     logger.error('Unhandled request error', {
       error: error.message,
@@ -128,7 +112,6 @@ export async function build(opts = {}) {
     });
   });
 
-  // Graceful shutdown handler
   const gracefulShutdown = async (signal: string) => {
     logger.info(`Received ${signal}, starting graceful shutdown`);
 

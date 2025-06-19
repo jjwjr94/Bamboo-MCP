@@ -84,7 +84,6 @@ export class MetaAdSetHandler {
     await initializeMetaApi(authPayload.userId);
 
     return await handleMetaApiCall(async () => {
-      // Use the account selection logic to determine the ad account
       const adAccountId = await accountManager.requireAccountSelection(
         authPayload.userId,
         undefined
@@ -104,7 +103,6 @@ export class MetaAdSetHandler {
         [MetaAdSetSDK.Fields.status]: params.status || 'PAUSED',
       };
 
-      // Remove undefined values
       removeUndefinedProperties(adSetData);
 
       const adSet = await new MetaAdAccountSDK(adAccountId).createAdSet([], adSetData);

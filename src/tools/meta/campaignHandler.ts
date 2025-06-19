@@ -61,7 +61,6 @@ export class MetaCampaignHandler {
             validatedCampaigns.push(result.data);
           } else {
             logger.warn('Skipping invalid campaign data received from Meta API', {
-              // It's safer not to log the entire object if it could contain PII
               campaignId: (campaign as { id?: string }).id || 'Unknown ID',
               errors: result.error.errors,
             });
@@ -97,7 +96,6 @@ export class MetaCampaignHandler {
         [MetaCampaignSDK.Fields.special_ad_categories]: params.specialAdCategories,
       };
 
-      // Remove undefined values
       removeUndefinedProperties(campaignData);
 
       const campaign = await new MetaAdAccountSDK(adAccountId).createCampaign([], campaignData);

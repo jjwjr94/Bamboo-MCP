@@ -262,6 +262,10 @@ export interface MetaOAuthAdAccountsResponse {
     account_status: string | number;
     currency: string;
     timezone_name: string;
+    business?: {
+      id: string;
+      name?: string;
+    };
   }>;
   paging?: {
     cursors: {

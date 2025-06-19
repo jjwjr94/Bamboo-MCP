@@ -967,22 +967,6 @@ export const commerceTools: Tool[] = [
   }
 ];
 
-// Generic API Tool
-export const genericApiTool: Tool = {
-  name: 'call_meta_api',
-  description: 'Make a generic call to any Meta API endpoint not covered by specific tools',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      endpoint: { type: 'string', description: 'API endpoint path (e.g., /v22.0/act_123/campaigns)' },
-      method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
-      params: { type: 'object', description: 'Query parameters or request body' },
-      fields: { type: 'array', items: { type: 'string' }, description: 'Fields to retrieve' }
-    },
-    required: ['endpoint']
-  }
-};
-
 // Export all tools
 export const allTools: Tool[] = [
   ...accountManagementTools,
@@ -992,8 +976,7 @@ export const allTools: Tool[] = [
   ...audienceManagementTools,
   ...insightsTools,
   ...pageManagementTools,
-  ...commerceTools,
-  genericApiTool
+  ...commerceTools
 ];
 ```
 
@@ -1244,50 +1227,7 @@ export class MetaToolsHandler {
     }
   }
 
-  async handleCallMetaApi(args: {
-    endpoint: string;
-    method?: string;
-    params?: any;
-    fields?: string[];
-  }, userId: string) {
-    try {
-      const method = args.method || 'GET';
-      const api = new AdAccount('me').getApi();
-      
-      // Add fields to params if provided
-      const params = { ...args.params };
-      if (args.fields && args.fields.length > 0) {
-        params.fields = args.fields.join(',');
-      }
-      
-      let result;
-      switch (method) {
-        case 'GET':
-          result = await api.call('GET', args.endpoint, params);
-          break;
-        case 'POST':
-          result = await api.call('POST', args.endpoint, params);
-          break;
-        case 'PUT':
-          result = await api.call('PUT', args.endpoint, params);
-          break;
-        case 'DELETE':
-          result = await api.call('DELETE', args.endpoint, params);
-          break;
-        default:
-          throw new Error(`Unsupported HTTP method: ${method}`);
-      }
-      
-      return {
-        success: true,
-        data: result,
-        endpoint: args.endpoint,
-        method: method
-      };
-    } catch (error) {
-      throw new Error(`API call to ${args.endpoint} failed: ${error.message}`);
-    }
-  }
+
 
   // Add handlers for all other tools...
   // (Implementation would continue with all the other tool handlers)

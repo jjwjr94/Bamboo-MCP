@@ -44,7 +44,6 @@ export class AccountManager {
     });
   }
 
-  // Handles account selection: explicit -> current -> single auto-select -> error for multiple
   async requireAccountSelection(userId: string, providedAccountId?: string): Promise<string> {
     const context = await this.getAccountContext(userId);
 
@@ -186,5 +185,4 @@ export class AccountManager {
   }
 }
 
-// Export a singleton instance
 export const accountManager = new AccountManager();

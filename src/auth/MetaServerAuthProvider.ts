@@ -63,9 +63,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       },
     };
 
-    setInterval(async () => {
-      await this.cleanExpiredTokens();
-    }, 60 * 1000);
+    setInterval(
+      async () => {
+        await this.cleanExpiredTokens();
+      },
+      15 * 60 * 1000
+    );
 
     logger.info('MetaServerAuthProvider initialized');
   }

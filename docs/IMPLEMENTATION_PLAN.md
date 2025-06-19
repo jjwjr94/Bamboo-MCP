@@ -236,8 +236,7 @@ The MCP server provides complete coverage of the Facebook Business SDK, supporti
 - `get_products` - List products in catalogs with details
 - `create_product` - Create new products in catalogs
 
-#### Generic API Access (1 tool)
-- `call_meta_api` - Direct access to any Meta API endpoint not covered by specific tools
+
 
 ### Multi-Account Handling Strategy
 
