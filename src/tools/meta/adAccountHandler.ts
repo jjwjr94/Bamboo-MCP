@@ -1,7 +1,7 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { AdAccount as MetaAdAccountSDK, User as MetaUserSDK } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
-import { db, withUserContext } from '../../db/client.js';
+import { withUserContext } from '../../db/client.js';
 import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
@@ -118,34 +118,27 @@ export class MetaAdAccountHandler {
         }
       }
 
-      const accountsToStore = await Promise.all(
-        validatedAccounts.map(async (acc) => {
-          const accountData = this.extractAccountData(acc);
+      const accountsToStore = await withUserContext(authPayload.userId, async (tx) => {
+        if (validatedAccounts.length === 0) {
+          return [];
+        }
 
-          const permissions = await MetaApiService.fetchAdAccountPermissions(
-            accountData.id,
-            accessToken,
-            metaUserId,
-            authPayload.userId
-          );
+        // Extract data once to use in both phases
+        const extractedAccounts = validatedAccounts.map((acc) => this.extractAccountData(acc));
 
-          return {
-            ...accountData,
-            permissions,
-          };
-        })
-      );
+        // --- Phase 1: Insert/Update basic account info ---
+        // This phase is critical for resolving a circular dependency. Some ad accounts
+        // are business-managed and require a 'business' parameter to fetch permissions.
+        // By first storing the basic account info (including businessId), we ensure
+        // the business context is available in our database for the next phase.
+        const basicAccountData = extractedAccounts.map((acc) => ({
+          ...acc,
+          userId: authPayload.userId,
+        }));
 
-      // Store in database
-      await withUserContext(authPayload.userId, async () => {
-        await db
+        await tx
           .insert(adAccounts)
-          .values(
-            accountsToStore.map((acc) => ({
-              ...acc,
-              userId: authPayload.userId,
-            }))
-          )
+          .values(basicAccountData)
           .onConflictDoUpdate({
             target: [adAccounts.id, adAccounts.userId],
             set: {
@@ -153,10 +146,44 @@ export class MetaAdAccountHandler {
               status: sql`excluded.status`,
               currency: sql`excluded.currency`,
               timezone: sql`excluded.timezone`,
-              businessId: sql`excluded.businessId`,
-              permissions: sql`excluded.permissions`,
+              businessId: sql`excluded.business_id`,
+              // Note: `permissions` are NOT updated here
             },
           });
+
+        // --- Phase 2: Fetch and update permissions (Optimized) ---
+        // With the basic account info, including businessId, now stored in the database
+        // (within this transaction), we can process all accounts in parallel to improve performance.
+        // The underlying call to fetchAdAccountPermissions can now look up the businessId if needed.
+        const permissionUpdatePromises = extractedAccounts.map(async (accountData) => {
+          // This call now works for business-managed accounts because the businessId
+          // was stored in Phase 1 and is available within this transaction.
+          const permissions = await MetaApiService.fetchAdAccountPermissions(
+            accountData.id,
+            accessToken,
+            metaUserId,
+            authPayload.userId
+          );
+
+          // Update the permissions for the specific ad account
+          // This DB update can also run in parallel within the transaction.
+          await tx
+            .update(adAccounts)
+            .set({ permissions })
+            .where(
+              and(eq(adAccounts.id, accountData.id), eq(adAccounts.userId, authPayload.userId))
+            );
+
+          return {
+            ...accountData,
+            permissions,
+          };
+        });
+
+        // Await all parallel operations to complete
+        const finalAccountsWithPermissions = await Promise.all(permissionUpdatePromises);
+
+        return finalAccountsWithPermissions;
       });
 
       logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });

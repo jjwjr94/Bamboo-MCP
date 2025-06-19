@@ -33,7 +33,7 @@ export class MetaBusinessManagerHandler {
           allRawBusinesses.push(...(currentCursor.data || []));
 
           // Check for pagination
-          while (currentCursor && currentCursor.paging && currentCursor.paging.next) {
+          while (currentCursor?.paging?.next) {
             // Safety limit to prevent resource exhaustion
             if (allRawBusinesses.length >= MAX_BUSINESS_ACCOUNTS_TO_FETCH) {
               logger.warn('Reached maximum business accounts limit, truncating results', {
@@ -46,7 +46,7 @@ export class MetaBusinessManagerHandler {
             // Fetch next page
             if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
               currentCursor = await currentCursor.next();
-              if (currentCursor && currentCursor.data) {
+              if (currentCursor?.data) {
                 allRawBusinesses.push(...currentCursor.data);
               }
             } else {

@@ -106,7 +106,6 @@ export class MetaApiService {
    * @param userId The local user ID
    * @param accessToken The Meta access token
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This method handles multiple scenarios and error cases for robustness
   public static async syncUserAdAccounts(userId: string, accessToken: string): Promise<void> {
     // Fetch Meta User ID with robust error handling
     let metaUserId: string | undefined;
@@ -163,7 +162,8 @@ export class MetaApiService {
                   account.id,
                   accessToken,
                   metaUserId,
-                  userId
+                  userId,
+                  account.business?.id || null
                 );
               } else {
                 // Fallback if Meta User ID could not be fetched initially
@@ -221,26 +221,42 @@ export class MetaApiService {
    * @param accessToken The user's Meta access token
    * @param currentUserId The user's Meta ID
    * @param userId The local user ID for business context lookup
+   * @param businessId Optional business ID to use directly (avoids database lookup during sync)
    * @returns An array of permission strings (tasks). Returns ['UNKNOWN'] on failure
    */
   public static async fetchAdAccountPermissions(
     adAccountId: string,
     accessToken: string,
     currentUserId: string,
-    userId: string
+    userId: string,
+    businessId?: string | null
   ): Promise<string[]> {
     const defaultPermissions = ['UNKNOWN'];
     try {
-      // Use centralized URL builder for consistent business parameter handling
-      const url = await buildMetaApiUrl(
-        `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users`,
-        userId,
-        adAccountId,
-        {
+      let url: string;
+
+      if (businessId !== undefined) {
+        // Use provided business ID directly (typically during sync)
+        const params = new URLSearchParams({
           access_token: accessToken,
           fields: 'id,tasks',
+        });
+        if (businessId) {
+          params.set('business', businessId);
         }
-      );
+        url = `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?${params.toString()}`;
+      } else {
+        // Fall back to database lookup for business context (used by other operations)
+        url = await buildMetaApiUrl(
+          `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users`,
+          userId,
+          adAccountId,
+          {
+            access_token: accessToken,
+            fields: 'id,tasks',
+          }
+        );
+      }
 
       const response = await handleMetaApiCall(async () => {
         return await fetch(url, {
@@ -250,13 +266,28 @@ export class MetaApiService {
 
       if (!response.ok) {
         const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
-        logger.warn('Failed to fetch ad account permissions', {
-          adAccountId,
-          currentUserId,
-          userId,
-          status: response.status,
-          error: errorData.error?.message,
-        });
+
+        // Special handling for business parameter requirement
+        if (
+          errorData.error?.code === 100 &&
+          errorData.error?.message?.includes('business is required')
+        ) {
+          logger.warn('Ad account requires business parameter but none provided', {
+            adAccountId,
+            currentUserId,
+            userId,
+            businessIdProvided: businessId !== undefined,
+            message: 'This ad account is business-managed but business ID was not available',
+          });
+        } else {
+          logger.warn('Failed to fetch ad account permissions', {
+            adAccountId,
+            currentUserId,
+            userId,
+            status: response.status,
+            error: errorData.error?.message,
+          });
+        }
         return defaultPermissions;
       }
 

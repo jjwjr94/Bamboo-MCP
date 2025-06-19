@@ -100,18 +100,24 @@ pnpm start
 # Database
 DATABASE_URL="postgresql://user:password@localhost:5432/mcp_db"
 
-# Meta API
-META_APP_ID="your_meta_app_id"
-META_APP_SECRET="your_meta_app_secret"
-META_REDIRECT_URI="http://localhost:3000/auth/callback"
+# Facebook OAuth
+FACEBOOK_APP_ID="your_facebook_app_id"
+FACEBOOK_APP_SECRET="your_facebook_app_secret"
+FACEBOOK_CALLBACK_URL="http://localhost:3000/auth/callback"
 
-# Security
-JWT_SECRET="your-secure-jwt-secret"
-ENCRYPTION_KEY="your-32-byte-encryption-key"
+# JWT (EdDSA Ed25519 asymmetric keys)
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+...your Ed25519 private key...
+-----END PRIVATE KEY-----"
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+...your Ed25519 public key...
+-----END PUBLIC KEY-----"
+JWT_EXPIRES_IN="24h"
 
 # Server
 PORT=3000
 NODE_ENV=production
+BASE_URL="http://localhost:3000"
 ```
 
 ## Usage

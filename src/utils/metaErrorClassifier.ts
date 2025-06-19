@@ -11,7 +11,7 @@ interface MetaErrorDetails {
 
 const AUTH_ERROR_CODES = new Set(['190', '200', '458']);
 const RATE_LIMIT_CODES = new Set(['341', '368']);
-const VALIDATION_ERROR_CODES = new Set(['506', '1609005']);
+const VALIDATION_ERROR_CODES = new Set(['100', '506', '1609005']);
 const TRANSIENT_ERROR_CODES = new Set(['SDK_TIMEOUT', 'TIMEOUT_ERROR']);
 
 /**

@@ -52,6 +52,7 @@ export class ToolRegistry {
             status: z.string(),
             currency: z.string(),
             timezone: z.string(),
+            businessId: z.string().optional(),
             permissions: z.array(z.string()),
           })
         )
