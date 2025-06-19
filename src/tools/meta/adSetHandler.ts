@@ -3,17 +3,18 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { JWTPayload } from '../types/auth.js';
+import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
+import type { JWTPayload } from '../../types/auth.js';
 import type {
   CampaignStatus,
   CreateAdSetRequest,
   MetaAdSet,
   MetaTargeting,
-} from '../types/meta.js';
-import { accountManager } from '../utils/accountManager.js';
-import { logger } from '../utils/logger.js';
-import { removeUndefinedProperties } from '../utils/objectUtils.js';
-import { handleMetaApiCall, initializeMetaApi } from './metaApi.js';
+} from '../../types/meta.js';
+import { accountManager } from '../../utils/accountManager.js';
+import { logger } from '../../utils/logger.js';
+import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
 export class MetaAdSetHandler {
   async getAdSets(authPayload: JWTPayload, params: { campaignId?: string; adAccountId?: string }) {
@@ -73,10 +74,7 @@ export class MetaAdSetHandler {
         promoted_object: adSet.promoted_object,
       }));
 
-      return {
-        structuredContent: { adSets: adSetData },
-        content: [{ type: 'text' as const, text: JSON.stringify(adSetData, null, 2) }],
-      };
+      return createMcpSuccessResult({ adSets: adSetData }, `Retrieved ${adSetData.length} ad sets`);
     });
   }
 
@@ -121,10 +119,7 @@ export class MetaAdSetHandler {
         message: `Ad set "${params.name}" created successfully with ID: ${adSet.id}`,
       };
 
-      return {
-        structuredContent: result,
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      return createMcpSuccessResult(result, 'Ad set created successfully');
     });
   }
 
@@ -171,10 +166,7 @@ export class MetaAdSetHandler {
         message: `Ad set ${params.adSetId} updated successfully`,
       };
 
-      return {
-        structuredContent: result,
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      return createMcpSuccessResult(result, 'Ad set updated successfully');
     });
   }
 
@@ -195,10 +187,7 @@ export class MetaAdSetHandler {
         message: `Ad set ${params.adSetId} deleted successfully`,
       };
 
-      return {
-        structuredContent: result,
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      return createMcpSuccessResult(result, 'Ad set deleted successfully');
     });
   }
 }

@@ -1,14 +1,19 @@
-import type { JWTPayload } from '../types/auth.js';
+import type { JWTPayload } from '../../types/auth.js';
 import type {
   CampaignStatus,
   CreateAdSetRequest,
   CreateCampaignRequest,
   MetaTargeting,
-} from '../types/meta.js';
-import { MetaAdAccountHandler } from './metaAdAccountHandler.js';
-import { MetaAdSetHandler } from './metaAdSetHandler.js';
-import { MetaApiHandler } from './metaApiHandler.js';
-import { MetaCampaignHandler } from './metaCampaignHandler.js';
+} from '../../types/meta.js';
+import { MetaAdAccountHandler } from './adAccountHandler.js';
+import { MetaAdSetHandler } from './adSetHandler.js';
+import { MetaApiHandler } from './apiHandler.js';
+import { MetaCampaignHandler } from './campaignHandler.js';
+
+type MetaApiParameters = Record<
+  string,
+  string | number | boolean | undefined | Array<unknown> | Record<string, unknown>
+>;
 
 export class MetaToolsHandler {
   private adAccountHandler = new MetaAdAccountHandler();
@@ -28,7 +33,7 @@ export class MetaToolsHandler {
       endpoint: string;
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
       fields?: string[];
-      parameters?: Record<string, any>;
+      parameters?: MetaApiParameters;
     }
   ) {
     return this.apiHandler.callMetaApi(authPayload, params);

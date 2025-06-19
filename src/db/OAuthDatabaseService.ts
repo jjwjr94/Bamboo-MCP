@@ -57,7 +57,8 @@ export class OAuthDatabaseService {
       response_types: client.responseTypes,
       token_endpoint_auth_method:
         client.tokenEndpointAuthMethod as OAuthClientInformationFull['token_endpoint_auth_method'],
-      scope: client.allowedScopes.join(' '),
+      // Return server-supported Facebook scopes for all MCP clients
+      scope: env.FACEBOOK_OAUTH_SCOPES.replace(/,/g, ' '),
       client_id_issued_at: client.createdAt
         ? Math.floor(client.createdAt.getTime() / 1000)
         : Math.floor(Date.now() / 1000),
@@ -72,26 +73,25 @@ export class OAuthDatabaseService {
     type ClientWithName = OAuthClientInformationFull & { client_name?: string };
     const clientName = (client as ClientWithName).client_name ?? 'Unnamed MCP Client';
 
-    // If no scopes provided, default to all supported scopes
-    // This ensures clients can request any of the server's supported scopes
-    const allowedScopes = client.scope?.split(' ') || env.FACEBOOK_OAUTH_SCOPES.split(',');
+    // All MCP clients are granted the same Facebook API scopes as per server policy
+    // MCP client scopes (like "claudeai") are protocol-level and not relevant to Facebook permissions
 
     await db.insert(oauthClients).values({
       clientId: client.client_id,
       clientSecret: client.client_secret || null,
       clientName,
       redirectUris: client.redirect_uris,
-      allowedScopes: allowedScopes,
       grantTypes: client.grant_types || ['authorization_code'],
       responseTypes: client.response_types || ['code'],
       tokenEndpointAuthMethod: client.token_endpoint_auth_method || 'none',
       isActive: true,
     });
 
-    logger.info('Successfully registered MCP client in database', {
+    logger.info('Successfully registered MCP client with server-defined Facebook API scopes', {
       clientId: client.client_id,
       clientName,
-      allowedScopes: allowedScopes,
+      mcpClientScope: client.scope, // Log original MCP scope for reference
+      serverScopePolicy: 'All MCP clients granted identical Facebook API access',
     });
     return client;
   }

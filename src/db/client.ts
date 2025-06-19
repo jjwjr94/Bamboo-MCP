@@ -12,6 +12,16 @@ const client = postgres(env.DATABASE_URL, {
   prepare: false,
   max: 10, // Connection pool size
   onnotice: () => {}, // Suppress notices
+
+  // Production-ready timeout configurations
+  idle_timeout: 30, // Close idle connections after 30 seconds
+  max_lifetime: 60 * 15, // Retire connections after 15 minutes
+  connect_timeout: 10, // Connection timeout in seconds
+
+  // Set statement timeout at the PostgreSQL level
+  connection: {
+    statement_timeout: env.DB_STATEMENT_TIMEOUT,
+  },
 });
 
 export const db = drizzle(client, { schema });

@@ -1,14 +1,16 @@
-import { db } from '../db/client.js';
-import { adAccounts } from '../db/schema.js';
+import { db } from '../../db/client.js';
+import { adAccounts } from '../../db/schema.js';
 import type {
+  MetaAdAccountAssignedUsersResponse,
   MetaGraphApiError,
   MetaOAuthAdAccountsResponse,
   MetaOAuthTokenResponse,
   MetaOAuthUserInfoResponse,
-} from '../types/meta.js';
-import { env } from '../utils/env.js';
-import { MetaApiError } from '../utils/errors.js';
-import { logger } from '../utils/logger.js';
+} from '../../types/meta.js';
+import { env } from '../../utils/env.js';
+import { MetaApiError } from '../../utils/errors.js';
+import { logger } from '../../utils/logger.js';
+import { handleMetaApiCall } from './api.js';
 
 /**
  * Service for handling direct API interactions with the Meta Graph API.
@@ -16,6 +18,7 @@ import { logger } from '../utils/logger.js';
  * This service encapsulates all Meta/Facebook Graph API communication
  * including OAuth token exchange, user info retrieval, and ad account syncing.
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This is a utility class that provides a namespace for related static methods
 export class MetaApiService {
   /**
    * Exchanges an authorization code for a Meta access token.
@@ -27,7 +30,7 @@ export class MetaApiService {
   public static async exchangeMetaCodeForToken(
     code: string
   ): Promise<{ accessToken: string; expiresIn?: number }> {
-    try {
+    return handleMetaApiCall(async () => {
       const tokenResponse = await fetch('https://graph.facebook.com/v22.0/oauth/access_token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -37,6 +40,7 @@ export class MetaApiService {
           code: code,
           redirect_uri: env.FACEBOOK_CALLBACK_URL,
         }),
+        signal: AbortSignal.timeout(env.META_API_TIMEOUT),
       });
 
       if (!tokenResponse.ok) {
@@ -56,15 +60,7 @@ export class MetaApiService {
       }
 
       return { accessToken: tokenData.access_token, expiresIn: tokenData.expires_in };
-    } catch (error) {
-      if (error instanceof MetaApiError) {
-        throw error;
-      }
-      logger.error('Token exchange error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw new MetaApiError('OAuth token exchange failed', 'OAUTH_ERROR');
-    }
+    });
   }
 
   /**
@@ -75,9 +71,12 @@ export class MetaApiService {
    * @throws MetaApiError if user info retrieval fails
    */
   public static async getMetaUserInfo(accessToken: string): Promise<{ id: string }> {
-    try {
+    return handleMetaApiCall(async () => {
       const userResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`
+        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`,
+        {
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        }
       );
 
       if (!userResponse.ok) {
@@ -93,15 +92,7 @@ export class MetaApiService {
 
       const userData = (await userResponse.json()) as MetaOAuthUserInfoResponse;
       return { id: userData.id };
-    } catch (error) {
-      if (error instanceof MetaApiError) {
-        throw error;
-      }
-      logger.error('User info retrieval error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw new MetaApiError('Failed to retrieve user information', 'USER_INFO_ERROR');
-    }
+    });
   }
 
   /**
@@ -115,12 +106,33 @@ export class MetaApiService {
    * @param accessToken The Meta access token
    */
   public static async syncUserAdAccounts(userId: string, accessToken: string): Promise<void> {
+    // Fetch Meta User ID with robust error handling
+    let metaUserId: string | undefined;
+    try {
+      const userInfo = await MetaApiService.getMetaUserInfo(accessToken);
+      metaUserId = userInfo.id;
+    } catch (error) {
+      logger.warn(
+        'Could not fetch Meta user ID during ad account sync. Permissions will default to UNKNOWN.',
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }
+      );
+      // metaUserId remains undefined; sync will proceed with default permissions
+    }
+
     let nextUrl: string | undefined =
       `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name&limit=100`;
 
     try {
       while (nextUrl) {
-        const adAccountsResponse = await fetch(nextUrl);
+        const currentUrl = nextUrl; // TypeScript assertion: nextUrl is guaranteed to be string here
+        const adAccountsResponse = await handleMetaApiCall(async () => {
+          return await fetch(currentUrl, {
+            signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+          });
+        });
 
         if (!adAccountsResponse.ok) {
           const errorData = (await adAccountsResponse
@@ -140,9 +152,19 @@ export class MetaApiService {
         if (accounts.length > 0) {
           // Process accounts in batches for better performance
           for (const account of accounts) {
-            // Set default permissions since roles are not fetched during OAuth sync
-            // Actual permissions will be determined when accounts are accessed via getAdAccounts
-            const permissions = ['UNKNOWN'];
+            // Dynamically fetch permissions or use fallback
+            let permissions: string[];
+            if (metaUserId) {
+              // This method handles its own errors and returns ['UNKNOWN'] on failure
+              permissions = await MetaApiService.fetchAdAccountPermissions(
+                account.id,
+                accessToken,
+                metaUserId
+              );
+            } else {
+              // Fallback if Meta User ID could not be fetched initially
+              permissions = ['UNKNOWN'];
+            }
             await db
               .insert(adAccounts)
               .values({
@@ -171,11 +193,84 @@ export class MetaApiService {
         nextUrl = adAccountsData.paging?.next;
       }
     } catch (error) {
+      // Handle timeout errors
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        logger.warn('Ad account sync timed out during auth', { userId });
+        return; // Exit on timeout as per existing error handling logic
+      }
       logger.warn('Ad account sync failed during auth', {
         userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       // Non-critical error, don't throw
+    }
+  }
+
+  /**
+   * Fetches the permissions (tasks) for a specific user on a given ad account.
+   *
+   * This is a non-critical operation; if it fails, it logs a warning and returns
+   * default permissions to avoid blocking other processes.
+   *
+   * @param adAccountId The ID of the ad account
+   * @param accessToken The user's Meta access token
+   * @param currentUserId The user's Meta ID
+   * @returns An array of permission strings (tasks). Returns ['UNKNOWN'] on failure
+   */
+  public static async fetchAdAccountPermissions(
+    adAccountId: string,
+    accessToken: string,
+    currentUserId: string
+  ): Promise<string[]> {
+    const defaultPermissions = ['UNKNOWN'];
+    try {
+      const url = `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?access_token=${accessToken}&fields=id,tasks`;
+
+      const response = await handleMetaApiCall(async () => {
+        return await fetch(url, {
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        });
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
+        logger.warn('Failed to fetch ad account permissions', {
+          adAccountId,
+          currentUserId,
+          status: response.status,
+          error: errorData.error?.message,
+        });
+        return defaultPermissions;
+      }
+
+      const permissionsData = (await response.json()) as MetaAdAccountAssignedUsersResponse;
+      const userPermissions = permissionsData.data?.find((user) => user.id === currentUserId);
+
+      if (!userPermissions) {
+        logger.warn('User not found in ad account permissions response', {
+          adAccountId,
+          currentUserId,
+        });
+        return defaultPermissions;
+      }
+
+      if (userPermissions.tasks) {
+        return userPermissions.tasks;
+      }
+      logger.warn('User found, but tasks property is missing in permissions response', {
+        adAccountId,
+        currentUserId,
+      });
+      return defaultPermissions;
+    } catch (error) {
+      // handleMetaApiCall will retry appropriate errors, but if it ultimately fails,
+      // we still want to return default permissions for this non-critical operation
+      logger.warn('Error fetching ad account permissions', {
+        adAccountId,
+        currentUserId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return defaultPermissions;
     }
   }
 
@@ -187,9 +282,12 @@ export class MetaApiService {
    * @throws MetaApiError if the validation call fails for reasons other than an invalid token
    */
   public static async validateAccessToken(accessToken: string): Promise<boolean> {
-    try {
+    return handleMetaApiCall(async () => {
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`
+        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`,
+        {
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        }
       );
 
       if (response.ok) {
@@ -213,14 +311,6 @@ export class MetaApiService {
         errorData.error?.error_subcode?.toString(),
         response.status
       );
-    } catch (error) {
-      if (error instanceof MetaApiError) throw error;
-
-      logger.error('Unexpected error during Meta token validation', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      // Rethrow as a generic error to indicate a problem with the validation process itself
-      throw new MetaApiError('Failed to validate Meta access token', 'VALIDATION_FAILED');
-    }
+    });
   }
 }

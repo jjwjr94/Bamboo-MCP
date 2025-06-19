@@ -2,19 +2,19 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import pTimeout, { TimeoutError } from 'p-timeout';
 import { extractTokenFromHeader, verifyJWT } from '../auth/jwt.js';
 import { db } from '../db/client.js';
 import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { AuthenticationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import { bambooServer } from './server.js';
+import { BambooMCPServer } from './server.js';
 
-// Create a function to get a new server instance for each request
+// Create a new server instance for each request (stateless pattern)
 function createMCPServerInstance(): McpServer {
-  // For stateless pattern, we should create a new server instance for each request
-  // But the current architecture uses a singleton, so we'll reuse it
-  // TODO: Refactor to proper factory pattern
+  // Create a new server instance for true request isolation
+  const bambooServer = new BambooMCPServer();
   return bambooServer.getServer();
 }
 
@@ -42,7 +42,11 @@ async function authenticateRequest(authHeader: string | undefined): Promise<JWTP
 }
 
 async function createMockAuthPayload(): Promise<JWTPayload> {
-  const testUser = await db.query.users.findFirst();
+  // Use deterministic ordering for development consistency
+  const testUser = await db.query.users.findFirst({
+    orderBy: (users, { asc }) => [asc(users.createdAt)],
+  });
+
   if (!testUser) {
     throw new AuthenticationError(
       'For testing without a token, at least one user must exist in the database. Please run the OAuth flow once.'
@@ -132,26 +136,42 @@ async function handleMCPRequest(
   // Setup cleanup handlers
   setupTransportCleanup(transport, reply);
 
-  // Connect server to transport for this request
-  await mcpServer.connect(transport);
-  logger.debug('Created new MCP transport for request', {
-    method,
-    userId: authPayload.userId,
-  });
+  try {
+    // Connect server to transport for this request
+    await mcpServer.connect(transport);
+    logger.debug('Created new MCP transport for request', {
+      method,
+      userId: authPayload.userId,
+    });
 
-  // Handle request using the dedicated transport instance
-  const authInfo: AuthInfo = {
-    token: request.headers.authorization
-      ? extractTokenFromHeader(request.headers.authorization)
-      : `dev-token-${Date.now()}`,
-    clientId: 'bamboo-mcp-client',
-    scopes: authPayload.scopes,
-    expiresAt: authPayload.exp,
-    extra: { authPayload },
-  };
+    // Handle request using the dedicated transport instance
+    const authInfo: AuthInfo = {
+      token: request.headers.authorization
+        ? extractTokenFromHeader(request.headers.authorization)
+        : `dev-token-${Date.now()}`,
+      clientId: 'bamboo-mcp-client',
+      scopes: authPayload.scopes,
+      expiresAt: authPayload.exp,
+      extra: { authPayload },
+    };
 
-  const reqWithAuth = Object.assign(request.raw, { auth: authInfo });
-  await transport.handleRequest(reqWithAuth, reply.raw, request.body);
+    const reqWithAuth = Object.assign(request.raw, { auth: authInfo });
+
+    // Wrap transport.handleRequest with timeout to prevent hanging
+    await pTimeout(transport.handleRequest(reqWithAuth, reply.raw, request.body), {
+      milliseconds: env.MCP_REQUEST_TIMEOUT,
+      message: `MCP transport request timed out after ${env.MCP_REQUEST_TIMEOUT}ms for method: ${method}`,
+    });
+  } catch (error) {
+    // The transport layer failed. Log the low-level error and re-throw.
+    // The top-level handler will be responsible for sending the HTTP response.
+    logger.error('MCP transport layer error', {
+      method,
+      userId: authPayload.userId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw error;
+  }
 }
 
 export function setupMCPHttpTransport(fastify: FastifyInstance): void {
@@ -166,13 +186,14 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
     async (request: FastifyRequest<{ Body: JsonRpcRequestBody }>, reply: FastifyReply) => {
       const startTime = Date.now();
       const { id = null, method = 'unknown' } = request.body ?? {};
+      let authPayload: JWTPayload | undefined; // Declare here for access in catch block
 
       // Take control of the response immediately
       reply.hijack();
 
       try {
         // Authentication
-        const authPayload = await authenticateRequest(request.headers.authorization);
+        authPayload = await authenticateRequest(request.headers.authorization);
         logger.info(`HTTP MCP: Using auth payload for user ${authPayload.userId}`);
 
         // Handle the MCP request
@@ -182,7 +203,19 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
         logger.mcpRequest(method, authPayload.userId, true, duration);
       } catch (error) {
         const duration = Date.now() - startTime;
-        logger.mcpRequest(method, undefined, false, duration);
+        const userId = authPayload?.userId;
+        logger.mcpRequest(method, userId, false, duration);
+
+        // Handle timeout errors
+        if (error instanceof TimeoutError) {
+          logger.error('MCP request timed out', {
+            method,
+            userId,
+            error: error.message,
+          });
+          sendInternalError(reply, id);
+          return;
+        }
 
         // Handle authentication errors
         if (error instanceof AuthenticationError) {
@@ -193,6 +226,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
         // Handle other errors
         logger.error('MCP HTTP transport error', {
           method,
+          userId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
 

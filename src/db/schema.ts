@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
+  jsonb,
   pgPolicy,
   pgRole,
   pgTable,
@@ -10,6 +11,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { SessionData, TempAuthCodeData } from '../types/auth.js';
 
 // Define application role for authenticated users
 export const appUser = pgRole('app_user').existing();
@@ -20,9 +22,21 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     facebookUserId: text('facebook_user_id').notNull().unique(),
     createdAt: timestamp('created_at').defaultNow(),
+    sessionState: jsonb('session_state').$type<Record<string, unknown>>(),
+    accountContext: jsonb('account_context').$type<{
+      selectedAccountId?: string;
+      availableAccounts?: Array<{
+        id: string;
+        name: string;
+        permissions: string[];
+        status: string;
+        currency?: string;
+      }>;
+    }>(),
   },
   (table) => [
     index('users_facebook_user_id_idx').on(table.facebookUserId),
+    index('users_jsonb_gin_idx').using('gin', table.sessionState, table.accountContext),
 
     // Users can only access their own data using session variable
     pgPolicy('users_select_own', {
@@ -37,6 +51,28 @@ export const users = pgTable(
       withCheck: sql`${table.id} = current_setting('app.current_user_id')::uuid`,
     }),
   ]
+);
+
+export const oauthSessions = pgTable(
+  'oauth_sessions',
+  {
+    state: text('state').primaryKey(),
+    sessionData: jsonb('session_data').$type<SessionData>().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => [index('oauth_sessions_expires_at_idx').on(table.expiresAt)]
+);
+
+export const oauthTempAuthCodes = pgTable(
+  'oauth_temp_auth_codes',
+  {
+    code: text('code').primaryKey(),
+    data: jsonb('data').$type<TempAuthCodeData>().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => [index('oauth_temp_auth_codes_expires_at_idx').on(table.expiresAt)]
 );
 
 export const oauthTokens = pgTable(
@@ -135,7 +171,6 @@ export const oauthClients = pgTable(
     clientSecret: text('client_secret'), // Optional for public clients
     clientName: text('client_name').notNull(),
     redirectUris: text('redirect_uris').array().notNull(),
-    allowedScopes: text('allowed_scopes').array().notNull(),
     grantTypes: text('grant_types').array().notNull().default(['authorization_code']),
     responseTypes: text('response_types').array().notNull().default(['code']),
     tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('none'),
@@ -185,6 +220,26 @@ export type NewOAuthClient = typeof oauthClients.$inferInsert;
 
 export type OAuthRefreshToken = typeof oauthRefreshTokens.$inferSelect;
 export type NewOAuthRefreshToken = typeof oauthRefreshTokens.$inferInsert;
+
+export type OAuthSession = typeof oauthSessions.$inferSelect;
+export type NewOAuthSession = typeof oauthSessions.$inferInsert;
+
+export type OAuthTempAuthCode = typeof oauthTempAuthCodes.$inferSelect;
+export type NewOAuthTempAuthCode = typeof oauthTempAuthCodes.$inferInsert;
+
+// JSONB field types for type safety
+export type UserAccountContext = {
+  selectedAccountId?: string;
+  availableAccounts?: Array<{
+    id: string;
+    name: string;
+    permissions: string[];
+    status: string;
+    currency?: string;
+  }>;
+};
+
+export type UserSessionState = Record<string, unknown>;
 
 // Note: RLS is automatically enabled when policies are defined
 // Session variable 'app.current_user_id' is set per connection for user context

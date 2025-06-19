@@ -25,6 +25,20 @@ const envSchema = z.object({
 
   // Server
   BASE_URL: z.string().url(),
+
+  // Timeout Configurations
+  META_API_TIMEOUT: z.string().transform(Number).default('15000'), // 15 seconds default
+  DB_STATEMENT_TIMEOUT: z.string().transform(Number).default('10000'), // 10 seconds default
+
+  // MCP Configuration
+  MCP_REQUEST_TIMEOUT: z.string().transform(Number).default('30000'), // 30 seconds default
+
+  // Circuit Breaker & Retry Configuration
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.string().transform(Number).default('5'),
+  CIRCUIT_BREAKER_RESET_TIMEOUT: z.string().transform(Number).default('30000'), // 30 seconds default
+  RETRY_MAX_ATTEMPTS: z.string().transform(Number).default('3'),
+  RETRY_BASE_DELAY: z.string().transform(Number).default('1000'), // 1 second default
+  RETRY_MAX_DELAY: z.string().transform(Number).default('10000'), // 10 seconds default
 });
 
 export const env = envSchema.parse(process.env);

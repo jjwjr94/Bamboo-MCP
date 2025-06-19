@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db, withUserContext } from '../db/client.js';
-import { adAccounts } from '../db/schema.js';
+import { type DbTransaction, withUserContext } from '../db/client.js';
+import { type UserAccountContext, adAccounts, users } from '../db/schema.js';
+import { DatabaseError, NotFoundError } from './errors.js';
 import { logger } from './logger.js';
 
 export interface AccountContext {
@@ -23,29 +24,24 @@ export interface AccountSelectionResponse {
 }
 
 export class AccountManager {
-  private contexts = new Map<string, AccountContext>();
-
   async getAccountContext(userId: string): Promise<AccountContext> {
-    if (!this.contexts.has(userId)) {
-      const accounts = await this.fetchUserAccounts(userId);
-      this.contexts.set(userId, { availableAccounts: accounts });
-    }
-    const context = this.contexts.get(userId);
-    if (!context) {
-      // This should not happen because we initialize the context above, but we guard to satisfy the type checker
-      throw new Error(`Failed to load account context for user ${userId}`);
-    }
-    return context;
+    return withUserContext(userId, (tx) => this._getAndEnsureAccountContext(userId, tx));
   }
 
   async selectAccount(userId: string, accountId: string): Promise<void> {
-    const context = await this.getAccountContext(userId);
-    const account = context.availableAccounts.find((acc) => acc.id === accountId);
-    if (!account) {
-      throw new Error(`Account ${accountId} not found or not accessible`);
-    }
-    context.selectedAccountId = accountId;
-    logger.info('Account selected', { userId, accountId, accountName: account.name });
+    await withUserContext(userId, async (tx) => {
+      const context = await this._getAndEnsureAccountContext(userId, tx);
+      const account = context.availableAccounts.find((acc) => acc.id === accountId);
+
+      if (!account) {
+        throw new NotFoundError(`Account ${accountId} not found or not accessible`);
+      }
+
+      const newContext: UserAccountContext = { ...context, selectedAccountId: accountId };
+      await tx.update(users).set({ accountContext: newContext }).where(eq(users.id, userId));
+
+      logger.info('Account selected', { userId, accountId, accountName: account.name });
+    });
   }
 
   // Handles account selection: explicit -> current -> single auto-select -> error for multiple
@@ -62,13 +58,14 @@ export class AccountManager {
     }
 
     if (context.availableAccounts.length === 1) {
-      context.selectedAccountId = context.availableAccounts[0].id;
+      const accountId = context.availableAccounts[0].id;
+      await this.selectAccount(userId, accountId);
       logger.info('Auto-selected single account', {
         userId,
-        accountId: context.selectedAccountId,
+        accountId,
         accountName: context.availableAccounts[0].name,
       });
-      return context.selectedAccountId;
+      return accountId;
     }
 
     // Multiple accounts available - return structured error for Claude to handle
@@ -108,15 +105,16 @@ export class AccountManager {
     }
 
     if (context.availableAccounts.length === 1) {
-      context.selectedAccountId = context.availableAccounts[0].id;
+      const accountId = context.availableAccounts[0].id;
+      await this.selectAccount(userId, accountId);
       logger.info('Auto-selected single account', {
         userId,
-        accountId: context.selectedAccountId,
+        accountId,
         accountName: context.availableAccounts[0].name,
       });
       return {
         success: true,
-        accountId: context.selectedAccountId,
+        accountId,
       };
     }
 
@@ -129,28 +127,62 @@ export class AccountManager {
     };
   }
 
-  private async fetchUserAccounts(userId: string) {
-    return await withUserContext(userId, async () => {
-      const accounts = await db.select().from(adAccounts).where(eq(adAccounts.userId, userId));
-
-      return accounts.map((acc) => ({
-        id: acc.id,
-        name: acc.name,
-        permissions: acc.permissions || ['UNKNOWN'],
-        status: acc.status,
-        currency: acc.currency || undefined,
-      }));
+  async clearContext(userId: string): Promise<void> {
+    await withUserContext(userId, async (tx) => {
+      await tx
+        .update(users)
+        .set({ accountContext: {} }) // Reset to an empty object
+        .where(eq(users.id, userId));
     });
-  }
-
-  clearContext(userId: string): void {
-    this.contexts.delete(userId);
     logger.info('Account context cleared', { userId });
   }
 
   async getSelectedAccount(userId: string): Promise<string | undefined> {
     const context = await this.getAccountContext(userId);
     return context.selectedAccountId;
+  }
+
+  // Private helper method to fetch and ensure account context
+  private async _getAndEnsureAccountContext(
+    userId: string,
+    tx: DbTransaction
+  ): Promise<AccountContext> {
+    const user = await tx.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { accountContext: true },
+    });
+
+    if (!user) {
+      throw new DatabaseError(`User not found: ${userId}`);
+    }
+
+    let context = user.accountContext ?? { availableAccounts: [] };
+
+    // If available accounts are not populated in the DB, fetch and save them
+    if (!context.availableAccounts || context.availableAccounts.length === 0) {
+      const fetchedAccounts = await this.fetchUserAccounts(userId, tx);
+      context = { ...context, availableAccounts: fetchedAccounts };
+      await tx.update(users).set({ accountContext: context }).where(eq(users.id, userId));
+    }
+
+    // Ensure the returned object matches the AccountContext interface
+    return {
+      availableAccounts: context.availableAccounts ?? [],
+      selectedAccountId: context.selectedAccountId ?? undefined,
+    };
+  }
+
+  private async fetchUserAccounts(userId: string, tx: DbTransaction) {
+    // RLS context is already set by the calling method's withUserContext wrapper
+    const accounts = await tx.select().from(adAccounts).where(eq(adAccounts.userId, userId));
+
+    return accounts.map((acc) => ({
+      id: acc.id,
+      name: acc.name,
+      permissions: acc.permissions || ['UNKNOWN'],
+      status: acc.status,
+      currency: acc.currency || undefined,
+    }));
   }
 }
 

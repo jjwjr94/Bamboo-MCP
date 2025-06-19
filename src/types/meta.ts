@@ -271,6 +271,19 @@ export interface MetaOAuthAdAccountsResponse {
   };
 }
 
+export interface MetaAdAccountAssignedUsersResponse {
+  data?: Array<{
+    id: string;
+    tasks: string[];
+  }>;
+  paging?: {
+    cursors: {
+      after: string;
+    };
+    next?: string;
+  };
+}
+
 export interface MetaGraphApiError {
   error: {
     message: string;

@@ -12,12 +12,13 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { eq } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
-import { OAuthDatabaseService } from '../db/OAuthDatabaseService.js';
 import { db } from '../db/client.js';
+import { OAuthDatabaseService } from '../db/oauthDatabaseService.js';
 import { oauthTokens } from '../db/schema.js';
-import { MetaApiService } from '../tools/MetaApiService.js';
+import { MetaApiService } from '../tools/meta/ApiService.js';
 import type { SessionData } from '../types/auth.js';
 import { env } from '../utils/env.js';
+import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { SessionManager } from './SessionManager.js';
 import { TokenManager } from './TokenManager.js';
@@ -39,16 +40,8 @@ import { createJWT, verifyJWT } from './jwt.js';
 export class MetaServerAuthProvider implements OAuthServerProvider {
   private static instance: MetaServerAuthProvider;
 
-  private _tempAuthCodes: Map<
-    string,
-    {
-      sessionToken: string;
-      expires: number;
-      clientId: string;
-      codeChallenge: string;
-      codeChallengeMethod: 'S256';
-    }
-  > = new Map();
+  // OAuth authorization codes are now stored in database via SessionManager
+  // to support horizontal scaling across multiple server instances
 
   private _clientsStoreImpl: OAuthRegisteredClientsStore;
   private dbService: OAuthDatabaseService;
@@ -57,7 +50,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
   private constructor() {
     this.dbService = OAuthDatabaseService.getInstance();
-    this.sessionManager = SessionManager.getInstance();
+    this.sessionManager = new SessionManager();
     this.tokenManager = new TokenManager(this.dbService);
     this._clientsStoreImpl = {
       getClient: (clientId: string) => {
@@ -70,8 +63,8 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       },
     };
 
-    setInterval(() => {
-      this.cleanExpiredTokens();
+    setInterval(async () => {
+      await this.cleanExpiredTokens();
     }, 60 * 1000);
 
     logger.info('MetaServerAuthProvider initialized');
@@ -94,32 +87,36 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     params: AuthorizationParams,
     reply: FastifyReply
   ): Promise<void> {
-    logger.info('Starting OAuth authorization', {
+    logger.info('Starting OAuth authorization for MCP client', {
       clientId: client.client_id,
       requestedScopes: params.scopes,
     });
 
     try {
-      // Validate requested scopes against client's allowed scopes
-      const requestedScopes = params.scopes || env.FACEBOOK_OAUTH_SCOPES.split(',');
-      const clientAllowedScopes = client.scope?.split(' ') || [];
+      // Define server-supported Facebook API scopes
       const serverSupportedScopes = env.FACEBOOK_OAUTH_SCOPES.split(',');
 
-      // Find intersection of requested, allowed, and supported scopes
-      const grantedScopes = requestedScopes.filter(
-        (scope) => clientAllowedScopes.includes(scope) && serverSupportedScopes.includes(scope)
+      // Get client-requested scopes, defaulting to all server-supported scopes if none specified
+      // This maintains the business requirement that MCP clients get full access by default
+      // while still allowing clients to request specific subsets for principle of least privilege
+      const clientRequestedScopes = params.scopes || serverSupportedScopes;
+
+      // Calculate intersection of requested and supported scopes
+      const grantedScopes = clientRequestedScopes.filter((scope) =>
+        serverSupportedScopes.includes(scope)
       );
 
       if (grantedScopes.length === 0) {
         throw new Error(
-          `No valid scopes requested. Client allowed: ${clientAllowedScopes.join(', ')}, Requested: ${requestedScopes.join(', ')}`
+          `No valid Facebook API scopes requested. Supported: ${serverSupportedScopes.join(', ')}, Requested: ${clientRequestedScopes.join(', ')}`
         );
       }
 
-      logger.info('Scope validation passed', {
-        requested: requestedScopes,
-        granted: grantedScopes,
+      logger.info('Granting Facebook API scopes to MCP client', {
         clientId: client.client_id,
+        requested: clientRequestedScopes,
+        granted: grantedScopes,
+        isDefaultGrant: !params.scopes, // Log whether this used default scopes
       });
 
       const redirectUri = client.redirect_uris[0] as string;
@@ -138,9 +135,9 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
         grantedScopes: grantedScopes, // Store the granted scopes for later use
       };
 
-      this.sessionManager.storeSessionData(state, sessionData);
+      await this.sessionManager.storeSessionData(state, sessionData);
 
-      // Redirect to Meta OAuth with the granted scopes
+      // Redirect to Meta OAuth with the granted Facebook API scopes
       const metaAuthUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth');
       metaAuthUrl.searchParams.append('client_id', env.FACEBOOK_APP_ID);
       metaAuthUrl.searchParams.append('redirect_uri', env.FACEBOOK_CALLBACK_URL);
@@ -168,7 +165,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     error?: string;
   }> {
     try {
-      const sessionData = this.sessionManager.getSessionData(state);
+      const sessionData = await this.sessionManager.getSessionData(state);
 
       if (!sessionData) {
         return { redirectUrl: '', success: false, error: 'Invalid state parameter' };
@@ -200,20 +197,24 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       });
 
       const tempAuthCode = crypto.randomBytes(32).toString('hex');
-      this._tempAuthCodes.set(tempAuthCode, {
+
+      // Store temporary auth code in database for horizontal scaling
+      const authCodeData = {
         sessionToken: jwt,
         expires: Date.now() + 5 * 60 * 1000, // 5 minutes
         clientId: sessionData.clientId,
         codeChallenge: sessionData.clientCodeChallenge as string,
-        codeChallengeMethod: 'S256',
-      });
+        codeChallengeMethod: 'S256' as const,
+      };
+
+      await this.sessionManager.storeTempAuthCode(tempAuthCode, authCodeData);
 
       const clientRedirectUrl = new URL(sessionData.redirectUri);
       clientRedirectUrl.searchParams.append('code', tempAuthCode);
       clientRedirectUrl.searchParams.append('state', sessionData.originalState || '');
 
       // 5. Clean up
-      this.sessionManager.clearSessionData(state);
+      await this.sessionManager.clearSessionData(state);
 
       return {
         redirectUrl: clientRedirectUrl.toString(),
@@ -237,18 +238,16 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
     // Note: PKCE challenge check has already been performed by the SDK handler via challengeForAuthorizationCode.
 
-    const tempCodeData = this._tempAuthCodes.get(authorizationCode);
+    // ATOMIC GET & DELETE: This single call replaces the separate get and clear calls, preventing the race condition.
+    const tempCodeData = await this.sessionManager.getAndClearTempAuthCode(authorizationCode);
 
-    if (
-      !tempCodeData ||
-      tempCodeData.expires < Date.now() ||
-      tempCodeData.clientId !== client.client_id
-    ) {
-      throw new Error('Invalid or expired authorization code');
+    // The new method returns undefined if the code is not found, expired, or invalid.
+    // We only need to check for existence and if the code belongs to the correct client.
+    if (!tempCodeData || tempCodeData.clientId !== client.client_id) {
+      throw new TokenError('Invalid, expired, or already used authorization code');
     }
 
-    // Single-use temporary code
-    this._tempAuthCodes.delete(authorizationCode);
+    // Single-use temporary code is now guaranteed by the atomic database operation.
 
     const sessionToken = tempCodeData.sessionToken;
     const payload = verifyJWT(sessionToken);
@@ -314,7 +313,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       clientId: client.client_id,
       authorizationCode,
     });
-    const tempCodeData = this._tempAuthCodes.get(authorizationCode);
+    const tempCodeData = await this.sessionManager.getTempAuthCode(authorizationCode);
 
     // Check for existence, expiration, and if the client_id matches.
     if (
@@ -325,7 +324,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       // As per security guidelines, if the code is invalid for any reason,
       // it should be deleted to prevent reuse attempts.
       if (tempCodeData) {
-        this._tempAuthCodes.delete(authorizationCode);
+        await this.sessionManager.clearTempAuthCode(authorizationCode);
       }
       throw new Error('Invalid or expired authorization code');
     }
@@ -356,12 +355,13 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     );
   }
 
-  private cleanExpiredTokens(): void {
-    const now = Date.now();
-    for (const [code, data] of this._tempAuthCodes.entries()) {
-      if (data.expires < now) {
-        this._tempAuthCodes.delete(code);
-      }
+  private async cleanExpiredTokens(): Promise<void> {
+    // Expired temp auth codes are now automatically cleaned up by the SessionManager's
+    // database-level expiration handling, so this method just triggers that cleanup
+    try {
+      await this.sessionManager.cleanupExpiredSessions();
+    } catch (error) {
+      logger.error('Failed to clean up expired temp auth codes', { error });
     }
   }
 }

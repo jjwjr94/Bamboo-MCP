@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
-import type { MetaToolsHandler } from '../tools/metaToolsHandler.js';
-import { logger } from '../utils/logger.js';
+import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
+import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
+import { logger } from '../../utils/logger.js';
+import { createMcpErrorResult } from '../errorHandler.js';
 
 /**
  * Ad Set Tool Registry
@@ -39,6 +40,33 @@ export class AdSetToolRegistry {
    * Register the get_adsets tool
    */
   private registerGetAdSets(): void {
+    const outputSchema = z.object({
+      adSets: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            status: z.string(),
+            effective_status: z.string().optional(),
+            configured_status: z.string().optional(),
+            created_time: z.string().optional(),
+            updated_time: z.string().optional(),
+            start_time: z.string().optional().nullable(),
+            end_time: z.string().optional().nullable(),
+            daily_budget: z.string().optional(),
+            lifetime_budget: z.string().optional(),
+            budget_remaining: z.string().optional(),
+            billing_event: z.string().optional(),
+            optimization_goal: z.string().optional(),
+            bid_amount: z.number().optional().nullable(),
+            targeting: z.unknown().optional(),
+            attribution_spec: z.unknown().optional(),
+            promoted_object: z.unknown().optional(),
+          })
+        )
+        .describe('A list of ad sets.'),
+    });
+
     this.server.registerTool(
       'get_adsets',
       {
@@ -53,36 +81,30 @@ export class AdSetToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
         },
-        outputSchema: {
-          adSets: z
-            .array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                status: z.string(),
-                effective_status: z.string().optional(),
-                configured_status: z.string().optional(),
-                created_time: z.string().optional(),
-                updated_time: z.string().optional(),
-                start_time: z.string().optional().nullable(),
-                end_time: z.string().optional().nullable(),
-                daily_budget: z.string().optional(),
-                lifetime_budget: z.string().optional(),
-                budget_remaining: z.string().optional(),
-                billing_event: z.string().optional(),
-                optimization_goal: z.string().optional(),
-                bid_amount: z.number().optional().nullable(),
-                targeting: z.any().optional(),
-                attribution_spec: z.any().optional(),
-                promoted_object: z.any().optional(),
-              })
-            )
-            .describe('A list of ad sets.'),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.getAdSets(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.getAdSets(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for get_adsets', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
@@ -91,6 +113,14 @@ export class AdSetToolRegistry {
    * Register the create_adset tool
    */
   private registerCreateAdSet(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      adSetId: z.string(),
+      name: z.string(),
+      campaignId: z.string(),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'create_adset',
       {
@@ -155,17 +185,30 @@ export class AdSetToolRegistry {
           endTime: z.string().optional().describe('End time in ISO format.'),
           status: z.enum(['ACTIVE', 'PAUSED']).default('PAUSED').describe('The ad set status.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          name: z.string(),
-          campaignId: z.string(),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.createAdSet(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.createAdSet(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for create_adset', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
@@ -174,6 +217,13 @@ export class AdSetToolRegistry {
    * Register the update_adset tool
    */
   private registerUpdateAdSet(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      adSetId: z.string(),
+      updatedFields: z.array(z.string()),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'update_adset',
       {
@@ -225,16 +275,30 @@ export class AdSetToolRegistry {
             .optional()
             .describe('New targeting criteria for the ad set.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          updatedFields: z.array(z.string()),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.updateAdSet(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.updateAdSet(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for update_adset', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
@@ -243,6 +307,12 @@ export class AdSetToolRegistry {
    * Register the delete_adset tool
    */
   private registerDeleteAdSet(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      adSetId: z.string(),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'delete_adset',
       {
@@ -251,15 +321,30 @@ export class AdSetToolRegistry {
         inputSchema: {
           adSetId: z.string().describe('The ID of the ad set to delete.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          adSetId: z.string(),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.deleteAdSet(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.deleteAdSet(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for delete_adset', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }

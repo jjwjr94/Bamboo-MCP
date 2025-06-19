@@ -19,3 +19,11 @@ export interface SessionData {
   clientCodeChallengeMethod?: string;
   grantedScopes?: string[]; // The scopes that were granted during authorization
 }
+
+export interface TempAuthCodeData {
+  sessionToken: string;
+  expires: number;
+  clientId: string;
+  codeChallenge: string;
+  codeChallengeMethod: 'S256';
+}

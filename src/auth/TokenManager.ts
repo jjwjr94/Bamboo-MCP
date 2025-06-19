@@ -3,7 +3,7 @@ import type {
   OAuthClientInformationFull,
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
-import type { OAuthDatabaseService } from '../db/OAuthDatabaseService.js';
+import type { OAuthDatabaseService } from '../db/oauthDatabaseService.js';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import { createJWT, verifyJWT } from './jwt.js';
@@ -70,11 +70,57 @@ export class TokenManager {
       client.client_id
     );
 
-    // Generate new tokens
+    // SECURITY FIX: Preserve originally granted Facebook scopes for this specific client
+    // Note: In the current architecture, all clients get the same scopes, but we preserve
+    // the original grant to maintain OAuth 2.1 compliance and prevent privilege escalation
+    const userOAuthToken = await this.dbService.getLatestUserOAuthToken(storedToken.userId);
+
+    if (!userOAuthToken || !userOAuthToken.scopes) {
+      // Fallback to default server scopes if no user token found
+      // This maintains compatibility while being secure
+      logger.warn('No user OAuth token found, using default server scopes for refresh', {
+        userId: storedToken.userId,
+        clientId: client.client_id,
+      });
+      const defaultScopes = env.FACEBOOK_OAUTH_SCOPES.split(',');
+
+      const newAccessToken = createJWT({
+        userId: storedToken.userId,
+        clientId: client.client_id,
+        scopes: defaultScopes,
+      });
+      const newPayload = verifyJWT(newAccessToken);
+      const newRefreshToken = crypto.randomBytes(64).toString('hex');
+      const newHashedRefreshToken = crypto
+        .createHash('sha256')
+        .update(newRefreshToken)
+        .digest('hex');
+
+      await this.dbService.rotateRefreshToken(
+        storedToken.id,
+        storedToken.userId,
+        client.client_id,
+        newHashedRefreshToken
+      );
+
+      return {
+        access_token: newAccessToken,
+        token_type: 'Bearer',
+        expires_in: Math.floor((newPayload.exp * 1000 - Date.now()) / 1000),
+        refresh_token: newRefreshToken,
+        scope: newPayload.scopes.join(' '),
+      };
+    }
+
+    // Use the originally granted scopes from the stored OAuth token
+    // This preserves the principle of least privilege per OAuth 2.1
+    const originallyGrantedScopes = userOAuthToken.scopes;
+
+    // Generate new tokens with preserved scopes
     const newAccessToken = createJWT({
       userId: storedToken.userId,
       clientId: client.client_id,
-      scopes: env.FACEBOOK_OAUTH_SCOPES.split(','),
+      scopes: originallyGrantedScopes, // FIXED: Use preserved scopes, not all scopes
     });
     const newPayload = verifyJWT(newAccessToken);
     const newRefreshToken = crypto.randomBytes(64).toString('hex');
@@ -88,7 +134,11 @@ export class TokenManager {
       newHashedRefreshToken
     );
 
-    logger.info('Refresh token rotated successfully', { userId: storedToken.userId });
+    logger.info('Refresh token rotated with preserved Facebook scopes', {
+      userId: storedToken.userId,
+      clientId: client.client_id,
+      preservedScopes: originallyGrantedScopes,
+    });
 
     return {
       access_token: newAccessToken,

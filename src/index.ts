@@ -40,6 +40,10 @@ export async function build(opts = {}) {
   // Register Express compatibility layer
   await app.register(fastifyExpress);
 
+  // Configure trust proxy for Render hosting (single proxy hop)
+  // This fixes the express-rate-limit ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error
+  app.express.set('trust proxy', 1);
+
   // Register static file serving
   await app.register(fastifyStatic, {
     root: join(__dirname, '../public'),

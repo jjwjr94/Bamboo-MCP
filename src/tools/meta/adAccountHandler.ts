@@ -1,17 +1,42 @@
-import { sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { AdAccount as MetaAdAccountSDK, User as MetaUserSDK } from 'facebook-nodejs-business-sdk';
-import { db, withUserContext } from '../db/client.js';
-import { adAccounts } from '../db/schema.js';
-import type { JWTPayload } from '../types/auth.js';
-import type { MetaAdAccount } from '../types/meta.js';
-import { logger } from '../utils/logger.js';
-import { handleMetaApiCall, initializeMetaApi } from './metaApi.js';
+import { db, withUserContext } from '../../db/client.js';
+import { adAccounts, oauthTokens, users } from '../../db/schema.js';
+import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
+import type { JWTPayload } from '../../types/auth.js';
+import type { MetaAdAccount } from '../../types/meta.js';
+import { AuthenticationError } from '../../utils/errors.js';
+import { logger } from '../../utils/logger.js';
+import { MetaApiService } from './ApiService.js';
+import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
 export class MetaAdAccountHandler {
   async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
     logger.info('Executing get_ad_accounts', { userId: authPayload.userId, params });
 
     await initializeMetaApi(authPayload.userId);
+
+    // Fetch the user's most recent access token and their Meta ID
+    const tokenAndMetaId = await withUserContext(authPayload.userId, async (tx) => {
+      return await tx
+        .select({
+          accessToken: oauthTokens.accessToken,
+          metaUserId: users.facebookUserId,
+        })
+        .from(oauthTokens)
+        .innerJoin(users, eq(oauthTokens.userId, users.id))
+        .where(eq(oauthTokens.userId, authPayload.userId))
+        .orderBy(desc(oauthTokens.createdAt))
+        .limit(1);
+    });
+
+    // Validate that the required information was found
+    if (!tokenAndMetaId.length || !tokenAndMetaId[0].accessToken || !tokenAndMetaId[0].metaUserId) {
+      throw new AuthenticationError(
+        'Could not find a valid Meta access token or Meta User ID for the user.'
+      );
+    }
+    const { accessToken, metaUserId } = tokenAndMetaId[0];
 
     return await handleMetaApiCall(async () => {
       const fields = [
@@ -37,26 +62,12 @@ export class MetaAdAccountHandler {
             currency: string;
             timezone_name: string;
           }) => {
-            let permissions = ['UNKNOWN'];
-
-            try {
-              const usersCursor = await new MetaAdAccountSDK(acc.id).getUsers(['id', 'role']);
-              const users = usersCursor as unknown as Array<{
-                id: string;
-                role: string;
-              }>;
-              const currentUser = await new MetaUserSDK('me').get(['id']);
-              const userRole = users.find((u) => u.id === currentUser.id);
-
-              if (userRole) {
-                permissions = [userRole.role];
-              }
-            } catch (error) {
-              logger.warn('Failed to fetch permissions for ad account', {
-                accountId: acc.id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              });
-            }
+            // Fetch real permissions using the new MetaApiService method
+            const permissions = await MetaApiService.fetchAdAccountPermissions(
+              acc.id,
+              accessToken,
+              metaUserId
+            );
 
             return {
               id: acc.id,
@@ -93,10 +104,10 @@ export class MetaAdAccountHandler {
       });
 
       logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
-      return {
-        structuredContent: { accounts: accountsToStore },
-        content: [{ type: 'text' as const, text: JSON.stringify(accountsToStore, null, 2) }],
-      };
+      return createMcpSuccessResult(
+        { accounts: accountsToStore },
+        `Retrieved ${accountsToStore.length} ad accounts`
+      );
     });
   }
 }

@@ -1,9 +1,12 @@
 import { desc, eq } from 'drizzle-orm';
 import { FacebookAdsApi } from 'facebook-nodejs-business-sdk';
-import { withUserContext } from '../db/client.js';
-import { oauthTokens } from '../db/schema.js';
-import { AuthenticationError, MetaApiError } from '../utils/errors.js';
-import { logger } from '../utils/logger.js';
+import { withUserContext } from '../../db/client.js';
+import { oauthTokens } from '../../db/schema.js';
+import { AuthenticationError, MetaApiError } from '../../utils/errors.js';
+import { logger } from '../../utils/logger.js';
+import { createMetaResiliencePolicy } from '../../utils/resiliencePolicy.js';
+
+// Circuit breaker is now request-scoped to prevent cross-user impact
 
 async function fetchUserToken(userId: string) {
   return withUserContext(userId, async (tx) => {
@@ -51,7 +54,9 @@ export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi>
 
 export async function handleMetaApiCall<T>(apiCall: () => Promise<T>): Promise<T> {
   try {
-    return await apiCall();
+    // Create a new resilience policy per request to prevent cross-user circuit breaker impact
+    const requestScopedPolicy = createMetaResiliencePolicy();
+    return await requestScopedPolicy.execute(apiCall);
   } catch (error: unknown) {
     logger.error('Meta API call failed', { error: (error as Error).message });
 

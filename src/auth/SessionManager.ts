@@ -1,62 +1,217 @@
-import type { SessionData } from '../types/auth.js';
+import { eq, lt } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { oauthSessions, oauthTempAuthCodes } from '../db/schema.js';
+import type { SessionData, TempAuthCodeData } from '../types/auth.js';
+import { DatabaseError, ValidationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
 /**
- * Manages transient session state for the OAuth 2.0 authorization flow.
- * Implemented as a singleton to ensure a single state store across the application.
- * TODO: This in-memory implementation can be replaced with a distributed
- * store like Redis for production environments without changing the consumers.
+ * Manages transient session state for the OAuth 2.0 authorization flow
+ * by storing state in the database. This implementation is stateless.
  */
 export class SessionManager {
-  private static instance: SessionManager;
-  private _sessionStore: Map<string, SessionData> = new Map();
-
-  private constructor() {
-    logger.info('SessionManager initialized');
-  }
-
-  public static getInstance(): SessionManager {
-    if (!SessionManager.instance) {
-      SessionManager.instance = new SessionManager();
-      logger.info('Created SessionManager singleton instance');
-    }
-    return SessionManager.instance;
+  constructor() {
+    logger.info('Stateless SessionManager initialized');
   }
 
   /**
-   * Stores session data against a unique state key.
+   * Stores session data against a unique state key in the database.
    * @param state The unique state identifier.
    * @param data The session data to store.
    */
-  public storeSessionData(state: string, data: SessionData): void {
+  public async storeSessionData(state: string, data: SessionData): Promise<void> {
     if (!state) {
-      throw new Error('Cannot store session data: state parameter is missing');
+      throw new ValidationError('Cannot store session data: state parameter is missing');
     }
-    this._sessionStore.set(state, data);
-    logger.debug('Session data stored', { state, mapSize: this._sessionStore.size });
+
+    // Set an expiration for the session state (10 minutes)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    try {
+      await db.insert(oauthSessions).values({
+        state,
+        sessionData: data,
+        expiresAt,
+      });
+      logger.debug('Session data stored in database', { state });
+    } catch (error) {
+      logger.error('Failed to store session data in database', { state, error });
+      throw new DatabaseError('Could not store OAuth session state.');
+    }
   }
 
   /**
-   * Retrieves session data using the state key.
-   * @param state The unique state identifier.
-   * @returns The stored session data, or undefined if not found.
+   * Stores temporary authorization code data against a unique code key in the database.
+   * Used for horizontal scaling of OAuth flows.
+   * @param authCode The unique authorization code identifier.
+   * @param data The temporary auth code data to store.
    */
-  public getSessionData(state: string): SessionData | undefined {
-    const data = this._sessionStore.get(state);
-    logger.debug('Session data retrieved', {
-      state,
-      found: !!data,
-      mapSize: this._sessionStore.size,
-    });
-    return data;
+  public async storeTempAuthCode(authCode: string, data: TempAuthCodeData): Promise<void> {
+    if (!authCode) {
+      throw new ValidationError('Cannot store temp auth code: code parameter is missing');
+    }
+
+    // Use the expires timestamp from the data for expiration
+    const expiresAt = new Date(data.expires);
+
+    try {
+      // Use the new, type-safe table. No 'as any' cast needed.
+      await db.insert(oauthTempAuthCodes).values({
+        code: authCode,
+        data: data,
+        expiresAt,
+      });
+      logger.debug('Temp auth code stored in database', { authCode });
+    } catch (error) {
+      logger.error('Failed to store temp auth code in database', { authCode, error });
+      throw new DatabaseError('Could not store temporary authorization code.');
+    }
   }
 
   /**
-   * Deletes session data for a given state key after it has been used.
+   * Retrieves temporary authorization code data from the database.
+   * @param authCode The unique authorization code identifier.
+   * @returns The stored temp auth code data, or undefined if not found or expired.
+   */
+  public async getTempAuthCode(authCode: string): Promise<TempAuthCodeData | undefined> {
+    try {
+      // Query the new table directly.
+      const result = await db.query.oauthTempAuthCodes.findFirst({
+        where: eq(oauthTempAuthCodes.code, authCode),
+      });
+
+      if (result && result.expiresAt > new Date()) {
+        logger.debug('Temp auth code retrieved from database', { authCode, found: true });
+        // The 'data' property is already correctly typed as TempAuthCodeData.
+        return result.data;
+      }
+
+      logger.debug('Temp auth code not found or expired in database', { authCode });
+      return undefined;
+    } catch (error) {
+      logger.error('Failed to retrieve temp auth code from database', { authCode, error });
+      throw new DatabaseError('Could not retrieve temporary authorization code.');
+    }
+  }
+
+  /**
+   * Deletes temporary authorization code data from the database.
+   * @param authCode The unique authorization code identifier to clear.
+   */
+  public async clearTempAuthCode(authCode: string): Promise<void> {
+    try {
+      // Delete from the correct table.
+      await db.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
+      logger.debug('Temp auth code cleared from database', { authCode });
+    } catch (error) {
+      logger.error('Failed to clear temp auth code from database', { authCode, error });
+      // This is a cleanup step, so we log the error but don't throw,
+      // to avoid interrupting the user flow.
+    }
+  }
+
+  /**
+   * Retrieves session data from the database using the state key.
+   * @param state The unique state identifier.
+   * @returns The stored session data, or undefined if not found or expired.
+   */
+  public async getSessionData(state: string): Promise<SessionData | undefined> {
+    try {
+      // Find the session and ensure it has not expired
+      const result = await db.query.oauthSessions.findFirst({
+        where: eq(oauthSessions.state, state),
+      });
+
+      // Check for expiration
+      if (result && result.expiresAt > new Date()) {
+        logger.debug('Session data retrieved from database', { state, found: true });
+        return result.sessionData as SessionData;
+      }
+
+      logger.debug('Session data not found or expired in database', { state });
+      return undefined;
+    } catch (error) {
+      logger.error('Failed to retrieve session data from database', { state, error });
+      throw new DatabaseError('Could not retrieve OAuth session state.');
+    }
+  }
+
+  /**
+   * Deletes session data from the database for a given state key.
    * @param state The unique state identifier to clear.
    */
-  public clearSessionData(state: string): void {
-    this._sessionStore.delete(state);
-    logger.debug('Session data cleared', { state });
+  public async clearSessionData(state: string): Promise<void> {
+    try {
+      await db.delete(oauthSessions).where(eq(oauthSessions.state, state));
+      logger.debug('Session data cleared from database', { state });
+    } catch (error) {
+      logger.error('Failed to clear session data from database', { state, error });
+      // This is a cleanup step, so we log the error but don't throw,
+      // to avoid interrupting the user flow.
+    }
+  }
+
+  /**
+   * Atomically retrieves and deletes a temporary authorization code from the database.
+   * This prevents race conditions where a code could be used multiple times.
+   * @param authCode The unique authorization code identifier.
+   * @returns The stored temp auth code data, or undefined if not found, expired, or invalid.
+   */
+  public async getAndClearTempAuthCode(authCode: string): Promise<TempAuthCodeData | undefined> {
+    try {
+      const result = await db.transaction(async (tx) => {
+        // Step 1: Find the auth code record within the transaction.
+        const record = await tx.query.oauthTempAuthCodes.findFirst({
+          where: eq(oauthTempAuthCodes.code, authCode),
+        });
+
+        if (!record) {
+          logger.debug('Temp auth code not found in database transaction', { authCode });
+          return null; // Return null to indicate not found within the transaction.
+        }
+
+        // Step 2: Immediately delete the record within the same transaction.
+        await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
+
+        // Step 3: Return the retrieved record for post-transaction validation.
+        return record;
+      });
+
+      // Log success only after transaction commits successfully
+      if (result) {
+        logger.debug('Atomically retrieved and deleted temp auth code', { authCode });
+      }
+
+      // Step 4: After the transaction, validate the retrieved data.
+      if (result && result.expiresAt > new Date()) {
+        // The 'data' property is already correctly typed as TempAuthCodeData.
+        return result.data;
+      }
+
+      logger.debug('Temp auth code was expired or invalid after atomic retrieval', { authCode });
+      return undefined;
+    } catch (error) {
+      logger.error('Failed to atomically get and clear temp auth code', { authCode, error });
+      throw new DatabaseError('Could not process temporary authorization code.');
+    }
+  }
+
+  /**
+   * Periodically cleans up all expired OAuth sessions from the database.
+   * This is intended to be run by a scheduled job (e.g., cron).
+   */
+  public async cleanupExpiredSessions(): Promise<void> {
+    logger.info('Running cleanup for expired OAuth sessions and temp codes...');
+    try {
+      // It's good practice to run these in a transaction, though not strictly required.
+      await db.transaction(async (tx) => {
+        await tx.delete(oauthSessions).where(lt(oauthSessions.expiresAt, new Date()));
+        await tx.delete(oauthTempAuthCodes).where(lt(oauthTempAuthCodes.expiresAt, new Date()));
+      });
+      logger.info('Successfully cleaned up expired OAuth data.');
+    } catch (error) {
+      logger.error('Failed to clean up expired OAuth data', { error });
+      // Do not throw, as this is a background maintenance task.
+    }
   }
 }

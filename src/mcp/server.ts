@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { MetaToolsHandler } from '../tools/metaToolsHandler.js';
+import { MetaToolsHandler } from '../tools/meta/toolsHandler.js';
 import { logger } from '../utils/logger.js';
 import { ResourceRegistry } from './ResourceRegistry.js';
-import { ToolRegistry } from './toolRegistry.js';
+import { ToolRegistry } from './registries/toolRegistry.js';
 
-class BambooMCPServer {
+export class BambooMCPServer {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
 
@@ -39,12 +39,9 @@ class BambooMCPServer {
   }
 }
 
-// Create and export server instance
-const bambooServer = new BambooMCPServer();
-export { bambooServer };
-
 // --- Stdio entry point ---
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const bambooServer = new BambooMCPServer();
   bambooServer.runStdio().catch((error) => {
     logger.error('Failed to start MCP server', { error });
     process.exit(1);

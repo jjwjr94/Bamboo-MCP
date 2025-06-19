@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
-import type { MetaToolsHandler } from '../tools/metaToolsHandler.js';
-import { logger } from '../utils/logger.js';
+import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
+import { MetaCampaignResponseSchema } from '../../generated/schemas.js';
+import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
+import { logger } from '../../utils/logger.js';
+import { createMcpErrorResult } from '../errorHandler.js';
 
 /**
  * Campaign Tool Registry
@@ -38,6 +40,12 @@ export class CampaignToolRegistry {
   }
 
   private registerGetCampaigns(): void {
+    const outputSchema = z.object({
+      campaigns: z
+        .array(MetaCampaignResponseSchema)
+        .describe('A list of campaigns with all available Meta API fields.'),
+    });
+
     this.server.registerTool(
       'get_campaigns',
       {
@@ -52,38 +60,44 @@ export class CampaignToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
         },
-        outputSchema: {
-          campaigns: z
-            .array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                status: z.string(),
-                effective_status: z.string(),
-                objective: z.string(),
-                created_time: z.string().optional(),
-                updated_time: z.string().optional(),
-                daily_budget: z.string().optional(),
-                lifetime_budget: z.string().optional(),
-                bid_strategy: z.string().optional(),
-                budget_remaining: z.string().optional(),
-                spend_cap: z.string().optional(),
-                configured_status: z.string().optional(),
-                start_time: z.string().optional(),
-                stop_time: z.string().optional(),
-              })
-            )
-            .describe('A list of campaigns.'),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.getCampaigns(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.getCampaigns(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for get_campaigns', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
 
   private registerCreateCampaign(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      campaignId: z.string(),
+      name: z.string(),
+      objective: z.string(),
+      status: z.string(),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'create_campaign',
       {
@@ -125,23 +139,42 @@ export class CampaignToolRegistry {
             .optional()
             .describe('Special ad categories if applicable.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          name: z.string(),
-          objective: z.string(),
-          status: z.string(),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.createCampaign(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.createCampaign(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for create_campaign', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
 
   private registerUpdateCampaign(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      campaignId: z.string(),
+      updatedFields: z.array(z.string()),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'update_campaign',
       {
@@ -167,21 +200,41 @@ export class CampaignToolRegistry {
             .optional()
             .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          updatedFields: z.array(z.string()),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.updateCampaign(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.updateCampaign(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for update_campaign', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
 
   private registerDeleteCampaign(): void {
+    const outputSchema = z.object({
+      success: z.boolean(),
+      campaignId: z.string(),
+      message: z.string(),
+    });
+
     this.server.registerTool(
       'delete_campaign',
       {
@@ -190,15 +243,30 @@ export class CampaignToolRegistry {
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to delete.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-          campaignId: z.string(),
-          message: z.string(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
-        const authPayload = extractAuthPayload(extra);
-        return this.toolsHandler.deleteCampaign(authPayload, params);
+        try {
+          const authPayload = extractAuthPayload(extra);
+          const result = await this.toolsHandler.deleteCampaign(authPayload, params);
+
+          // Validate output schema
+          if (result?.structuredContent) {
+            const validation = outputSchema.safeParse(result.structuredContent);
+            if (!validation.success) {
+              logger.error('Tool output validation failed for delete_campaign', {
+                errors: validation.error.format(),
+              });
+              return createMcpErrorResult(
+                new Error('Internal error: Tool output failed validation.')
+              );
+            }
+          }
+
+          return result;
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
       }
     );
   }
