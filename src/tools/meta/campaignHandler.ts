@@ -98,9 +98,18 @@ export class MetaCampaignHandler {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
     // Validate special_ad_category_country requirement (business rule)
-    const isSpecialCategory =
-      params.specialAdCategories.length > 1 ||
-      (params.specialAdCategories.length === 1 && params.specialAdCategories[0] !== 'NONE');
+    // Check for invalid combination: NONE cannot be mixed with other categories
+    const hasNone = params.specialAdCategories.includes('NONE');
+    const hasOtherCategories = params.specialAdCategories.some((cat) => cat !== 'NONE');
+
+    if (hasNone && hasOtherCategories) {
+      throw new Error(
+        "Invalid special ad categories: 'NONE' cannot be combined with other special ad categories."
+      );
+    }
+
+    // Check if special_ad_category_country is required
+    const isSpecialCategory = params.specialAdCategories.length > 0 && !hasNone;
 
     if (
       isSpecialCategory &&
