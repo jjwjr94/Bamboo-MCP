@@ -88,6 +88,9 @@ export class ResourceRegistry {
           return {
             contents: [
               {
+                name: `ad-account-${account.id}`,
+                title: `Ad Account: ${account.name}`,
+                description: `Data for ad account: ${account.name} (${account.id})`,
                 uri: uri.href,
                 mimeType: 'application/json',
                 text: JSON.stringify(account, null, 2),

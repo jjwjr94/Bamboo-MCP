@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
 import { NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
