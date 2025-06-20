@@ -1,8 +1,7 @@
 // Meta Ads API type definitions
 
 // Import auto-generated types from schemas
-// Re-export types from generated schemas that are used externally
-export type {
+import type {
   AdSetBillingEvent,
   AdSetOptimizationGoal,
   AdsInsightsBreakdowns,
@@ -427,20 +426,22 @@ export interface MetaApiNodeList extends Array<MetaApiNode> {
   };
 }
 
-// Re-export key auto-generated types for convenience
+// Re-export key auto-generated types for external use
 export type {
+  AdSetBillingEvent,
+  AdSetOptimizationGoal,
+  AdsInsightsBreakdowns,
+  AdsInsightsDatePreset,
+  AssetType,
   CampaignObjective,
   CampaignSpecialAdCategories,
   CampaignStatus,
-  AdSetBillingEvent,
-  AdSetOptimizationGoal,
-  CustomAudienceSubtype,
   CustomAudienceCustomerFileSource,
-  ProductCatalogVertical,
-  ProductAvailability,
-  ProductCondition,
-  AssetType,
+  CustomAudienceSubtype,
   HttpMethod,
-  AdsInsightsDatePreset,
   InsightLevel,
+  InsightMetric,
+  ProductAvailability,
+  ProductCatalogVertical,
+  ProductCondition,
 };
