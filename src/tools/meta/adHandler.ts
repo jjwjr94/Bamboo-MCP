@@ -162,17 +162,15 @@ export class MetaAdHandler {
     logger.info('Executing update_ad', { userId: authPayload.userId, params });
     await initializeMetaApi(authPayload.userId);
     return await handleMetaApiCall(async () => {
-      const updateData: Record<string, unknown> = {};
+      const updateData: Record<string, unknown> = {
+        [MetaAdSDK.Fields.name]: params.name,
+        [MetaAdSDK.Fields.status]: params.status,
+        [MetaAdSDK.Fields.creative]: params.creativeId
+          ? { creative_id: params.creativeId }
+          : undefined,
+      };
 
-      if (params.name !== undefined) {
-        updateData[MetaAdSDK.Fields.name] = params.name;
-      }
-      if (params.status !== undefined) {
-        updateData[MetaAdSDK.Fields.status] = params.status;
-      }
-      if (params.creativeId !== undefined) {
-        updateData[MetaAdSDK.Fields.creative] = { creative_id: params.creativeId };
-      }
+      removeUndefinedProperties(updateData);
 
       const ad = new MetaAdSDK(params.adId);
       const updateResponse = await ad.update([], updateData);

@@ -125,16 +125,9 @@ export class MetaCustomAudienceHandler {
       const apiParams: Record<string, unknown> = {
         [MetaCustomAudienceSDK.Fields.name]: audienceParams.name,
         [MetaCustomAudienceSDK.Fields.subtype]: audienceParams.subtype,
+        [MetaCustomAudienceSDK.Fields.description]: audienceParams.description,
+        [MetaCustomAudienceSDK.Fields.customer_file_source]: audienceParams.customerFileSource,
       };
-
-      // Add optional fields if provided
-      if (audienceParams.description) {
-        apiParams[MetaCustomAudienceSDK.Fields.description] = audienceParams.description;
-      }
-      if (audienceParams.customerFileSource) {
-        apiParams[MetaCustomAudienceSDK.Fields.customer_file_source] =
-          audienceParams.customerFileSource;
-      }
 
       removeUndefinedProperties(apiParams);
 

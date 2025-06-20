@@ -10,7 +10,11 @@ import {
   isBambooError,
 } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import { isMetaRateLimitError, shouldRetryMetaError } from '../utils/metaErrorClassifier.js';
+import {
+  isMetaOAuthTokenError,
+  isMetaRateLimitError,
+  shouldRetryMetaError,
+} from '../utils/metaErrorClassifier.js';
 
 /**
  * Metadata providing client guidance on how to handle a tool error.
@@ -131,17 +135,27 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
       category: 'validation',
     };
   } else if (error instanceof MetaApiError) {
-    message = `Meta API error: ${error.message}`;
-    const isRetryable = shouldRetryMetaError(error);
-    metadata = {
-      retryable: isRetryable,
-      errorCode: error.code,
-      category: 'api_error',
-    };
+    if (isMetaOAuthTokenError(error)) {
+      message =
+        'Authentication failed. The access token is invalid or has expired. Please re-authenticate and try again.';
+      metadata = {
+        retryable: false,
+        errorCode: error.metaErrorCode || error.code,
+        category: 'authentication',
+      };
+    } else {
+      message = `Meta API error: ${error.message}`;
+      const isRetryable = shouldRetryMetaError(error);
+      metadata = {
+        retryable: isRetryable,
+        errorCode: error.metaErrorCode || error.code,
+        category: 'api_error',
+      };
 
-    // Add retry delay for rate limit errors
-    if (isRetryable && isMetaRateLimitError(error)) {
-      metadata.retryAfterMs = 60000; // 1 minute default
+      // Add retry delay for rate limit errors
+      if (isRetryable && isMetaRateLimitError(error)) {
+        metadata.retryAfterMs = 60000; // 1 minute default
+      }
     }
   } else if (error instanceof TimeoutError) {
     message = 'The request timed out. Please try again later.';

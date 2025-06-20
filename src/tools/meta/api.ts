@@ -25,6 +25,11 @@ async function fetchUserToken(userId: string) {
   });
 }
 
+export async function fetchUserTokenString(userId: string): Promise<string> {
+  const tokenRecord = await fetchUserToken(userId);
+  return tokenRecord.accessToken;
+}
+
 export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi> {
   const token = await fetchUserToken(userId);
 

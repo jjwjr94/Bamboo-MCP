@@ -1,4 +1,5 @@
 import {
+  FacebookAdsApi,
   AdAccount as MetaAdAccountSDK,
   AdCreative as MetaAdCreativeSDK,
   PagePost as MetaPagePostSDK,
@@ -10,9 +11,10 @@ import { MetaCreateSuccessResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
-import { ValidationError } from '../../utils/errors.js';
+import { AuthorizationError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { fetchUserTokenString, handleMetaApiCall, initializeMetaApi } from './api.js';
 
 // Schema for an individual Page, matching the tool's output
 const StrictPageSchema = z.object({
@@ -119,70 +121,102 @@ export class MetaPagesHandler {
    */
   async getPagePosts(authPayload: JWTPayload, params: { pageId: string }) {
     logger.info('Executing get_page_posts', { userId: authPayload.userId, params });
+
+    // Fetch the original user token to restore it later
+    const userAccessToken = await fetchUserTokenString(authPayload.userId);
     await initializeMetaApi(authPayload.userId);
 
-    return handleMetaApiCall(async () => {
-      const fields = [
-        MetaPagePostSDK.Fields.id,
-        MetaPagePostSDK.Fields.message,
-        MetaPagePostSDK.Fields.created_time,
-        MetaPagePostSDK.Fields.permalink_url,
-        MetaPagePostSDK.Fields.full_picture,
-        MetaPagePostSDK.Fields.story,
-        MetaPagePostSDK.Fields.status_type,
-      ];
+    try {
+      return await handleMetaApiCall(async () => {
+        // Fetch the page object to get its specific access token
+        logger.info('Fetching page access token', {
+          userId: authPayload.userId,
+          pageId: params.pageId,
+        });
 
-      const postsCursor = await new MetaPageSDK(params.pageId).getPosts(fields);
+        const page = await new MetaPageSDK(params.pageId).read([MetaPageSDK.Fields.access_token]);
+        const pageAccessToken = page.access_token;
 
-      // Handle pagination with improved type safety and fetch limit
-      const allRawPosts: unknown[] = [];
-      let currentCursor: PaginatedCursor<unknown> = postsCursor;
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawPosts.push(...currentCursor);
-
-        if (allRawPosts.length >= MAX_POSTS_TO_FETCH) {
-          logger.warn('Reached maximum posts fetch limit', {
-            limit: MAX_POSTS_TO_FETCH,
-            userId: authPayload.userId,
-            pageId: params.pageId,
-          });
-          break;
+        // Validate that a page access token was retrieved
+        if (!pageAccessToken) {
+          throw new AuthorizationError(
+            `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
+          );
         }
 
-        // Check for pagination
-        if (typeof currentCursor.next === 'function' && currentCursor.hasNext?.()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+        // Re-initialize the API with the page-specific token for this scope
+        FacebookAdsApi.init(pageAccessToken as string);
+        logger.info('API re-initialized with page-specific access token', {
+          pageId: params.pageId,
+        });
 
-      // Validate and transform the response
-      const validatedPosts: z.infer<typeof StrictPagePostSchema>[] = [];
-      for (const post of allRawPosts) {
-        const result = StrictPagePostSchema.safeParse(post);
-        if (result.success) {
-          validatedPosts.push(result.data);
-        } else {
-          logger.warn('Invalid post data received from Meta API, skipping.', {
-            error: result.error.format(),
-            post,
-            userId: authPayload.userId,
-            pageId: params.pageId,
-          });
-        }
-      }
+        const fields = [
+          MetaPagePostSDK.Fields.id,
+          MetaPagePostSDK.Fields.message,
+          MetaPagePostSDK.Fields.created_time,
+          MetaPagePostSDK.Fields.permalink_url,
+          MetaPagePostSDK.Fields.full_picture,
+          MetaPagePostSDK.Fields.story,
+          MetaPagePostSDK.Fields.status_type,
+        ];
 
-      const response = { posts: validatedPosts };
-      logger.info('Successfully retrieved page posts', {
-        userId: authPayload.userId,
-        pageId: params.pageId,
-        count: validatedPosts.length,
+        const postsCursor = await new MetaPageSDK(params.pageId).getPosts(fields);
+
+        // Handle pagination with improved type safety and fetch limit
+        const allRawPosts: unknown[] = [];
+        let currentCursor: PaginatedCursor<unknown> = postsCursor;
+
+        while (currentCursor && currentCursor.length > 0) {
+          allRawPosts.push(...currentCursor);
+
+          if (allRawPosts.length >= MAX_POSTS_TO_FETCH) {
+            logger.warn('Reached maximum posts fetch limit', {
+              limit: MAX_POSTS_TO_FETCH,
+              userId: authPayload.userId,
+              pageId: params.pageId,
+            });
+            break;
+          }
+
+          // Check for pagination
+          if (typeof currentCursor.next === 'function' && currentCursor.hasNext?.()) {
+            currentCursor = await currentCursor.next();
+          } else {
+            break;
+          }
+        }
+
+        // Validate and transform the response
+        const validatedPosts: z.infer<typeof StrictPagePostSchema>[] = [];
+        for (const post of allRawPosts) {
+          const result = StrictPagePostSchema.safeParse(post);
+          if (result.success) {
+            validatedPosts.push(result.data);
+          } else {
+            logger.warn('Invalid post data received from Meta API, skipping.', {
+              error: result.error.format(),
+              post,
+              userId: authPayload.userId,
+              pageId: params.pageId,
+            });
+          }
+        }
+
+        const response = { posts: validatedPosts };
+        logger.info('Successfully retrieved page posts', {
+          userId: authPayload.userId,
+          pageId: params.pageId,
+          count: validatedPosts.length,
+        });
+
+        return createMcpSuccessResult(response);
       });
-
-      return createMcpSuccessResult(response);
-    });
+    } finally {
+      // CRITICAL: Restore the API to use the original user access token
+      // to prevent breaking other tools in the same request flow.
+      FacebookAdsApi.init(userAccessToken);
+      logger.info('API restored with user-specific access token', { userId: authPayload.userId });
+    }
   }
 
   /**
@@ -214,6 +248,8 @@ export class MetaPagesHandler {
         [MetaAdCreativeSDK.Fields.object_story_id]: params.postId,
       };
 
+      removeUndefinedProperties(creativeData);
+
       const adCreative = await new MetaAdAccountSDK(adAccountId).createAdCreative([], creativeData);
       const creativeValidation = MetaCreateSuccessResponseSchema.safeParse(adCreative);
 
@@ -234,6 +270,8 @@ export class MetaPagesHandler {
         creative: { creative_id: adCreativeId },
         status: params.status || 'PAUSED',
       };
+
+      removeUndefinedProperties(adData);
 
       const ad = await new MetaAdAccountSDK(adAccountId).createAd([], adData);
       const adValidation = MetaCreateSuccessResponseSchema.safeParse(ad);

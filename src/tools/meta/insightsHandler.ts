@@ -28,11 +28,8 @@ export class MetaInsightsHandler {
   ) {
     // The metrics and breakdowns are already validated by Zod
     const fields = params.metrics;
-    const breakdowns = params.breakdowns;
 
-    // Apply default for limit parameter and sanitize undefined values
-    const sanitizedLimit = params.limit ?? 250;
-
+    // Build complete API parameters object using build-then-sanitize pattern
     const apiParams: Record<string, unknown> = {
       level: (params as GetAdInsightsInput).adId
         ? 'ad'
@@ -41,18 +38,11 @@ export class MetaInsightsHandler {
           : (params as GetAdInsightsInput).campaignId
             ? 'campaign'
             : 'account',
-      limit: sanitizedLimit,
+      limit: params.limit ?? 250,
+      breakdowns: params.breakdowns && params.breakdowns.length > 0 ? params.breakdowns : undefined,
+      time_range: params.timeRange,
+      date_preset: params.timeRange ? undefined : params.datePreset || 'last_30d',
     };
-
-    if (breakdowns && breakdowns.length > 0) {
-      apiParams.breakdowns = breakdowns;
-    }
-
-    if (params.timeRange) {
-      apiParams.time_range = params.timeRange;
-    } else {
-      apiParams.date_preset = params.datePreset || 'last_30d';
-    }
 
     // Ensure no undefined values are passed to Meta API
     removeUndefinedProperties(apiParams);

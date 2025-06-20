@@ -7,6 +7,7 @@ interface MetaErrorDetails {
   type?: string;
   isTransient?: boolean;
   statusCode?: number;
+  message?: string;
 }
 
 const AUTH_ERROR_CODES = new Set(['190', '200', '458']);
@@ -39,12 +40,13 @@ function parseErrorDetails(error: unknown): MetaErrorDetails {
   const code = (err.metaErrorCode || errorPayloadTyped?.code)?.toString();
   const subcode = (err.metaErrorSubcode || errorPayloadTyped?.error_subcode)?.toString();
   const type = errorPayloadTyped?.type as string | undefined;
+  const message = (err.message || errorPayloadTyped?.message) as string | undefined;
   const isTransient = errorPayloadTyped?.is_transient as boolean | undefined;
   const statusCode =
     (err.statusCode as number | undefined) ||
     ((err.response as Record<string, unknown>)?.status as number | undefined);
 
-  return { code, subcode, type, isTransient, statusCode };
+  return { code, subcode, type, isTransient, statusCode, message };
 }
 
 /**
@@ -108,4 +110,16 @@ export function getRetryDelayMultiplier(error: unknown): number {
 export function isMetaRateLimitError(error: unknown): boolean {
   const details = parseErrorDetails(error);
   return details.code ? RATE_LIMIT_CODES.has(details.code) : false;
+}
+
+/**
+ * Checks if a Meta API error is due to an invalid or expired OAuth token.
+ *
+ * @param error The error received from a Meta API call.
+ * @returns `true` if the error is an OAuth token error, otherwise `false`.
+ */
+export function isMetaOAuthTokenError(error: unknown): boolean {
+  const details = parseErrorDetails(error);
+  // Meta API error code 190 specifically indicates an invalid or expired OAuth access token.
+  return details.code === '190';
 }
