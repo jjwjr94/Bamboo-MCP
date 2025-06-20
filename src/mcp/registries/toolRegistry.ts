@@ -7,8 +7,8 @@ import { accountManager } from '../../utils/accountManager.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
 import { createMcpSuccessResult } from '../responseHelper.js';
+import type { IToolRegistry } from '../types.js';
 import { AdCreativeToolRegistry } from './AdCreativeToolRegistry.js';
-
 import { AdSetToolRegistry } from './AdSetToolRegistry.js';
 import { AdToolRegistry } from './AdToolRegistry.js';
 import { BusinessManagerToolRegistry } from './BusinessManagerToolRegistry.js';
@@ -20,26 +20,23 @@ import { PagesToolRegistry } from './PagesToolRegistry.js';
 export class ToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private campaignToolRegistry: CampaignToolRegistry;
-  private adSetToolRegistry: AdSetToolRegistry;
-  private adCreativeToolRegistry: AdCreativeToolRegistry;
-  private adToolRegistry: AdToolRegistry;
-  private insightsToolRegistry: InsightsToolRegistry;
-  private customAudienceToolRegistry: CustomAudienceToolRegistry;
-  private pagesToolRegistry: PagesToolRegistry;
-  private businessManagerToolRegistry: BusinessManagerToolRegistry;
+  private registries: IToolRegistry[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
-    this.campaignToolRegistry = new CampaignToolRegistry(server, toolsHandler);
-    this.adSetToolRegistry = new AdSetToolRegistry(server, toolsHandler);
-    this.adCreativeToolRegistry = new AdCreativeToolRegistry(server, toolsHandler);
-    this.adToolRegistry = new AdToolRegistry(server, toolsHandler);
-    this.insightsToolRegistry = new InsightsToolRegistry(server, toolsHandler);
-    this.customAudienceToolRegistry = new CustomAudienceToolRegistry(server, toolsHandler);
-    this.pagesToolRegistry = new PagesToolRegistry(server, toolsHandler);
-    this.businessManagerToolRegistry = new BusinessManagerToolRegistry(server, toolsHandler);
+
+    // Initialize all registries in a consistent order
+    this.registries = [
+      new CampaignToolRegistry(server, toolsHandler),
+      new AdSetToolRegistry(server, toolsHandler),
+      new AdCreativeToolRegistry(server, toolsHandler),
+      new AdToolRegistry(server, toolsHandler),
+      new InsightsToolRegistry(server, toolsHandler),
+      new CustomAudienceToolRegistry(server, toolsHandler),
+      new PagesToolRegistry(server, toolsHandler),
+      new BusinessManagerToolRegistry(server, toolsHandler),
+    ];
   }
 
   public register() {
@@ -81,21 +78,31 @@ export class ToolRegistry {
       }
     );
 
-    this.campaignToolRegistry.register();
+    // Register all tool registries using loop-based approach
+    logger.info('Registering tool registries...');
+    let totalToolsRegistered = 0;
 
-    this.adSetToolRegistry.register();
+    for (const registry of this.registries) {
+      const registryName = registry.getRegistryName();
+      try {
+        logger.info(
+          `Attempting to register ${registryName} registry (${registry.getToolCount()} tools)`
+        );
+        registry.register();
+        totalToolsRegistered += registry.getToolCount();
+      } catch (error) {
+        logger.error(`Failed to register tool registry: ${registryName}`, {
+          registry: registryName,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        // Continue with next registry
+      }
+    }
 
-    this.adCreativeToolRegistry.register();
-
-    this.adToolRegistry.register();
-
-    this.insightsToolRegistry.register();
-
-    this.customAudienceToolRegistry.register();
-
-    this.pagesToolRegistry.register();
-
-    this.businessManagerToolRegistry.register();
+    logger.info(
+      `Registry registration complete. Total tools successfully registered: ${totalToolsRegistered}`
+    );
 
     const selectAdAccountOutputSchema = z.object({
       type: z.literal('success'),

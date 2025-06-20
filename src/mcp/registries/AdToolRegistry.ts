@@ -6,6 +6,7 @@ import { AdStatusSchema, MetaAdResponseSchema } from '../../generated/schemas.js
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
 /**
  * Ad Tool Registry
@@ -16,13 +17,28 @@ import { createMcpErrorResult } from '../errorHandler.js';
  * - update_ad: Update an existing ad
  * - delete_ad: Delete an ad
  */
-export class AdToolRegistry {
+export class AdToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetAds.bind(this),
+      this.registerCreateAd.bind(this),
+      this.registerUpdateAd.bind(this),
+      this.registerDeleteAd.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Ad';
   }
 
   /**
@@ -31,12 +47,11 @@ export class AdToolRegistry {
   public register(): void {
     logger.info('Registering Ad MCP tools');
 
-    this.registerGetAds();
-    this.registerCreateAd();
-    this.registerUpdateAd();
-    this.registerDeleteAd();
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
 
-    logger.info('Ad MCP tools registered', { count: 4 });
+    logger.info('Ad MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetAds(): void {

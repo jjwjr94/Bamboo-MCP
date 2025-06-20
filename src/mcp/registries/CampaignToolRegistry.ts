@@ -11,6 +11,7 @@ import {
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
 /**
  * Campaign Tool Registry
@@ -21,13 +22,28 @@ import { createMcpErrorResult } from '../errorHandler.js';
  * - update_campaign: Update an existing campaign
  * - delete_campaign: Delete a campaign (set status to DELETED)
  */
-export class CampaignToolRegistry {
+export class CampaignToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetCampaigns.bind(this),
+      this.registerCreateCampaign.bind(this),
+      this.registerUpdateCampaign.bind(this),
+      this.registerDeleteCampaign.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Campaign';
   }
 
   /**
@@ -36,12 +52,11 @@ export class CampaignToolRegistry {
   public register(): void {
     logger.info('Registering Campaign MCP tools');
 
-    this.registerGetCampaigns();
-    this.registerCreateCampaign();
-    this.registerUpdateCampaign();
-    this.registerDeleteCampaign();
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
 
-    logger.info('Campaign MCP tools registered', { count: 4 });
+    logger.info('Campaign MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetCampaigns(): void {

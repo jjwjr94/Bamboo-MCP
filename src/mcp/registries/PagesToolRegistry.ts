@@ -6,21 +6,39 @@ import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
-export class PagesToolRegistry {
+export class PagesToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetPages.bind(this),
+      this.registerGetPagePosts.bind(this),
+      this.registerCreatePagePostAd.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Pages';
   }
 
   public register() {
-    this.registerGetPages();
-    this.registerGetPagePosts();
-    this.registerCreatePagePostAd();
-    logger.info('Registered Pages tools', { count: 3 });
+    logger.info('Registering Pages MCP tools');
+
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
+
+    logger.info('Pages MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetPages() {

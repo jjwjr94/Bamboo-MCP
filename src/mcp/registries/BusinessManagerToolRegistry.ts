@@ -5,6 +5,7 @@ import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
 /**
  * Business Manager Tool Registry
@@ -13,13 +14,26 @@ import { createMcpErrorResult } from '../errorHandler.js';
  * - get_business_accounts: List business manager accounts
  * - get_business_users: List users in a business manager
  */
-export class BusinessManagerToolRegistry {
+export class BusinessManagerToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetBusinessAccounts.bind(this),
+      this.registerGetBusinessUsers.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Business Manager';
   }
 
   /**
@@ -28,10 +42,11 @@ export class BusinessManagerToolRegistry {
   public register(): void {
     logger.info('Registering Business Manager MCP tools');
 
-    this.registerGetBusinessAccounts();
-    this.registerGetBusinessUsers();
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
 
-    logger.info('Business Manager MCP tools registered', { count: 2 });
+    logger.info('Business Manager MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetBusinessAccounts(): void {

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
@@ -9,21 +10,39 @@ import {
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
-export class CustomAudienceToolRegistry {
+export class CustomAudienceToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetCustomAudiences.bind(this),
+      this.registerCreateCustomAudience.bind(this),
+      this.registerDeleteCustomAudience.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Custom Audience';
   }
 
   public register() {
-    this.registerGetCustomAudiences();
-    this.registerCreateCustomAudience();
-    this.registerDeleteCustomAudience();
-    logger.info('Registered Custom Audience tools', { count: 3 });
+    logger.info('Registering Custom Audience MCP tools');
+
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
+
+    logger.info('Custom Audience MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetCustomAudiences() {

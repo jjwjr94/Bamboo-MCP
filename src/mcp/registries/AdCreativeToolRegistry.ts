@@ -9,6 +9,7 @@ import {
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
+import type { IToolRegistry } from '../types.js';
 
 /**
  * Ad Creative Tool Registry
@@ -19,13 +20,28 @@ import { createMcpErrorResult } from '../errorHandler.js';
  * - update_ad_creative: Update an existing ad creative
  * - delete_ad_creative: Delete an ad creative
  */
-export class AdCreativeToolRegistry {
+export class AdCreativeToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
+  private readonly registrationMethods: (() => void)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
     this.toolsHandler = toolsHandler;
+    this.registrationMethods = [
+      this.registerGetAdCreatives.bind(this),
+      this.registerCreateAdCreative.bind(this),
+      this.registerUpdateAdCreative.bind(this),
+      this.registerDeleteAdCreative.bind(this),
+    ];
+  }
+
+  public getToolCount(): number {
+    return this.registrationMethods.length;
+  }
+
+  public getRegistryName(): string {
+    return 'Ad Creative';
   }
 
   /**
@@ -34,12 +50,11 @@ export class AdCreativeToolRegistry {
   public register(): void {
     logger.info('Registering Ad Creative MCP tools');
 
-    this.registerGetAdCreatives();
-    this.registerCreateAdCreative();
-    this.registerUpdateAdCreative();
-    this.registerDeleteAdCreative();
+    for (const registerMethod of this.registrationMethods) {
+      registerMethod();
+    }
 
-    logger.info('Ad Creative MCP tools registered', { count: 4 });
+    logger.info('Ad Creative MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetAdCreatives(): void {
