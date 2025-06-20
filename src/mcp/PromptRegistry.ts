@@ -61,7 +61,7 @@ export class PromptRegistry {
         description:
           'Core system instructions defining the AI agent behavior and expertise for Meta advertising operations',
       },
-      async (_args: unknown, extra: unknown) => {
+      async (_args: unknown, _extra: unknown) => {
         // Claude doesn't send auth payload when requesting prompts
         // const authPayload = extractAuthPayload(extra);
         // logger.info('Serving cached system prompt', {
@@ -96,7 +96,7 @@ export class PromptRegistry {
         description:
           'Comprehensive Meta Ads best practices organized by vertical and campaign objective for expert guidance',
       },
-      async (_args: unknown, extra: unknown) => {
+      async (_args: unknown, _extra: unknown) => {
         // Claude doesn't send auth payload when requesting prompts
         // const authPayload = extractAuthPayload(extra);
         // logger.info('Serving cached best practices prompt', {
