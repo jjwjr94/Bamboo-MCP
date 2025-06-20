@@ -83,7 +83,6 @@ export class InsightsToolRegistry implements IToolRegistry {
       .int()
       .positive()
       .max(1000)
-      .default(250)
       .optional()
       .describe('Maximum number of results to return (default: 250).'),
   });
@@ -137,7 +136,6 @@ export class InsightsToolRegistry implements IToolRegistry {
       .int()
       .positive()
       .max(1000)
-      .default(250)
       .optional()
       .describe('Maximum number of results to return (default: 250).'),
   });

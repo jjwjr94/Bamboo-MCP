@@ -15,6 +15,7 @@ import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
+import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
 const MAX_CREATIVES_TO_FETCH = 1000;
@@ -101,6 +102,9 @@ export class MetaAdCreativeHandler {
         [MetaAdCreativeSDK.Fields.object_story_spec]: params.objectStorySpec,
       };
 
+      // Ensure no undefined values are passed to Meta API
+      removeUndefinedProperties(creativeData);
+
       const creative = await new MetaAdAccountSDK(adAccountId).createAdCreative([], creativeData);
 
       // Treat response as unknown and validate
@@ -128,6 +132,10 @@ export class MetaAdCreativeHandler {
     await initializeMetaApi(authPayload.userId);
     return await handleMetaApiCall(async () => {
       const updateData = { [MetaAdCreativeSDK.Fields.name]: params.name };
+
+      // Ensure no undefined values are passed to Meta API
+      removeUndefinedProperties(updateData);
+
       const creative = new MetaAdCreativeSDK(params.adCreativeId);
       const updateResponse = await creative.update([], updateData);
 

@@ -14,6 +14,7 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { logger } from '../../utils/logger.js';
+import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
 
 const MAX_INSIGHTS_TO_FETCH = 10000; // Insights can have many data points, so higher limit
@@ -29,6 +30,9 @@ export class MetaInsightsHandler {
     const fields = params.metrics;
     const breakdowns = params.breakdowns;
 
+    // Apply default for limit parameter and sanitize undefined values
+    const sanitizedLimit = params.limit ?? 250;
+
     const apiParams: Record<string, unknown> = {
       level: (params as GetAdInsightsInput).adId
         ? 'ad'
@@ -37,7 +41,7 @@ export class MetaInsightsHandler {
           : (params as GetAdInsightsInput).campaignId
             ? 'campaign'
             : 'account',
-      limit: params.limit,
+      limit: sanitizedLimit,
     };
 
     if (breakdowns && breakdowns.length > 0) {
@@ -49,6 +53,9 @@ export class MetaInsightsHandler {
     } else {
       apiParams.date_preset = params.datePreset || 'last_30d';
     }
+
+    // Ensure no undefined values are passed to Meta API
+    removeUndefinedProperties(apiParams);
 
     // Get insights using the SDK
     let insightsCursor = await apiObject.getInsights(fields, apiParams);
