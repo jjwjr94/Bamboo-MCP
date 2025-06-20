@@ -63,10 +63,11 @@ export class PromptRegistry {
           'Core system instructions defining the AI agent behavior and expertise for Meta advertising operations',
       },
       async (_args: unknown, extra: unknown) => {
-        const authPayload = extractAuthPayload(extra);
-        logger.info('Serving cached system prompt', {
-          userId: authPayload.userId,
-        });
+        // Claude doesn't send auth payload when requesting prompts
+        // const authPayload = extractAuthPayload(extra);
+        // logger.info('Serving cached system prompt', {
+        //   userId: authPayload.userId,
+        // });
 
         if (this.systemPromptContent === null) {
           // This should not happen if initialize() succeeded
@@ -97,10 +98,11 @@ export class PromptRegistry {
           'Comprehensive Meta Ads best practices organized by vertical and campaign objective for expert guidance',
       },
       async (_args: unknown, extra: unknown) => {
-        const authPayload = extractAuthPayload(extra);
-        logger.info('Serving cached best practices prompt', {
-          userId: authPayload.userId,
-        });
+        // Claude doesn't send auth payload when requesting prompts
+        // const authPayload = extractAuthPayload(extra);
+        // logger.info('Serving cached best practices prompt', {
+        //   userId: authPayload.userId,
+        // });
 
         if (this.bestPracticesPromptContent === null) {
           // This should not happen if initialize() succeeded
