@@ -7,7 +7,7 @@
   "scripts": {
     "prebuild": "node scripts/generateSchemas.js",
     "dev": "pnpm prebuild && tsx watch src/index.ts",
-    "build": "pnpm prebuild && tsc",
+    "build": "pnpm prebuild && tsc && copyfiles -u 1 'src/**/*.md' dist",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -47,6 +47,7 @@
     "@types/node": "^24.0.3",
     "@types/supertest": "^6.0.3",
     "@vitest/ui": "^3.2.3",
+    "copyfiles": "^2.4.1",
     "drizzle-kit": "^0.31.1",
     "supertest": "^7.1.1",
     "ts-json-schema-generator": "^2.4.0",
