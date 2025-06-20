@@ -31,7 +31,7 @@ export class ResourceRegistry {
             return {
               resources: userAdAccounts.map((account) => ({
                 uri: `bamboo://ad-accounts/${account.id}`,
-                name: 'ad-account',
+                name: `ad-account-${account.id}`,
                 title: `Ad Account: ${account.name}`,
                 description: `Data for ad account: ${account.name} (${account.id})`,
                 mimeType: 'application/json',
