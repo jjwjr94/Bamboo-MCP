@@ -1,4 +1,5 @@
 import type { CallToolResult, TextContent } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -27,6 +28,24 @@ export interface McpErrorMetadata {
 }
 
 /**
+ * Zod schema for the McpErrorMetadata interface.
+ * Defines the structure for client guidance on handling tool errors.
+ */
+export const mcpErrorMetadataSchema = z.object({
+  retryable: z.boolean(),
+  retryAfterMs: z.number().optional(),
+  errorCode: z.string(),
+  category: z.enum([
+    'authentication',
+    'authorization',
+    'validation',
+    'rate_limit',
+    'api_error',
+    'internal',
+  ]),
+});
+
+/**
  * A structured error object for the structuredContent field of a CallToolResult.
  * Follows a discriminated union pattern with `type: 'error'`.
  */
@@ -36,6 +55,19 @@ export interface McpStructuredError {
   error: McpErrorMetadata;
   [key: string]: unknown;
 }
+
+/**
+ * Zod schema for the McpStructuredError interface.
+ * Represents the standardized error output for an MCP tool.
+ * This is a part of the discriminated union for tool outputs.
+ */
+export const mcpErrorSchema = z
+  .object({
+    type: z.literal('error'),
+    message: z.string(),
+    error: mcpErrorMetadataSchema,
+  })
+  .passthrough();
 
 /**
  * Converts a BambooError or unknown exception into a structured MCP CallToolResult error object.

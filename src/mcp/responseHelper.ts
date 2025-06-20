@@ -36,15 +36,27 @@ export function createMcpSuccessResult<T>(
     data: sanitizedData,
   };
 
-  const textContent: TextContent = {
+  const textHumanReadableContent: TextContent | undefined = description
+    ? {
+        type: 'text',
+        // Use the human-readable description if available, otherwise serialize the structured content.
+        // This provides a more useful summary for text-only clients, similar to error messages.
+        text: description,
+      }
+    : undefined;
+
+  const textStructuredContent: TextContent = {
     type: 'text',
-    // Use the human-readable description if available, otherwise serialize the structured content.
-    // This provides a more useful summary for text-only clients, similar to error messages.
-    text: description || JSON.stringify(successContent, null, 2),
+    // From the 2025-06-18 MCP spec:
+    // For backwards compatibility, a tool that returns structured content SHOULD also return
+    // functionally equivalent unstructured content. (For example, serialized JSON can be returned
+    // in a TextContent block.)
+    text: JSON.stringify(successContent, null, 2),
   };
 
   const result = {
-    content: [textContent],
+    // Filter out textHumanReadableContent if it's undefined
+    content: [textHumanReadableContent, textStructuredContent].filter(Boolean),
     structuredContent: successContent,
     isError: false,
   } as CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> };

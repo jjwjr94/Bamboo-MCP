@@ -19,9 +19,51 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputPath = path.resolve(__dirname, '../src/generated/schemas.ts');
 
+// Official Meta deprecation mapping based on Marketing API v21+ changelog
+// Source: https://developers.facebook.com/docs/graph-api/changelog/
+const DEPRECATED_OBJECTIVES = {
+  // Deprecated -> Current mapping (from Meta's official docs)
+  BRAND_AWARENESS: 'OUTCOME_AWARENESS',
+  REACH: 'OUTCOME_AWARENESS',
+  LINK_CLICKS: 'OUTCOME_TRAFFIC',
+  POST_ENGAGEMENT: 'OUTCOME_ENGAGEMENT',
+  VIDEO_VIEWS: 'OUTCOME_ENGAGEMENT',
+  PAGE_LIKES: 'OUTCOME_ENGAGEMENT',
+  LEAD_GENERATION: 'OUTCOME_LEADS',
+  MESSAGES: 'OUTCOME_LEADS',
+  APP_INSTALLS: 'OUTCOME_APP_PROMOTION',
+  CONVERSIONS: 'OUTCOME_SALES',
+  PRODUCT_CATALOG_SALES: 'OUTCOME_SALES',
+  WEBSITE_CONVERSIONS: 'OUTCOME_SALES', // Explicitly deprecated
+  STORE_VISITS: 'OUTCOME_SALES',
+  EVENT_RESPONSES: 'OUTCOME_ENGAGEMENT',
+  OFFER_CLAIMS: 'OUTCOME_ENGAGEMENT',
+  LOCAL_AWARENESS: 'OUTCOME_AWARENESS',
+};
+
+// Current valid objectives (as of v21+)
+const CURRENT_VALID_OBJECTIVES = [
+  'OUTCOME_AWARENESS',
+  'OUTCOME_TRAFFIC',
+  'OUTCOME_ENGAGEMENT',
+  'OUTCOME_LEADS',
+  'OUTCOME_APP_PROMOTION',
+  'OUTCOME_SALES',
+];
+
+// Deprecated call to action types (internal/legacy types)
+// Source: Meta API research - these appear to be legacy/internal CTA types
+const DEPRECATED_CTA_TYPES = [
+  'SOTTO_SUBSCRIBE', // Legacy internal CTA type
+  'WOODHENGE_SUPPORT', // Legacy internal CTA type
+  'VIDEO_ANNOTATION', // Deprecated video interaction type
+];
+
+// Note: TARGET_COST bid strategy was deprecated in v9 but is no longer in the SDK
+
 // Configuration for constants to auto-generate from Meta SDK
 const constantsToGenerate = [
-  { name: 'CampaignObjective', constant: Campaign.Objective },
+  { name: 'CampaignObjective', constant: Campaign.Objective, filterDeprecated: true },
   { name: 'CampaignStatus', constant: Campaign.Status },
   { name: 'CampaignConfiguredStatus', constant: Campaign.ConfiguredStatus },
   { name: 'CampaignEffectiveStatus', constant: Campaign.EffectiveStatus },
@@ -36,7 +78,11 @@ const constantsToGenerate = [
   { name: 'AdStatus', constant: Ad.Status },
   { name: 'AdConfiguredStatus', constant: Ad.ConfiguredStatus },
   { name: 'AdEffectiveStatus', constant: Ad.EffectiveStatus },
-  { name: 'AdCreativeCallToActionType', constant: AdCreative.CallToActionType },
+  {
+    name: 'AdCreativeCallToActionType',
+    constant: AdCreative.CallToActionType,
+    filterDeprecated: true,
+  },
   { name: 'AdCreativeObjectType', constant: AdCreative.ObjectType },
   { name: 'CustomAudienceSubtype', constant: CustomAudience.Subtype },
   { name: 'CustomAudienceCustomerFileSource', constant: CustomAudience.CustomerFileSource },
@@ -70,10 +116,131 @@ const manualConstants = [
   },
 ];
 
+// Curated list of insight metrics to generate from AdsInsights.Fields
+// These are the most commonly used metrics for insights API
+const INSIGHT_METRICS = [
+  'spend',
+  'impressions',
+  'clicks',
+  'ctr',
+  'cpc',
+  'cpm',
+  'reach',
+  'frequency',
+  'conversions',
+  'cost_per_conversion',
+  'actions',
+  'unique_clicks',
+  'unique_ctr',
+  'cost_per_unique_click',
+  'outbound_clicks',
+  'video_p25_watched_actions',
+  'video_p50_watched_actions',
+  'video_p75_watched_actions',
+  'video_p100_watched_actions',
+  // Additional useful metrics
+  'inline_link_clicks',
+  'cost_per_inline_link_click',
+  'video_30_sec_watched_actions',
+  'video_thruplay_watched_actions',
+];
+
+/**
+ * Filter deprecated values based on Meta's official deprecation mapping
+ */
+function filterDeprecatedValues(name, values) {
+  if (name === 'CampaignObjective') {
+    const validValues = values.filter((value) => CURRENT_VALID_OBJECTIVES.includes(value));
+    const deprecatedValues = values.filter((value) => Object.hasOwn(DEPRECATED_OBJECTIVES, value));
+
+    console.info(`\n📋 ${name} Filtering Results:`);
+    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+
+    // Log deprecation mappings
+    for (const deprecated of deprecatedValues) {
+      console.info(`   ${deprecated} → ${DEPRECATED_OBJECTIVES[deprecated]}`);
+    }
+
+    return validValues;
+  }
+
+  if (name === 'AdCreativeCallToActionType') {
+    const validValues = values.filter((value) => !DEPRECATED_CTA_TYPES.includes(value));
+    const deprecatedValues = values.filter((value) => DEPRECATED_CTA_TYPES.includes(value));
+
+    console.info(`\n📋 ${name} Filtering Results:`);
+    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+
+    // Log deprecated CTA types
+    for (const deprecated of deprecatedValues) {
+      console.info(`   ${deprecated} → (Legacy/Internal CTA type - no direct replacement)`);
+    }
+
+    return validValues;
+  }
+
+  return values; // No filtering for other enums
+}
+
+/**
+ * Generate InsightMetric enum from curated list, validated against AdsInsights.Fields
+ */
+function generateInsightMetricEnum() {
+  if (!AdsInsights?.Fields) {
+    console.warn('Warning: AdsInsights.Fields not available, skipping InsightMetric generation');
+    return '';
+  }
+
+  const availableFields = Object.values(AdsInsights.Fields);
+  const validMetrics = [];
+  const invalidMetrics = [];
+
+  // Validate each metric against available fields
+  for (const metric of INSIGHT_METRICS) {
+    if (availableFields.includes(metric)) {
+      validMetrics.push(metric);
+    } else {
+      invalidMetrics.push(metric);
+    }
+  }
+
+  if (invalidMetrics.length > 0) {
+    console.warn(
+      'Warning: The following InsightMetric values are not available in AdsInsights.Fields:',
+      invalidMetrics
+    );
+  }
+
+  if (validMetrics.length === 0) {
+    console.warn('Warning: No valid InsightMetric values found, skipping generation');
+    return '';
+  }
+
+  // Sort for consistent output
+  validMetrics.sort();
+
+  const enumValues = validMetrics.map((value) => `'${value}'`).join(', ');
+
+  console.info('\n📊 InsightMetric Generation:');
+  console.info(`✅ Valid metrics (${validMetrics.length}):`, validMetrics.join(', '));
+  if (invalidMetrics.length > 0) {
+    console.info(`❌ Invalid metrics (${invalidMetrics.length}):`, invalidMetrics.join(', '));
+  }
+
+  return `
+// InsightMetric enum generated from curated list and validated against Meta SDK
+// Contains the most commonly used insight metrics for analytics and reporting
+export const InsightMetricSchema = z.enum([${enumValues}]);
+export type InsightMetric = z.infer<typeof InsightMetricSchema>;
+`;
+}
+
 /**
  * Generate Zod schema and TypeScript type for an enum
  */
-function generateEnumSchemaAndType(name, constant) {
+function generateEnumSchemaAndType(name, constant, options = {}) {
   let values;
 
   if (Array.isArray(constant)) {
@@ -90,12 +257,30 @@ function generateEnumSchemaAndType(name, constant) {
     return '';
   }
 
+  // Apply deprecation filtering if enabled
+  if (options.filterDeprecated) {
+    values = filterDeprecatedValues(name, values);
+  }
+
   // Sort values for consistent output
   values.sort();
 
   const enumValues = values.map((value) => `'${value}'`).join(', ');
 
-  return `
+  // Add deprecation notices for filtered enums
+  let deprecationNotice = '';
+  if (name === 'CampaignObjective') {
+    deprecationNotice = `
+// Note: This enum contains only current valid objectives (OUTCOME_*) as of Meta Marketing API v21+
+// Deprecated objectives like WEBSITE_CONVERSIONS, CONVERSIONS, etc. have been filtered out
+// See: https://developers.facebook.com/docs/graph-api/changelog/version21.0`;
+  } else if (name === 'AdCreativeCallToActionType') {
+    deprecationNotice = `
+// Note: Legacy/internal CTA types like SOTTO_SUBSCRIBE, WOODHENGE_SUPPORT have been filtered out
+// These appear to be deprecated internal Meta CTA types with no current equivalent`;
+  }
+
+  return `${deprecationNotice}
 // ${name} enum from Meta SDK
 export const ${name}Schema = z.enum([${enumValues}]);
 export type ${name} = z.infer<typeof ${name}Schema>;
@@ -106,14 +291,17 @@ export type ${name} = z.infer<typeof ${name}Schema>;
 let generatedEnumsContent = '';
 
 // Generate from SDK constants
-for (const { name, constant } of constantsToGenerate) {
-  generatedEnumsContent += generateEnumSchemaAndType(name, constant);
+for (const { name, constant, filterDeprecated } of constantsToGenerate) {
+  generatedEnumsContent += generateEnumSchemaAndType(name, constant, { filterDeprecated });
 }
 
 // Generate from manual constants
 for (const { name, values } of manualConstants) {
   generatedEnumsContent += generateEnumSchemaAndType(name, values);
 }
+
+// Generate InsightMetric enum from curated list
+generatedEnumsContent += generateInsightMetricEnum();
 
 // Check if AdsInsights.Fields is available for conditional generation
 const hasAdsInsightsFields = AdsInsights?.Fields && Object.keys(AdsInsights.Fields).length > 0;

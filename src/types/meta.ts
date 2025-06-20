@@ -1,7 +1,8 @@
 // Meta Ads API type definitions
 
 // Import auto-generated types from schemas
-import type {
+// Re-export types from generated schemas that are used externally
+export type {
   AdSetBillingEvent,
   AdSetOptimizationGoal,
   AdsInsightsBreakdowns,
@@ -14,6 +15,7 @@ import type {
   CustomAudienceSubtype,
   HttpMethod,
   InsightLevel,
+  InsightMetric,
   ProductAvailability,
   ProductCatalogVertical,
   ProductCondition,
@@ -147,18 +149,7 @@ export interface MetaInsights {
 }
 
 // Enhanced insights types for better API support
-export type InsightMetric =
-  | 'spend'
-  | 'impressions'
-  | 'clicks'
-  | 'ctr'
-  | 'cpc'
-  | 'cpm'
-  | 'reach'
-  | 'frequency'
-  | 'conversions'
-  | 'cost_per_conversion'
-  | 'actions';
+// InsightMetric is now auto-generated from curated list in generated/schemas.ts
 
 export type InsightBreakdown = AdsInsightsBreakdowns;
 
