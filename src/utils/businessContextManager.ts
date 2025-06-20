@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { withUserContext } from '../db/client.js';
 import { adAccounts } from '../db/schema.js';
+import { NotFoundError } from './errors.js';
 import { logger } from './logger.js';
 
 /**
@@ -45,7 +47,7 @@ export async function getBusinessIdForAdAccount(
           userId,
           adAccountId,
         });
-        return null;
+        throw new NotFoundError(`Ad account ${adAccountId} not found in database`);
       }
 
       const foundBusinessId = result[0]?.businessId || null;
@@ -61,7 +63,13 @@ export async function getBusinessIdForAdAccount(
 
     return businessId;
   } catch (error) {
-    logger.warn('Failed to fetch business ID for ad account', {
+    // Re-throw NotFoundError to be handled by the coordinator
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    // Log and return null for other unexpected database errors
+    logger.warn('Failed to fetch business ID for ad account due to an unexpected error', {
       userId,
       adAccountId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -121,4 +129,104 @@ export async function buildMetaApiUrl(
 export async function isBusinessManaged(userId: string, adAccountId: string): Promise<boolean> {
   const businessId = await getBusinessIdForAdAccount(userId, adAccountId);
   return businessId !== null;
+}
+
+/**
+ * Proactively discovers and caches business context for ad accounts.
+ * This is useful for handling cases where ad accounts exist but their business context
+ * is not yet stored in the database.
+ *
+ * @param userId - The user ID for security context
+ * @param accessToken - Meta access token for API calls
+ * @param adAccountIds - Array of ad account IDs to discover business context for
+ * @returns Promise that resolves when discovery is complete
+ */
+export async function discoverAndCacheBusinessContext(
+  userId: string,
+  accessToken: string,
+  adAccountIds: string[]
+): Promise<void> {
+  if (adAccountIds.length === 0) {
+    return;
+  }
+
+  logger.debug('Starting business context discovery', {
+    userId,
+    adAccountCount: adAccountIds.length,
+    adAccountIds,
+  });
+
+  const discoveryPromises = adAccountIds.map(async (adAccountId) => {
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v22.0/${adAccountId}?access_token=${accessToken}&fields=business,name,status`,
+        {
+          signal: AbortSignal.timeout(10000), // 10 second timeout for discovery
+        }
+      );
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          business?: { id?: string };
+          name?: string;
+          status?: string;
+        };
+
+        const businessId = data.business?.id || null;
+        const name = data.name || 'Unknown Account';
+        const status = data.status || 'UNKNOWN';
+
+        // Cache the discovered information
+        await withUserContext(userId, async (tx) => {
+          await tx
+            .insert(adAccounts)
+            .values({
+              id: adAccountId,
+              userId: userId,
+              name: name,
+              status: status,
+              businessId: businessId,
+            })
+            .onConflictDoUpdate({
+              target: [adAccounts.id, adAccounts.userId],
+              set: {
+                name: sql`excluded.name`,
+                status: sql`excluded.status`,
+                businessId: sql`excluded.business_id`,
+              },
+            });
+        });
+
+        logger.debug('Cached business context from discovery', {
+          adAccountId,
+          userId,
+          businessId,
+          name,
+          status,
+          isBusinessManaged: businessId !== null,
+        });
+      } else {
+        logger.warn('Failed to discover business context for ad account', {
+          adAccountId,
+          userId,
+          status: response.status,
+          statusText: response.statusText,
+        });
+      }
+    } catch (error) {
+      logger.warn('Business context discovery failed for ad account', {
+        adAccountId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  // Run all discoveries in parallel with error isolation
+  await Promise.allSettled(discoveryPromises);
+
+  logger.debug('Business context discovery completed', {
+    userId,
+    adAccountCount: adAccountIds.length,
+  });
 }

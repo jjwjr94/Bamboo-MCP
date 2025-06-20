@@ -282,7 +282,8 @@ export class MetaApiService {
       const resolvedBusinessId = await MetaApiService._resolveBusinessContext(
         businessId,
         userId,
-        adAccountId
+        adAccountId,
+        accessToken
       );
 
       const url = MetaApiService._buildAssignedUsersUrl(
@@ -325,13 +326,13 @@ export class MetaApiService {
             }
           );
 
-          // Strategy 2: Force business ID lookup with enhanced method
+          // Strategy 2: Enhanced retry with direct API business lookup
           return await MetaApiService._fetchAdAccountPermissionsWithRetry(
             adAccountId,
             accessToken,
             currentUserId,
             userId,
-            undefined, // Force database lookup
+            undefined, // Force enhanced business context resolution with API fallback
             attempt + 1
           );
         }
@@ -375,6 +376,25 @@ export class MetaApiService {
       const userPermissions = permissionsData.data?.find((user) => user.id === currentUserId);
 
       if (!userPermissions) {
+        // Enhanced user lookup strategy - try to find user by different identifiers
+        const fallbackUser = await MetaApiService._findUserInPermissionsResponse(
+          permissionsData,
+          currentUserId,
+          adAccountId,
+          userId
+        );
+
+        if (fallbackUser) {
+          logger.info('User found via enhanced lookup strategy', {
+            adAccountId,
+            currentUserId,
+            userId,
+            fallbackUserId: fallbackUser.id,
+            permissions: fallbackUser.tasks,
+          });
+          return fallbackUser.tasks || defaultPermissions;
+        }
+
         logger.warn('User not found in ad account permissions response', {
           adAccountId,
           currentUserId,
@@ -433,17 +453,19 @@ export class MetaApiService {
   }
 
   /**
-   * Resolves business context with multiple strategies.
+   * Resolves business context with multiple strategies and robust fallbacks.
    *
    * @param businessId - undefined: lookup from DB, null: non-business account, string: business account
    * @param userId - Local user ID for database queries
    * @param adAccountId - Ad account ID for business lookup
+   * @param accessToken - Meta access token for direct API calls
    * @returns Resolved business ID or null for non-business accounts
    */
   private static async _resolveBusinessContext(
     businessId: string | null | undefined,
     userId: string,
-    adAccountId: string
+    adAccountId: string,
+    accessToken?: string
   ): Promise<string | null> {
     // Strategy 1: Use explicitly provided business context
     if (businessId !== undefined) {
@@ -454,6 +476,7 @@ export class MetaApiService {
     // Strategy 2: Lookup from database
     try {
       const dbBusinessId = await getBusinessIdForAdAccount(userId, adAccountId);
+      // If the database lookup succeeds (doesn't throw), trust the result (string or null)
       logger.debug('Business ID resolved from database', {
         adAccountId,
         userId,
@@ -461,14 +484,150 @@ export class MetaApiService {
       });
       return dbBusinessId;
     } catch (error) {
-      logger.warn('Failed to resolve business context from database', {
+      logger.warn('Database business context lookup failed, proceeding to API lookup', {
         adAccountId,
         userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      // Return null as fallback (treat as non-business account)
+    }
+
+    // Strategy 3: Direct Meta API lookup as fallback
+    if (accessToken) {
+      try {
+        logger.debug('Attempting direct Meta API business context lookup', {
+          adAccountId,
+          userId,
+        });
+
+        const response = await fetch(
+          `https://graph.facebook.com/v22.0/${adAccountId}?access_token=${accessToken}&fields=business`,
+          {
+            signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+          }
+        );
+
+        if (response.ok) {
+          const data = (await response.json()) as { business?: { id?: string } };
+          const directBusinessId = data.business?.id || null;
+
+          logger.debug('Direct Meta API business context lookup result', {
+            adAccountId,
+            userId,
+            businessId: directBusinessId,
+            isBusinessManaged: directBusinessId !== null,
+          });
+
+          // Store the resolved business ID in the database for future use
+          if (directBusinessId) {
+            try {
+              await withUserContext(userId, async (tx) => {
+                await tx
+                  .insert(adAccounts)
+                  .values({
+                    id: adAccountId,
+                    userId: userId,
+                    name: 'Temp Account', // Temporary name, will be updated later
+                    status: 'UNKNOWN',
+                    businessId: directBusinessId,
+                  })
+                  .onConflictDoUpdate({
+                    target: [adAccounts.id, adAccounts.userId],
+                    set: {
+                      businessId: sql`excluded.business_id`,
+                    },
+                  });
+              });
+              logger.debug('Cached business ID from direct API lookup', {
+                adAccountId,
+                userId,
+                businessId: directBusinessId,
+              });
+            } catch (dbError) {
+              logger.warn('Failed to cache business ID from direct API lookup', {
+                adAccountId,
+                userId,
+                businessId: directBusinessId,
+                error: dbError instanceof Error ? dbError.message : 'Unknown error',
+              });
+            }
+          }
+
+          return directBusinessId;
+        }
+      } catch (apiError) {
+        logger.warn('Direct Meta API business context lookup failed', {
+          adAccountId,
+          userId,
+          error: apiError instanceof Error ? apiError.message : 'Unknown error',
+        });
+      }
+    }
+
+    // Strategy 4: Return null as final fallback (treat as non-business account)
+    logger.debug(
+      'All business context resolution strategies failed, treating as non-business account',
+      {
+        adAccountId,
+        userId,
+      }
+    );
+    return null;
+  }
+
+  /**
+   * Enhanced user lookup in permissions response using multiple strategies.
+   * This handles cases where user IDs might not match exactly due to different formats.
+   */
+  private static async _findUserInPermissionsResponse(
+    permissionsData: MetaAdAccountAssignedUsersResponse,
+    currentUserId: string,
+    adAccountId: string,
+    userId: string
+  ): Promise<{ id: string; tasks?: string[] } | null> {
+    if (!permissionsData.data || permissionsData.data.length === 0) {
       return null;
     }
+
+    // Strategy 1: Exact match (already tried, but double-check)
+    let user = permissionsData.data.find((u) => u.id === currentUserId);
+    if (user) {
+      return user;
+    }
+
+    // Strategy 2: Try string conversion variants
+    const userIdVariants = [currentUserId, String(currentUserId)];
+    // Safely add numeric variant only if the ID is a valid number string
+    if (!isNaN(Number(currentUserId))) {
+      userIdVariants.push(Number(currentUserId).toString());
+    }
+    const uniqueUserIdVariants = [...new Set(userIdVariants)]; // More concise way to get unique values
+
+    for (const variant of uniqueUserIdVariants) {
+      user = permissionsData.data.find((u) => u.id === variant || String(u.id) === variant);
+      if (user) {
+        logger.debug('User found via ID variant matching', {
+          adAccountId,
+          originalId: currentUserId,
+          matchedId: user.id,
+          variant,
+        });
+        return user;
+      }
+    }
+
+    // Strategy 3: If only one user in response, and it's likely the current user
+    if (permissionsData.data.length === 1) {
+      const singleUser = permissionsData.data[0];
+      logger.warn('Only one user in permissions response, assuming it is the current user', {
+        adAccountId,
+        currentUserId,
+        responseUserId: singleUser.id,
+        userId,
+      });
+      return singleUser;
+    }
+
+    return null;
   }
 
   /**
