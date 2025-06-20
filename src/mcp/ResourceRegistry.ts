@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { eq } from 'drizzle-orm';
 import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
@@ -8,11 +5,6 @@ import { db, withUserContext } from '../db/client.js';
 import { adAccounts } from '../db/schema.js';
 import { NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-
-// Use import.meta.url to safely resolve file paths
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const promptsDir = path.resolve(__dirname, '../prompts');
 
 export class ResourceRegistry {
   private server: McpServer;
@@ -22,74 +14,6 @@ export class ResourceRegistry {
   }
 
   public register() {
-    // Register system prompt resource
-    this.server.registerResource(
-      'system-prompt',
-      'bamboo://prompts/system',
-      {
-        title: 'System Prompt',
-        description: 'The system prompt for the AI agent',
-        mimeType: 'text/plain',
-      },
-      async (uri: URL, extra: unknown) => {
-        const authPayload = extractAuthPayload(extra);
-        logger.info('Reading system prompt resource', {
-          userId: authPayload.userId,
-          uri: uri.href,
-        });
-
-        try {
-          const text = await fs.readFile(path.join(promptsDir, 'system_prompt.md'), 'utf-8');
-          return {
-            contents: [
-              {
-                uri: uri.href,
-                mimeType: 'text/plain',
-                text,
-              },
-            ],
-          };
-        } catch (error) {
-          logger.error('Failed to read system prompt', { error });
-          throw new NotFoundError('System prompt resource');
-        }
-      }
-    );
-
-    // Register best practices resource
-    this.server.registerResource(
-      'best-practices',
-      'bamboo://prompts/best-practices',
-      {
-        title: 'Best Practices',
-        description: 'Meta Ads best practices document',
-        mimeType: 'text/markdown',
-      },
-      async (uri: URL, extra: unknown) => {
-        const authPayload = extractAuthPayload(extra);
-        logger.info('Reading best practices resource', {
-          userId: authPayload.userId,
-          uri: uri.href,
-        });
-
-        try {
-          const text = await fs.readFile(path.join(promptsDir, 'best_practices.md'), 'utf-8');
-          return {
-            contents: [
-              {
-                uri: uri.href,
-                mimeType: 'text/markdown',
-                text,
-              },
-            ],
-          };
-        } catch (error) {
-          logger.error('Failed to read best practices', { error });
-          throw new NotFoundError('Best practices resource');
-        }
-      }
-    );
-
     // Register dynamic ad account resource template
     this.server.registerResource(
       'ad-account',
@@ -180,6 +104,6 @@ export class ResourceRegistry {
       }
     );
 
-    logger.info('MCP resources registered using modern API', { count: 3 });
+    logger.info('MCP resources registered using modern API', { count: 1 });
   }
 }

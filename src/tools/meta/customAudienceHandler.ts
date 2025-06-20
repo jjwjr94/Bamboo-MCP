@@ -193,7 +193,10 @@ export class MetaCustomAudienceHandler {
         customAudienceId: params.customAudienceId,
       });
 
-      return createMcpSuccessResult(validatedResponse.data);
+      return createMcpSuccessResult(
+        { success: true },
+        `Custom audience ${params.customAudienceId} deleted successfully`
+      );
     });
   }
 }

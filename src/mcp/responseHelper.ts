@@ -13,23 +13,41 @@ import { removeUnderscoreProperties } from '../utils/objectUtils.js';
  * @param description - Optional description for the response's metadata
  * @returns A sanitized CallToolResult object with type-safe structured content
  */
+/**
+ * A structured success object for the structuredContent field of a CallToolResult.
+ * Follows a discriminated union pattern with `type: 'success'`.
+ */
+export interface McpStructuredSuccess<T> {
+  type: 'success';
+  data: T;
+  [key: string]: unknown;
+}
+
 export function createMcpSuccessResult<T>(
   data: T,
   description?: string
-): CallToolResult & { structuredContent: Sanitized<T> } {
+): CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> } {
   // Sanitize the data to remove internal properties (e.g., _api with access tokens)
   const sanitizedData = removeUnderscoreProperties(data);
 
+  // Wrap the data in the standardized success structure
+  const successContent: McpStructuredSuccess<Sanitized<T>> = {
+    type: 'success',
+    data: sanitizedData,
+  };
+
   const textContent: TextContent = {
     type: 'text',
-    text: JSON.stringify(sanitizedData, null, 2),
+    // Use the human-readable description if available, otherwise serialize the structured content.
+    // This provides a more useful summary for text-only clients, similar to error messages.
+    text: description || JSON.stringify(successContent, null, 2),
   };
 
   const result = {
     content: [textContent],
-    structuredContent: sanitizedData,
+    structuredContent: successContent,
     isError: false,
-  } as CallToolResult & { structuredContent: Sanitized<T> };
+  } as CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> };
 
   if (description) {
     result._meta = {

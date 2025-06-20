@@ -47,7 +47,10 @@ export class AdSetToolRegistry {
    */
   private registerGetAdSets(): void {
     const outputSchema = z.object({
-      adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
+      type: z.literal('success'),
+      data: z.object({
+        adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
+      }),
     });
 
     this.server.registerTool(
@@ -83,11 +86,12 @@ export class AdSetToolRegistry {
    */
   private registerCreateAdSet(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adSetId: z.string(),
-      name: z.string(),
-      campaignId: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adSetId: z.string(),
+        name: z.string(),
+        campaignId: z.string(),
+      }),
     });
 
     this.server.registerTool(
@@ -163,10 +167,11 @@ export class AdSetToolRegistry {
    */
   private registerUpdateAdSet(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adSetId: z.string(),
-      updatedFields: z.array(z.string()),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adSetId: z.string(),
+        updatedFields: z.array(z.string()),
+      }),
     });
 
     this.server.registerTool(
@@ -213,9 +218,10 @@ export class AdSetToolRegistry {
    */
   private registerDeleteAdSet(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adSetId: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adSetId: z.string(),
+      }),
     });
 
     this.server.registerTool(

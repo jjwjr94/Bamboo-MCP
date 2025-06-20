@@ -94,7 +94,12 @@ export class InsightsToolRegistry {
 
   private registerGetAdInsights(): void {
     const outputSchema = z.object({
-      insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
+      type: z.literal('success'),
+      data: z.object({
+        insights: z
+          .array(MetaAdsInsightsResponseSchema)
+          .describe('A list of insight data records.'),
+      }),
     });
 
     this.server.registerTool(
@@ -132,7 +137,12 @@ export class InsightsToolRegistry {
 
   private registerGetAdAccountInsights(): void {
     const outputSchema = z.object({
-      insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
+      type: z.literal('success'),
+      data: z.object({
+        insights: z
+          .array(MetaAdsInsightsResponseSchema)
+          .describe('A list of insight data records.'),
+      }),
     });
 
     this.server.registerTool(

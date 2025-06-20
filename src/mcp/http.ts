@@ -1,5 +1,4 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import pTimeout, { TimeoutError } from 'p-timeout';
@@ -8,12 +7,9 @@ import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { AuthenticationError, TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import { BambooMCPServer } from './server.js';
+import type { BambooMCPServer } from './server.js';
 
-function createMCPServerInstance(): McpServer {
-  const bambooServer = new BambooMCPServer();
-  return bambooServer.getServer();
-}
+// Removed createMCPServerInstance function - using singleton pattern instead
 
 interface JsonRpcRequestBody {
   id?: string | number | null;
@@ -78,9 +74,10 @@ async function handleMCPRequest(
   reply: FastifyReply,
   token: string,
   authPayload: JWTPayload,
-  method: string
+  method: string,
+  bambooServer: BambooMCPServer
 ): Promise<void> {
-  const mcpServer = createMCPServerInstance();
+  const mcpServer = bambooServer.getServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -119,7 +116,10 @@ async function handleMCPRequest(
   }
 }
 
-export function setupMCPHttpTransport(fastify: FastifyInstance): void {
+export function setupMCPHttpTransport(
+  fastify: FastifyInstance,
+  bambooServer: BambooMCPServer
+): void {
   fastify.post(
     '/',
     {
@@ -139,7 +139,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance): void {
         authPayload = await verifyJWT(token);
         logger.info(`HTTP MCP: Authenticated user ${authPayload.userId}`);
 
-        await handleMCPRequest(request, reply, token, authPayload, method);
+        await handleMCPRequest(request, reply, token, authPayload, method, bambooServer);
 
         const duration = Date.now() - startTime;
         logger.mcpRequest(method, authPayload.userId, true, duration);

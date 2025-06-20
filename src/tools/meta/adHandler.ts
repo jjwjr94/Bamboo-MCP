@@ -119,7 +119,7 @@ export class MetaAdHandler {
         [MetaAdSDK.Fields.name]: params.name,
         [MetaAdSDK.Fields.adset_id]: params.adsetId,
         [MetaAdSDK.Fields.creative]: { creative_id: params.creativeId },
-        [MetaAdSDK.Fields.status]: params.status || 'PAUSED',
+        [MetaAdSDK.Fields.status]: params.status,
       };
 
       // Meta API handles business context automatically via ad account
@@ -137,15 +137,16 @@ export class MetaAdHandler {
 
       const adId = validationResult.data.id;
       const result = {
-        success: true,
         adId: adId,
         name: params.name,
         adsetId: params.adsetId,
         creativeId: params.creativeId,
-        status: params.status || 'PAUSED',
-        message: `Ad "${params.name}" created successfully with ID: ${adId}`,
+        status: params.status,
       };
-      return createMcpSuccessResult(result, 'Ad created successfully');
+      return createMcpSuccessResult(
+        result,
+        `Ad "${params.name}" created successfully with ID: ${adId}`
+      );
     });
   }
 
@@ -185,12 +186,10 @@ export class MetaAdHandler {
       }
 
       const result = {
-        success: true,
         adId: params.adId,
         updatedFields: Object.keys(updateData),
-        message: `Ad ${params.adId} updated successfully`,
       };
-      return createMcpSuccessResult(result, 'Ad updated successfully');
+      return createMcpSuccessResult(result, `Ad ${params.adId} updated successfully`);
     });
   }
 
@@ -220,11 +219,9 @@ export class MetaAdHandler {
       }
 
       const result = {
-        success: true,
         adId: params.adId,
-        message: `Ad ${params.adId} deleted successfully`,
       };
-      return createMcpSuccessResult(result, 'Ad deleted successfully');
+      return createMcpSuccessResult(result, `Ad ${params.adId} deleted successfully`);
     });
   }
 }

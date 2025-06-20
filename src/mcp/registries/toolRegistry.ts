@@ -44,19 +44,22 @@ export class ToolRegistry {
 
   public register() {
     const getAdAccountsOutputSchema = z.object({
-      accounts: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            status: z.string(),
-            currency: z.string(),
-            timezone: z.string(),
-            businessId: z.string().optional(),
-            permissions: z.array(z.string()),
-          })
-        )
-        .describe('A list of ad accounts.'),
+      type: z.literal('success'),
+      data: z.object({
+        accounts: z
+          .array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              status: z.string(),
+              currency: z.string(),
+              timezone: z.string(),
+              businessId: z.string().optional(),
+              permissions: z.array(z.string()),
+            })
+          )
+          .describe('A list of ad accounts.'),
+      }),
     });
 
     this.server.registerTool(
@@ -95,10 +98,10 @@ export class ToolRegistry {
     this.businessManagerToolRegistry.register();
 
     const selectAdAccountOutputSchema = z.object({
-      success: z.boolean(),
-      selectedAccount: z.string().optional(),
-      message: z.string().optional(),
-      error: z.string().optional(),
+      type: z.literal('success'),
+      data: z.object({
+        selectedAccount: z.string(),
+      }),
     });
 
     this.server.registerTool(
@@ -124,12 +127,10 @@ export class ToolRegistry {
           await accountManager.selectAccount(authPayload.userId, adAccountId);
 
           const result = {
-            success: true,
             selectedAccount: adAccountId,
-            message: `Successfully selected ad account ${adAccountId}`,
           };
 
-          return createMcpSuccessResult(result);
+          return createMcpSuccessResult(result, `Successfully selected ad account ${adAccountId}`);
         } catch (error) {
           return createMcpErrorResult(error);
         }

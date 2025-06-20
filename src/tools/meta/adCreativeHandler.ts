@@ -113,12 +113,13 @@ export class MetaAdCreativeHandler {
 
       const adCreativeId = validationResult.data.id;
       const result = {
-        success: true,
         adCreativeId: adCreativeId,
         name: params.name,
-        message: `Ad creative "${params.name}" created successfully with ID: ${adCreativeId}`,
       };
-      return createMcpSuccessResult(result, 'Ad creative created successfully');
+      return createMcpSuccessResult(
+        result,
+        `Ad creative "${params.name}" created successfully with ID: ${adCreativeId}`
+      );
     });
   }
 
@@ -139,12 +140,13 @@ export class MetaAdCreativeHandler {
       }
 
       const result = {
-        success: true,
         adCreativeId: params.adCreativeId,
         updatedFields: Object.keys(updateData), // Make this dynamic
-        message: `Ad creative ${params.adCreativeId} updated successfully`,
       };
-      return createMcpSuccessResult(result, 'Ad creative updated successfully');
+      return createMcpSuccessResult(
+        result,
+        `Ad creative ${params.adCreativeId} updated successfully`
+      );
     });
   }
 
@@ -174,11 +176,12 @@ export class MetaAdCreativeHandler {
       }
 
       const result = {
-        success: true,
         adCreativeId: params.adCreativeId,
-        message: `Ad creative ${params.adCreativeId} deleted successfully`,
       };
-      return createMcpSuccessResult(result, 'Ad creative deleted successfully');
+      return createMcpSuccessResult(
+        result,
+        `Ad creative ${params.adCreativeId} deleted successfully`
+      );
     });
   }
 }

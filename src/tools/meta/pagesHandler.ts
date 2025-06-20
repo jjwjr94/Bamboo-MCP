@@ -249,10 +249,8 @@ export class MetaPagesHandler {
       const adId = adValidation.data.id;
 
       const result = {
-        success: true,
         adId,
         adCreativeId,
-        message: `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`,
       };
 
       logger.info('Successfully created page post ad', {
@@ -263,7 +261,10 @@ export class MetaPagesHandler {
         postId: params.postId,
       });
 
-      return createMcpSuccessResult(result);
+      return createMcpSuccessResult(
+        result,
+        `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`
+      );
     });
   }
 }

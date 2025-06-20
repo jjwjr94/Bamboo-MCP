@@ -9,6 +9,7 @@ import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, testConnection } from './db/client.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
+import { BambooMCPServer } from './mcp/server.js';
 import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
@@ -96,7 +97,13 @@ export async function build(opts = {}) {
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
 
-  setupMCPHttpTransport(app);
+  // Create and initialize the singleton MCP server instance
+  const bambooServer = new BambooMCPServer();
+  await bambooServer.initialize();
+  logger.info('Bamboo MCP Server initialized for HTTP transport');
+
+  // Pass the initialized instance to the transport setup
+  setupMCPHttpTransport(app, bambooServer);
 
   app.setErrorHandler(async (error, request, reply) => {
     logger.error('Unhandled request error', {
@@ -117,6 +124,7 @@ export async function build(opts = {}) {
 
     try {
       await app.close();
+      await bambooServer.shutdown();
       await closeDatabase();
       logger.info('Graceful shutdown completed');
       process.exit(0);

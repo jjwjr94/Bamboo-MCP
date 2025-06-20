@@ -36,29 +36,20 @@ export class BusinessManagerToolRegistry {
 
   private registerGetBusinessAccounts(): void {
     const outputSchema = z.object({
-      businesses: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          created_time: z.string().optional(),
-          link: z.string().optional(),
-          verification_status: z.string().optional(),
-          vertical: z.string().optional(),
-          timezone_id: z.number().optional(),
-        })
-      ),
-      paging: z
-        .object({
-          cursors: z
-            .object({
-              before: z.string().optional(),
-              after: z.string().optional(),
-            })
-            .optional(),
-          next: z.string().optional(),
-          previous: z.string().optional(),
-        })
-        .optional(),
+      type: z.literal('success'),
+      data: z.object({
+        businesses: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            created_time: z.string().optional(),
+            link: z.string().optional(),
+            verification_status: z.string().optional(),
+            vertical: z.string().optional(),
+            timezone_id: z.number().optional(),
+          })
+        ),
+      }),
     });
 
     this.server.registerTool(
@@ -83,34 +74,25 @@ export class BusinessManagerToolRegistry {
 
   private registerGetBusinessUsers(): void {
     const outputSchema = z.object({
-      users: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string().optional(),
-          email: z.string().optional(),
-          first_name: z.string().optional(),
-          last_name: z.string().optional(),
-          role: z.string().optional(),
-          title: z.string().optional(),
-          finance_permission: z.string().optional(),
-          ip_permission: z.string().optional(),
-          two_fac_status: z.string().optional(),
-          pending_email: z.string().optional(),
-        })
-      ),
-      paging: z
-        .object({
-          cursors: z
-            .object({
-              before: z.string().optional(),
-              after: z.string().optional(),
-            })
-            .optional(),
-          next: z.string().optional(),
-          previous: z.string().optional(),
-        })
-        .optional(),
-      businessId: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        users: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string().optional(),
+            email: z.string().optional(),
+            first_name: z.string().optional(),
+            last_name: z.string().optional(),
+            role: z.string().optional(),
+            title: z.string().optional(),
+            finance_permission: z.string().optional(),
+            ip_permission: z.string().optional(),
+            two_fac_status: z.string().optional(),
+            pending_email: z.string().optional(),
+          })
+        ),
+        businessId: z.string(),
+      }),
     });
 
     this.server.registerTool(

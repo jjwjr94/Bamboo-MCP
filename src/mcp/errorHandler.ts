@@ -27,12 +27,25 @@ export interface McpErrorMetadata {
 }
 
 /**
+ * A structured error object for the structuredContent field of a CallToolResult.
+ * Follows a discriminated union pattern with `type: 'error'`.
+ */
+export interface McpStructuredError {
+  type: 'error';
+  message: string;
+  error: McpErrorMetadata;
+  [key: string]: unknown;
+}
+
+/**
  * Converts a BambooError or unknown exception into a structured MCP CallToolResult error object.
  *
  * @param error - The caught exception
  * @returns A CallToolResult object representing the error, with retry metadata
  */
-export function createMcpErrorResult(error: unknown): CallToolResult {
+export function createMcpErrorResult(
+  error: unknown
+): CallToolResult & { structuredContent: McpStructuredError } {
   let message: string;
   let metadata: McpErrorMetadata;
 
@@ -109,11 +122,26 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
     text: message,
   };
 
-  return {
-    content: [errorContent],
-    isError: true,
-    _meta: {
-      errorMetadata: metadata,
+  // Structured error content following discriminated union pattern
+  const structuredError: McpStructuredError = {
+    type: 'error',
+    message: message,
+    error: {
+      retryable: metadata.retryable,
+      retryAfterMs: metadata.retryAfterMs,
+      errorCode: metadata.errorCode,
+      category: metadata.category,
     },
   };
+
+  return {
+    content: [errorContent],
+    structuredContent: structuredError,
+    isError: true,
+    _meta: {
+      // NOTE: errorMetadata is included in _meta for backward compatibility.
+      // New clients should prefer using the `structuredContent` field.
+      errorMetadata: metadata,
+    },
+  } as CallToolResult & { structuredContent: McpStructuredError };
 }

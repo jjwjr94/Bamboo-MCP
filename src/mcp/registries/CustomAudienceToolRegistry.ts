@@ -4,6 +4,7 @@ import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   CustomAudienceCustomerFileSourceSchema,
   CustomAudienceSubtypeSchema,
+  MetaCustomAudienceResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
@@ -26,6 +27,15 @@ export class CustomAudienceToolRegistry {
   }
 
   private registerGetCustomAudiences() {
+    const outputSchema = z.object({
+      type: z.literal('success'),
+      data: z.object({
+        customAudiences: z
+          .array(MetaCustomAudienceResponseSchema)
+          .describe('A list of custom audiences with all available Meta API fields.'),
+      }),
+    });
+
     this.server.registerTool(
       'get_custom_audiences',
       {
@@ -39,21 +49,7 @@ export class CustomAudienceToolRegistry {
               "The ad account ID (e.g., 'act_12345'). If not provided, the selected account will be used."
             ),
         },
-        outputSchema: {
-          customAudiences: z.array(
-            z.object({
-              id: z.string(),
-              name: z.string(),
-              description: z.string().optional().nullable(),
-              subtype: z.string().optional().nullable(),
-              approximate_count_lower_bound: z.number().optional().nullable(),
-              approximate_count_upper_bound: z.number().optional().nullable(),
-              time_updated: z.number().optional().nullable(),
-              retention_days: z.number().optional().nullable(),
-              customer_file_source: z.string().optional().nullable(),
-            })
-          ),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
         try {
@@ -67,6 +63,13 @@ export class CustomAudienceToolRegistry {
   }
 
   private registerCreateCustomAudience() {
+    const outputSchema = z.object({
+      type: z.literal('success'),
+      data: z.object({
+        id: z.string().describe('The ID of the newly created custom audience.'),
+      }),
+    });
+
     this.server.registerTool(
       'create_custom_audience',
       {
@@ -86,9 +89,7 @@ export class CustomAudienceToolRegistry {
             'The source of the customer data.'
           ),
         },
-        outputSchema: {
-          id: z.string().describe('The ID of the newly created custom audience.'),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
         try {
@@ -102,6 +103,13 @@ export class CustomAudienceToolRegistry {
   }
 
   private registerDeleteCustomAudience() {
+    const outputSchema = z.object({
+      type: z.literal('success'),
+      data: z.object({
+        success: z.boolean(),
+      }),
+    });
+
     this.server.registerTool(
       'delete_custom_audience',
       {
@@ -114,9 +122,7 @@ export class CustomAudienceToolRegistry {
             .boolean()
             .describe('Must be set to true to confirm permanent deletion of the custom audience.'),
         },
-        outputSchema: {
-          success: z.boolean(),
-        },
+        outputSchema: outputSchema.shape,
       },
       async (params, extra) => {
         try {

@@ -150,14 +150,15 @@ export class MetaAdSetHandler {
       logger.info('Ad set created successfully', { adSetId, name: params.name });
 
       const result = {
-        success: true,
         adSetId: adSetId,
         name: params.name,
         campaignId: params.campaignId,
-        message: `Ad set "${params.name}" created successfully with ID: ${adSetId}`,
       };
 
-      return createMcpSuccessResult(result, 'Ad set created successfully');
+      return createMcpSuccessResult(
+        result,
+        `Ad set "${params.name}" created successfully with ID: ${adSetId}`
+      );
     });
   }
 
@@ -208,13 +209,11 @@ export class MetaAdSetHandler {
       logger.info('Ad set updated successfully', { adSetId: params.adSetId });
 
       const result = {
-        success: true,
         adSetId: params.adSetId,
         updatedFields: Object.keys(updateData),
-        message: `Ad set ${params.adSetId} updated successfully`,
       };
 
-      return createMcpSuccessResult(result, 'Ad set updated successfully');
+      return createMcpSuccessResult(result, `Ad set ${params.adSetId} updated successfully`);
     });
   }
 
@@ -240,12 +239,10 @@ export class MetaAdSetHandler {
       logger.info('Ad set deleted successfully', { adSetId: params.adSetId });
 
       const result = {
-        success: true,
         adSetId: params.adSetId,
-        message: `Ad set ${params.adSetId} deleted successfully`,
       };
 
-      return createMcpSuccessResult(result, 'Ad set deleted successfully');
+      return createMcpSuccessResult(result, `Ad set ${params.adSetId} deleted successfully`);
     });
   }
 }

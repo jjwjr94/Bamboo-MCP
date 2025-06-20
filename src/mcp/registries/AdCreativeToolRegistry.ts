@@ -44,9 +44,12 @@ export class AdCreativeToolRegistry {
 
   private registerGetAdCreatives(): void {
     const outputSchema = z.object({
-      adCreatives: z
-        .array(MetaAdCreativeResponseSchema)
-        .describe('A list of ad creatives with all available Meta API fields.'),
+      type: z.literal('success'),
+      data: z.object({
+        adCreatives: z
+          .array(MetaAdCreativeResponseSchema)
+          .describe('A list of ad creatives with all available Meta API fields.'),
+      }),
     });
 
     this.server.registerTool(
@@ -79,10 +82,11 @@ export class AdCreativeToolRegistry {
 
   private registerCreateAdCreative(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adCreativeId: z.string(),
-      name: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adCreativeId: z.string(),
+        name: z.string(),
+      }),
     });
 
     this.server.registerTool(
@@ -162,10 +166,11 @@ export class AdCreativeToolRegistry {
 
   private registerUpdateAdCreative(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adCreativeId: z.string(),
-      updatedFields: z.array(z.string()),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adCreativeId: z.string(),
+        updatedFields: z.array(z.string()),
+      }),
     });
 
     this.server.registerTool(
@@ -193,9 +198,10 @@ export class AdCreativeToolRegistry {
 
   private registerDeleteAdCreative(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adCreativeId: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adCreativeId: z.string(),
+      }),
     });
 
     this.server.registerTool(

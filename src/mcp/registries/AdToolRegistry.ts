@@ -41,9 +41,12 @@ export class AdToolRegistry {
 
   private registerGetAds(): void {
     const outputSchema = z.object({
-      ads: z
-        .array(MetaAdResponseSchema)
-        .describe('A list of ads with all available Meta API fields.'),
+      type: z.literal('success'),
+      data: z.object({
+        ads: z
+          .array(MetaAdResponseSchema)
+          .describe('A list of ads with all available Meta API fields.'),
+      }),
     });
 
     this.server.registerTool(
@@ -88,13 +91,14 @@ export class AdToolRegistry {
 
   private registerCreateAd(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adId: z.string(),
-      name: z.string(),
-      adsetId: z.string(),
-      creativeId: z.string(),
-      status: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adId: z.string(),
+        name: z.string(),
+        adsetId: z.string(),
+        creativeId: z.string(),
+        status: z.string(),
+      }),
     });
 
     this.server.registerTool(
@@ -130,10 +134,11 @@ export class AdToolRegistry {
 
   private registerUpdateAd(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adId: z.string(),
-      updatedFields: z.array(z.string()),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adId: z.string(),
+        updatedFields: z.array(z.string()),
+      }),
     });
 
     this.server.registerTool(
@@ -163,9 +168,10 @@ export class AdToolRegistry {
 
   private registerDeleteAd(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      adId: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        adId: z.string(),
+      }),
     });
 
     this.server.registerTool(

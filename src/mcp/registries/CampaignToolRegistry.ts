@@ -46,9 +46,12 @@ export class CampaignToolRegistry {
 
   private registerGetCampaigns(): void {
     const outputSchema = z.object({
-      campaigns: z
-        .array(MetaCampaignResponseSchema)
-        .describe('A list of campaigns with all available Meta API fields.'),
+      type: z.literal('success'),
+      data: z.object({
+        campaigns: z
+          .array(MetaCampaignResponseSchema)
+          .describe('A list of campaigns with all available Meta API fields.'),
+      }),
     });
 
     this.server.registerTool(
@@ -67,7 +70,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params: any, extra: any) => {
+      async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically
@@ -81,12 +84,13 @@ export class CampaignToolRegistry {
 
   private registerCreateCampaign(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      campaignId: z.string(),
-      name: z.string(),
-      objective: z.string(),
-      status: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        campaignId: z.string(),
+        name: z.string(),
+        objective: z.string(),
+        status: z.string(),
+      }),
     });
 
     this.server.registerTool(
@@ -145,10 +149,11 @@ export class CampaignToolRegistry {
 
   private registerUpdateCampaign(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      campaignId: z.string(),
-      updatedFields: z.array(z.string()),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        campaignId: z.string(),
+        updatedFields: z.array(z.string()),
+      }),
     });
 
     this.server.registerTool(
@@ -178,7 +183,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params: any, extra: any) => {
+      async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically
@@ -192,9 +197,10 @@ export class CampaignToolRegistry {
 
   private registerDeleteCampaign(): void {
     const outputSchema = z.object({
-      success: z.boolean(),
-      campaignId: z.string(),
-      message: z.string(),
+      type: z.literal('success'),
+      data: z.object({
+        success: z.boolean(),
+      }),
     });
 
     this.server.registerTool(
@@ -208,7 +214,7 @@ export class CampaignToolRegistry {
         },
         outputSchema: outputSchema.shape,
       },
-      async (params: any, extra: any) => {
+      async (params, extra) => {
         try {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically

@@ -31,18 +31,21 @@ export class PagesToolRegistry {
         description: 'Retrieves a list of Facebook Pages the user has access to.',
         inputSchema: {},
         outputSchema: {
-          pages: z
-            .array(
-              z.object({
-                id: z.string(),
-                name: z.string(),
-                access_token: z.string().optional().nullable(),
-                category: z.string().optional().nullable(),
-                link: z.string().optional().nullable(),
-                about: z.string().optional().nullable(),
-              })
-            )
-            .describe('A list of Facebook pages.'),
+          type: z.literal('success'),
+          data: z.object({
+            pages: z
+              .array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  access_token: z.string().optional().nullable(),
+                  category: z.string().optional().nullable(),
+                  link: z.string().optional().nullable(),
+                  about: z.string().optional().nullable(),
+                })
+              )
+              .describe('A list of Facebook pages.'),
+          }),
         },
       },
       async (_params, extra) => {
@@ -66,19 +69,22 @@ export class PagesToolRegistry {
           pageId: z.string().describe('The ID of the Facebook Page.'),
         },
         outputSchema: {
-          posts: z
-            .array(
-              z.object({
-                id: z.string(),
-                message: z.string().optional().nullable(),
-                created_time: z.string().optional().nullable(),
-                permalink_url: z.string().optional().nullable(),
-                full_picture: z.string().optional().nullable(),
-                story: z.string().optional().nullable(),
-                status_type: z.string().optional().nullable(),
-              })
-            )
-            .describe('A list of posts from the page.'),
+          type: z.literal('success'),
+          data: z.object({
+            posts: z
+              .array(
+                z.object({
+                  id: z.string(),
+                  message: z.string().optional().nullable(),
+                  created_time: z.string().optional().nullable(),
+                  permalink_url: z.string().optional().nullable(),
+                  full_picture: z.string().optional().nullable(),
+                  story: z.string().optional().nullable(),
+                  status_type: z.string().optional().nullable(),
+                })
+              )
+              .describe('A list of posts from the page.'),
+          }),
         },
       },
       async (params, extra) => {
@@ -118,10 +124,11 @@ export class PagesToolRegistry {
             .describe('Status for the ad (ACTIVE or PAUSED).'),
         },
         outputSchema: {
-          success: z.boolean(),
-          adId: z.string(),
-          adCreativeId: z.string(),
-          message: z.string(),
+          type: z.literal('success'),
+          data: z.object({
+            adId: z.string(),
+            adCreativeId: z.string(),
+          }),
         },
       },
       async (params, extra) => {

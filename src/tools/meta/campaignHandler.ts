@@ -163,15 +163,16 @@ export class MetaCampaignHandler {
       logger.info('Campaign created successfully', { campaignId, name: params.name });
 
       const result = {
-        success: true,
         campaignId: campaignId,
         name: params.name,
         objective: params.objective,
         status: params.status,
-        message: `Campaign "${params.name}" created successfully with ID: ${campaignId}`,
       };
 
-      return createMcpSuccessResult(result, 'Campaign created successfully');
+      return createMcpSuccessResult(
+        result,
+        `Campaign "${params.name}" created successfully with ID: ${campaignId}`
+      );
     });
   }
 
@@ -214,13 +215,11 @@ export class MetaCampaignHandler {
       logger.info('Campaign updated successfully', { campaignId: params.campaignId });
 
       const result = {
-        success: true,
         campaignId: params.campaignId,
         updatedFields: Object.keys(updateData),
-        message: `Campaign ${params.campaignId} updated successfully`,
       };
 
-      return createMcpSuccessResult(result, 'Campaign updated successfully');
+      return createMcpSuccessResult(result, `Campaign ${params.campaignId} updated successfully`);
     });
   }
 
@@ -246,12 +245,10 @@ export class MetaCampaignHandler {
       logger.info('Campaign deleted successfully', { campaignId: params.campaignId });
 
       const result = {
-        success: true,
-        campaignId: params.campaignId,
-        message: `Campaign ${params.campaignId} deleted successfully`,
+        success: true, // Keep this as it indicates the outcome of the delete operation itself
       };
 
-      return createMcpSuccessResult(result, 'Campaign deleted successfully');
+      return createMcpSuccessResult(result, `Campaign ${params.campaignId} deleted successfully`);
     });
   }
 }
