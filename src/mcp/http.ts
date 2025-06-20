@@ -78,6 +78,7 @@ async function handleMCPRequest(
   bambooServer: BambooMCPServer
 ): Promise<void> {
   const mcpServer = bambooServer.getServer();
+
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -101,6 +102,9 @@ async function handleMCPRequest(
     };
 
     const reqWithAuth = Object.assign(request.raw, { auth: authInfo });
+
+    const clientCapabilities = mcpServer.server.getClientCapabilities();
+    console.info('clientCapabilities', clientCapabilities);
 
     await pTimeout(transport.handleRequest(reqWithAuth, reply.raw, request.body), {
       milliseconds: env.MCP_REQUEST_TIMEOUT,
