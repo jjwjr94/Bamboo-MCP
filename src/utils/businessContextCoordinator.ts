@@ -152,7 +152,7 @@ export class BusinessContextCoordinator {
    */
   static async performBusinessContextHealthCheck(
     userId: string,
-    accessToken: string
+    _accessToken: string
   ): Promise<{
     totalAccounts: number;
     businessManagedAccounts: number;

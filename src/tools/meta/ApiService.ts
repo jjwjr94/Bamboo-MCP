@@ -597,7 +597,7 @@ export class MetaApiService {
     // Strategy 2: Try string conversion variants
     const userIdVariants = [currentUserId, String(currentUserId)];
     // Safely add numeric variant only if the ID is a valid number string
-    if (!isNaN(Number(currentUserId))) {
+    if (!Number.isNaN(Number(currentUserId))) {
       userIdVariants.push(Number(currentUserId).toString());
     }
     const uniqueUserIdVariants = [...new Set(userIdVariants)]; // More concise way to get unique values
