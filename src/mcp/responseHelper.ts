@@ -1,7 +1,13 @@
-import type { CallToolResult, TextContent } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  CallToolResult,
+  EmbeddedResource,
+  TextContent,
+} from '@modelcontextprotocol/sdk/types.js';
 import type { Sanitized } from '../types/utils.js';
 import { removeUnderscoreProperties } from '../utils/objectUtils.js';
 import { redactSensitiveData } from '../utils/securityUtils.js';
+import { logger } from '../utils/logger.js';
+import { promptContentCache } from './promptContent.js';
 
 /**
  * Creates a success CallToolResult with both content and structuredContent fields.
@@ -25,6 +31,55 @@ export interface McpStructuredSuccess<T> {
   type: 'success';
   data: T;
   [key: string]: unknown;
+}
+
+/**
+ * Creates embedded resources for system prompts that are included in tool call results.
+ * This ensures Claude gets the prompt content with every successful tool call response.
+ */
+function createPromptEmbeddedResources(): EmbeddedResource[] {
+  const resources: EmbeddedResource[] = [];
+
+  // Only include resources if the prompt content cache is initialized
+  if (!promptContentCache.isInitialized()) {
+    logger.warn('Prompt content cache not initialized, embedded prompt resources will be omitted from response');
+    return resources;
+  }
+
+  const systemPrompt = promptContentCache.getSystemPromptContent();
+  const bestPractices = promptContentCache.getBestPracticesPromptContent();
+
+  if (systemPrompt) {
+    resources.push({
+      type: 'resource',
+      resource: {
+        uri: 'bamboo://prompts/system',
+        name: 'system-prompt',
+        title: 'System Prompt',
+        description:
+          'Core system instructions defining the AI agent behavior and expertise for Meta advertising operations',
+        mimeType: 'text/markdown',
+        text: systemPrompt,
+      },
+    });
+  }
+
+  if (bestPractices) {
+    resources.push({
+      type: 'resource',
+      resource: {
+        uri: 'bamboo://prompts/best-practices',
+        name: 'best-practices-prompt',
+        title: 'Best Practices Prompt',
+        description:
+          'Comprehensive Meta Ads best practices organized by vertical and campaign objective for expert guidance',
+        mimeType: 'text/markdown',
+        text: bestPractices,
+      },
+    });
+  }
+
+  return resources;
 }
 
 export function createMcpSuccessResult<T>(
@@ -61,9 +116,14 @@ export function createMcpSuccessResult<T>(
     text: JSON.stringify(successContent, null, 2),
   };
 
+  // Create embedded resources for prompt content
+  const embeddedResources = createPromptEmbeddedResources();
+
   const result = {
     // Filter out textHumanReadableContent if it's undefined
-    content: [textHumanReadableContent, textStructuredContent].filter(Boolean),
+    content: [textHumanReadableContent, textStructuredContent, ...embeddedResources].filter(
+      Boolean
+    ),
     structuredContent: successContent,
     isError: false,
   } as CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> };

@@ -5,6 +5,7 @@ import { MetaToolsHandler } from '../tools/meta/toolsHandler.js';
 import { logger } from '../utils/logger.js';
 import { PromptRegistry } from './PromptRegistry.js';
 import { ResourceRegistry } from './ResourceRegistry.js';
+import { promptContentCache } from './promptContent.js';
 import { ToolRegistry } from './registries/toolRegistry.js';
 
 export class BambooMCPServer {
@@ -43,7 +44,8 @@ export class BambooMCPServer {
    * This must be called before the server starts accepting requests.
    */
   public async initialize(): Promise<void> {
-    await this.promptRegistry.initialize();
+    // Initialize both the prompt registry and global cache
+    await Promise.all([this.promptRegistry.initialize(), promptContentCache.initialize()]);
 
     // Create instructions from cached prompt content
     // This is delivered during MCP handshake, so Claude gets context immediately
