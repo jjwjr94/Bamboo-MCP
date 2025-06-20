@@ -98,8 +98,7 @@ export async function build(opts = {}) {
   app.use('/', mcpAuthRouter);
 
   // Create and initialize the singleton MCP server instance
-  const bambooServer = new BambooMCPServer();
-  await bambooServer.initialize();
+  const bambooServer = await BambooMCPServer.create();
   logger.info('Bamboo MCP Server initialized for HTTP transport');
 
   // Pass the initialized instance to the transport setup

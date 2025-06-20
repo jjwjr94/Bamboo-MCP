@@ -4,9 +4,9 @@ import type {
   TextContent,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Sanitized } from '../types/utils.js';
+import { logger } from '../utils/logger.js';
 import { removeUnderscoreProperties } from '../utils/objectUtils.js';
 import { redactSensitiveData } from '../utils/securityUtils.js';
-import { logger } from '../utils/logger.js';
 import { promptContentCache } from './promptContent.js';
 
 /**
@@ -23,6 +23,19 @@ import { promptContentCache } from './promptContent.js';
  * @param description - Optional description for the response's metadata
  * @returns A sanitized CallToolResult object with type-safe structured content
  */
+
+/**
+ * Options for configuring the behavior of createMcpSuccessResult.
+ */
+export interface CreateMcpSuccessResultOptions {
+  /**
+   * If true, attaches the system prompt and best practices as embedded resources.
+   * This is useful for initializing the AI's context at the start of a session.
+   * Defaults to false to conserve context window space on subsequent calls.
+   */
+  attachPrompts?: boolean;
+}
+
 /**
  * A structured success object for the structuredContent field of a CallToolResult.
  * Follows a discriminated union pattern with `type: 'success'`.
@@ -42,7 +55,9 @@ function createPromptEmbeddedResources(): EmbeddedResource[] {
 
   // Only include resources if the prompt content cache is initialized
   if (!promptContentCache.isInitialized()) {
-    logger.warn('Prompt content cache not initialized, embedded prompt resources will be omitted from response');
+    logger.warn(
+      'Prompt content cache not initialized, embedded prompt resources will be omitted from response'
+    );
     return resources;
   }
 
@@ -84,7 +99,8 @@ function createPromptEmbeddedResources(): EmbeddedResource[] {
 
 export function createMcpSuccessResult<T>(
   data: T,
-  description?: string
+  description?: string,
+  options: CreateMcpSuccessResultOptions = {}
 ): CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> } {
   // Layer 1: Redact known sensitive fields first.
   const redactedData = redactSensitiveData(data);
@@ -116,8 +132,9 @@ export function createMcpSuccessResult<T>(
     text: JSON.stringify(successContent, null, 2),
   };
 
-  // Create embedded resources for prompt content
-  const embeddedResources = createPromptEmbeddedResources();
+  const { attachPrompts = false } = options;
+  // Conditionally create embedded resources for prompt content
+  const embeddedResources = attachPrompts ? createPromptEmbeddedResources() : [];
 
   const result = {
     // Filter out textHumanReadableContent if it's undefined

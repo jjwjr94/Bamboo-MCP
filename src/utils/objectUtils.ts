@@ -1,8 +1,6 @@
 import type { Sanitized } from '../types/utils.js';
+import { env } from './env.js';
 import { logger } from './logger.js';
-
-const MAX_RECURSION_DEPTH = 20;
-const MAX_SANITIZATION_DEPTH = 20;
 
 /**
  * Recursively removes properties with `undefined` values from an object and any
@@ -25,7 +23,7 @@ export function removeUndefinedProperties(obj: Record<string, unknown>): void {
     }
 
     // 2. Guard Clause: Protect against deep recursion / potential stack overflow.
-    if (depth > MAX_RECURSION_DEPTH) {
+    if (depth > env.MAX_RECURSION_DEPTH) {
       logger.warn('Maximum recursion depth exceeded in removeUndefinedProperties.', { depth });
       return;
     }
@@ -84,7 +82,7 @@ function removeUnderscorePropertiesRecursively<T>(
   }
 
   // 2. Protect against deep recursion
-  if (depth > MAX_SANITIZATION_DEPTH) {
+  if (depth > env.MAX_RECURSION_DEPTH) {
     logger.warn('Maximum sanitization depth exceeded. Potential circular reference in object.', {
       objectType: typeof data,
       keys: typeof data === 'object' && data !== null ? Object.keys(data).slice(0, 10) : undefined,

@@ -13,11 +13,11 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_CAMPAIGNS_TO_FETCH = 1000;
 
 export class MetaCampaignHandler {
   async getCampaigns(authPayload: JWTPayload, params: { adAccountId?: string }) {
@@ -57,9 +57,9 @@ export class MetaCampaignHandler {
         allRawCampaigns.push(...currentCursor);
 
         // Safety limit to prevent resource exhaustion
-        if (allRawCampaigns.length >= MAX_CAMPAIGNS_TO_FETCH) {
+        if (allRawCampaigns.length >= env.META_MAX_CAMPAIGNS_TO_FETCH) {
           logger.warn('Reached maximum campaigns limit, truncating results', {
-            limit: MAX_CAMPAIGNS_TO_FETCH,
+            limit: env.META_MAX_CAMPAIGNS_TO_FETCH,
           });
           break;
         }
@@ -103,7 +103,7 @@ export class MetaCampaignHandler {
     const hasOtherCategories = params.specialAdCategories.some((cat) => cat !== 'NONE');
 
     if (hasNone && hasOtherCategories) {
-      throw new Error(
+      throw new ValidationError(
         "Invalid special ad categories: 'NONE' cannot be combined with other special ad categories."
       );
     }
@@ -115,7 +115,7 @@ export class MetaCampaignHandler {
       isSpecialCategory &&
       (!params.specialAdCategoryCountry || params.specialAdCategoryCountry.length === 0)
     ) {
-      throw new Error(
+      throw new ValidationError(
         "The 'specialAdCategoryCountry' parameter is required when a special ad category is selected."
       );
     }
@@ -156,7 +156,7 @@ export class MetaCampaignHandler {
           response: campaign,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to create campaign: Invalid response from Meta API.');
+        throw new ValidationError('Failed to create campaign: Invalid response from Meta API.');
       }
 
       const campaignId = validationResult.data.id;
@@ -209,7 +209,7 @@ export class MetaCampaignHandler {
           response: updateResponse,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to update campaign: Invalid response from Meta API.');
+        throw new ValidationError('Failed to update campaign: Invalid response from Meta API.');
       }
 
       logger.info('Campaign updated successfully', { campaignId: params.campaignId });
@@ -239,7 +239,7 @@ export class MetaCampaignHandler {
           response: deleteResponse,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to delete campaign: Invalid response from Meta API.');
+        throw new ValidationError('Failed to delete campaign: Invalid response from Meta API.');
       }
 
       logger.info('Campaign deleted successfully', { campaignId: params.campaignId });

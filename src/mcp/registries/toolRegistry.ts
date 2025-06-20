@@ -63,7 +63,8 @@ export class ToolRegistry {
       'get_ad_accounts',
       {
         title: 'Get Ad Accounts',
-        description: 'Retrieves all ad accounts accessible by the user.',
+        description:
+          'Retrieves all ad accounts accessible by the user. This tool should be called first to initialize your session context and load expert guidance for Meta advertising operations.',
         inputSchema: {},
         outputSchema: getAdAccountsOutputSchema.shape,
       },

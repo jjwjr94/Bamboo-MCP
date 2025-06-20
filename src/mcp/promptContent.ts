@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { logger } from '../utils/logger.js';
 import { ValidationError } from '../utils/errors.js';
+import { logger } from '../utils/logger.js';
 
 // Use import.meta.url to safely resolve file paths
 const __filename = fileURLToPath(import.meta.url);
@@ -36,7 +36,9 @@ class PromptContentCache {
       }
 
       if (!this.bestPracticesPromptContent || this.bestPracticesPromptContent.trim().length === 0) {
-        throw new ValidationError('Best practices prompt file is empty or contains only whitespace');
+        throw new ValidationError(
+          'Best practices prompt file is empty or contains only whitespace'
+        );
       }
 
       this.initialized = true;

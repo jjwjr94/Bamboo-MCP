@@ -104,7 +104,7 @@ async function handleMCPRequest(
     const reqWithAuth = Object.assign(request.raw, { auth: authInfo });
 
     const clientCapabilities = mcpServer.server.getClientCapabilities();
-    console.info('clientCapabilities', clientCapabilities);
+    logger.debug('MCP client capabilities', { clientCapabilities });
 
     await pTimeout(transport.handleRequest(reqWithAuth, reply.raw, request.body), {
       milliseconds: env.MCP_REQUEST_TIMEOUT,

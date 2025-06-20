@@ -1,7 +1,7 @@
+import { env } from './env.js';
 import { logger } from './logger.js';
 
 // 2025-ready: Using a WeakSet for efficient circular reference tracking.
-const MAX_REDACTION_DEPTH = 20;
 const REDACTION_PLACEHOLDER = '[REDACTED]';
 
 /**
@@ -46,7 +46,7 @@ function redactRecursively(data: unknown, visited: WeakSet<object>, depth: numbe
     return data; // Primitives are returned as-is.
   }
 
-  if (depth > MAX_REDACTION_DEPTH) {
+  if (depth > env.MAX_REDACTION_DEPTH) {
     logger.warn('Maximum redaction depth exceeded. Aborting to prevent stack overflow.', { depth });
     return REDACTION_PLACEHOLDER;
   }

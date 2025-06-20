@@ -50,6 +50,16 @@ const envSchema = z.object({
   RETRY_MAX_ATTEMPTS: z.string().transform(Number).default('3'),
   RETRY_BASE_DELAY: z.string().transform(Number).default('1000'),
   RETRY_MAX_DELAY: z.string().transform(Number).default('10000'),
+
+  // Safety Limits
+  META_MAX_BATCH_SIZE: z.string().transform(Number).default('50'),
+  META_MAX_CAMPAIGNS_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_ADS_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_ADSETS_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_CREATIVES_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_INSIGHTS_TO_FETCH: z.string().transform(Number).default('10000'),
+  MAX_RECURSION_DEPTH: z.string().transform(Number).default('20'),
+  MAX_REDACTION_DEPTH: z.string().transform(Number).default('20'),
 });
 
 export const env = envSchema.parse(process.env);

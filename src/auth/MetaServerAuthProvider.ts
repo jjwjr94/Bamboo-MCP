@@ -18,7 +18,7 @@ import { oauthTokens } from '../db/schema.js';
 import { MetaApiService } from '../tools/meta/ApiService.js';
 import type { SessionData } from '../types/auth.js';
 import { env } from '../utils/env.js';
-import { TokenError } from '../utils/errors.js';
+import { TokenError, ValidationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { SessionManager } from './SessionManager.js';
 import { TokenManager } from './TokenManager.js';
@@ -64,10 +64,17 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     };
 
     setInterval(
-      async () => {
-        await this.cleanExpiredTokens();
+      () => {
+        // Call the async method and attach a .catch() handler to the returned promise
+        // to prevent unhandled promise rejections.
+        this.cleanExpiredTokens().catch((error) => {
+          logger.error('Unhandled error during scheduled token cleanup', {
+            // Safely log the error message
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
       },
-      15 * 60 * 1000
+      15 * 60 * 1000 // 15 minutes
     );
 
     logger.info('MetaServerAuthProvider initialized');
@@ -110,7 +117,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       );
 
       if (grantedScopes.length === 0) {
-        throw new Error(
+        throw new ValidationError(
           `No valid Facebook API scopes requested. Supported: ${serverSupportedScopes.join(', ')}, Requested: ${clientRequestedScopes.join(', ')}`
         );
       }
@@ -283,13 +290,13 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       });
 
       if (!oauthToken) {
-        throw new Error('No OAuth token found for user');
+        throw new TokenError('No OAuth token found for user');
       }
 
       // Use the new service method for validation
       const isMetaTokenValid = await MetaApiService.validateAccessToken(oauthToken.accessToken);
       if (!isMetaTokenValid) {
-        throw new Error('Meta access token is invalid or expired');
+        throw new TokenError('Meta access token is invalid or expired');
       }
 
       return {
@@ -306,7 +313,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       logger.error('Token verification failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      throw new Error('Invalid access token');
+      throw new TokenError('Invalid access token');
     }
   }
 
@@ -331,7 +338,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       if (tempCodeData) {
         await this.sessionManager.clearTempAuthCode(authorizationCode);
       }
-      throw new Error('Invalid or expired authorization code');
+      throw new TokenError('Invalid or expired authorization code');
     }
 
     // The SDK handler expects the challenge string to be returned.

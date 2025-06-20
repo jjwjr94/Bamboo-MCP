@@ -6,6 +6,7 @@ import {
   MetaApiError,
   RateLimitError,
   TimeoutError,
+  TokenError,
   ValidationError,
   isBambooError,
 } from '../utils/errors.js';
@@ -104,7 +105,7 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
   let message: string;
   let metadata: McpErrorMetadata;
 
-  if (error instanceof AuthenticationError) {
+  if (error instanceof AuthenticationError || error instanceof TokenError) {
     message =
       'Authentication failed. The provided credentials may be invalid or expired. Please re-authenticate.';
     metadata = {

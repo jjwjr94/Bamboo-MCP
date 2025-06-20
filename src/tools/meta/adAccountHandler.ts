@@ -189,7 +189,8 @@ export class MetaAdAccountHandler {
       logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
       return createMcpSuccessResult(
         { accounts: accountsToStore },
-        `Retrieved ${accountsToStore.length} ad accounts`
+        `Retrieved ${accountsToStore.length} ad accounts`,
+        { attachPrompts: true }
       );
     });
   }

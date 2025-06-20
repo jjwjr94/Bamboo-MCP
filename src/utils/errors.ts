@@ -132,13 +132,3 @@ export function isOperationalError(error: unknown): boolean {
   }
   return false;
 }
-
-// Error handler for async functions
-export function asyncErrorHandler<T extends (...args: unknown[]) => Promise<unknown>>(fn: T): T {
-  return ((...args: Parameters<T>) => {
-    const result = fn(...args);
-    return Promise.resolve(result).catch((error) => {
-      throw isBambooError(error) ? error : new BambooError((error as Error).message);
-    });
-  }) as T;
-}

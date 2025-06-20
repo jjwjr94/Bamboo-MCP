@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { type DbTransaction, withUserContext } from '../db/client.js';
 import { type UserAccountContext, adAccounts, users } from '../db/schema.js';
-import { DatabaseError, NotFoundError } from './errors.js';
+import { DatabaseError, NotFoundError, ValidationError } from './errors.js';
 import { logger } from './logger.js';
 
 export interface AccountContext {
@@ -68,7 +68,7 @@ export class AccountManager {
     }
 
     // Multiple accounts available - return structured error for Claude to handle
-    throw new Error(
+    throw new ValidationError(
       `Multiple ad accounts available. Please specify which account to use:\n${context.availableAccounts
         .map((acc) => `- ${acc.id}: ${acc.name}`)
         .join('\n')}`

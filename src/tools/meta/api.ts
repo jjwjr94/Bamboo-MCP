@@ -2,7 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { FacebookAdsApi } from 'facebook-nodejs-business-sdk';
 import { withUserContext } from '../../db/client.js';
 import { oauthTokens } from '../../db/schema.js';
-import { AuthenticationError, MetaApiError } from '../../utils/errors.js';
+import { MetaApiError, TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaResiliencePolicy } from '../../utils/resiliencePolicy.js';
 
@@ -18,7 +18,7 @@ async function fetchUserToken(userId: string) {
       .limit(1);
 
     if (!tokenRecord.length || !tokenRecord[0].accessToken) {
-      throw new AuthenticationError('No valid Meta access token found for the user.');
+      throw new TokenError('No valid Meta access token found for the user.');
     }
 
     return tokenRecord[0];
@@ -35,7 +35,7 @@ export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi>
 
   if (token.expiresAt && new Date() >= new Date(token.expiresAt)) {
     logger.warn('Meta access token has expired', { userId, expiresAt: token.expiresAt });
-    throw new AuthenticationError('Meta access token has expired. Please re-authenticate.');
+    throw new TokenError('Meta access token has expired. Please re-authenticate.');
   }
 
   // Warn if token expires soon (within 7 days)

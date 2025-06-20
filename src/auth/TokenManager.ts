@@ -4,7 +4,7 @@ import type {
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { OAuthDatabaseService } from '../db/oauthDatabaseService.js';
-import { env } from '../utils/env.js';
+import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { createJWT, verifyJWT } from './jwt.js';
 
@@ -70,46 +70,26 @@ export class TokenManager {
       client.client_id
     );
 
-    // SECURITY FIX: Preserve originally granted Facebook scopes for this specific client
-    // Note: In the current architecture, all clients get the same scopes, but we preserve
-    // the original grant to maintain OAuth 2.1 compliance and prevent privilege escalation
+    // SECURITY: Fail-closed approach - require original scope grant to prevent privilege escalation
+    // If the original OAuth token or scopes are missing, we cannot safely refresh the token
+    // as we don't know what permissions the user originally granted. The secure approach is
+    // to invalidate the refresh token and require re-authentication.
     const userOAuthToken = await this.dbService.getLatestUserOAuthToken(storedToken.userId);
 
     if (!userOAuthToken || !userOAuthToken.scopes) {
-      // Fallback to default server scopes if no user token found
-      // This maintains compatibility while being secure
-      logger.warn('No user OAuth token found, using default server scopes for refresh', {
+      // SECURITY FIX: Fail-closed to prevent privilege escalation
+      logger.error('Cannot refresh token: original OAuth scope grant information is missing', {
         userId: storedToken.userId,
         clientId: client.client_id,
+        reason: !userOAuthToken ? 'No OAuth token record found' : 'Scopes field is null/undefined',
       });
-      const defaultScopes = env.FACEBOOK_OAUTH_SCOPES.split(',');
 
-      const newAccessToken = await createJWT({
-        userId: storedToken.userId,
-        clientId: client.client_id,
-        scopes: defaultScopes,
-      });
-      const newPayload = await verifyJWT(newAccessToken);
-      const newRefreshToken = crypto.randomBytes(64).toString('hex');
-      const newHashedRefreshToken = crypto
-        .createHash('sha256')
-        .update(newRefreshToken)
-        .digest('hex');
+      // Invalidate the refresh token since we cannot safely refresh it
+      await this.dbService.revokeTokenById(storedToken.id);
 
-      await this.dbService.rotateRefreshToken(
-        storedToken.id,
-        storedToken.userId,
-        client.client_id,
-        newHashedRefreshToken
+      throw new TokenError(
+        'Token refresh failed: original authorization scope information is missing. Please re-authenticate to continue using the application.'
       );
-
-      return {
-        access_token: newAccessToken,
-        token_type: 'Bearer',
-        expires_in: Math.floor((newPayload.exp * 1000 - Date.now()) / 1000),
-        refresh_token: newRefreshToken,
-        scope: newPayload.scopes.join(' '),
-      };
     }
 
     // Use the originally granted scopes from the stored OAuth token

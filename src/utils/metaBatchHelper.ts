@@ -1,5 +1,5 @@
 import { env } from './env.js';
-import { MetaApiError } from './errors.js';
+import { MetaApiError, ValidationError } from './errors.js';
 import { logger } from './logger.js';
 
 /**
@@ -24,12 +24,6 @@ export interface BatchResponse {
 }
 
 /**
- * Maximum number of requests allowed in a single batch
- * Based on Meta's current API limits
- */
-export const MAX_BATCH_SIZE = 50;
-
-/**
  * Executes a batch of Meta Graph API requests
  *
  * @param requests - Array of batch requests to execute
@@ -44,8 +38,10 @@ export async function executeBatchRequests(
     return [];
   }
 
-  if (requests.length > MAX_BATCH_SIZE) {
-    throw new Error(`Batch size ${requests.length} exceeds maximum allowed ${MAX_BATCH_SIZE}`);
+  if (requests.length > env.META_MAX_BATCH_SIZE) {
+    throw new ValidationError(
+      `Batch size ${requests.length} exceeds maximum allowed ${env.META_MAX_BATCH_SIZE}`
+    );
   }
 
   logger.debug('Executing batch Meta API request', {
@@ -130,8 +126,8 @@ export async function executeLargeBatchRequests(
 
   // Split requests into batches
   const batches: BatchRequest[][] = [];
-  for (let i = 0; i < requests.length; i += MAX_BATCH_SIZE) {
-    batches.push(requests.slice(i, i + MAX_BATCH_SIZE));
+  for (let i = 0; i < requests.length; i += env.META_MAX_BATCH_SIZE) {
+    batches.push(requests.slice(i, i + env.META_MAX_BATCH_SIZE));
   }
 
   logger.info('Executing large batch Meta API request', {

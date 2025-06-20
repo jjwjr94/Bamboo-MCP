@@ -11,48 +11,28 @@ import { ToolRegistry } from './registries/toolRegistry.js';
 export class BambooMCPServer {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private promptRegistry: PromptRegistry;
 
-  constructor() {
-    this.server = new McpServer(
-      { name: 'Bamboo MCP', version: '0.1.0' },
-      {
-        capabilities: { tools: {}, resources: { subscribe: false }, prompts: {} },
-        // Instructions will be set after prompt initialization
-        instructions: undefined,
-      }
-    );
+  private constructor(server: McpServer) {
+    this.server = server;
     this.toolsHandler = new MetaToolsHandler();
-
-    // Instantiate registries
-    this.promptRegistry = new PromptRegistry(this.server);
-    const resourceRegistry = new ResourceRegistry(this.server);
-    const toolRegistry = new ToolRegistry(this.server, this.toolsHandler);
-
-    // Register handlers (this part is synchronous)
-    // Note: promptRegistry.register() is now called in initialize() after content is cached
-    resourceRegistry.register();
-    toolRegistry.register();
-  }
-
-  public getServer(): McpServer {
-    return this.server;
   }
 
   /**
-   * Initializes all asynchronous dependencies, such as caching prompts.
-   * This must be called before the server starts accepting requests.
+   * Creates a new BambooMCPServer instance with fully initialized prompts and server.
+   * This static factory method handles all server creation and async initialization.
    */
-  public async initialize(): Promise<void> {
-    // Initialize both the prompt registry and global cache
-    await Promise.all([this.promptRegistry.initialize(), promptContentCache.initialize()]);
+  public static async create(): Promise<BambooMCPServer> {
+    let mcpServer: McpServer | undefined;
 
-    // Create instructions from cached prompt content
-    // This is delivered during MCP handshake, so Claude gets context immediately
-    const systemPrompt = this.promptRegistry.getSystemPromptContent();
-    const bestPractices = this.promptRegistry.getBestPracticesPromptContent();
+    try {
+      // Initialize prompt content cache first
+      await promptContentCache.initialize();
 
-    const instructions = `# Bamboo Meta Ads AI Agent Instructions
+      // Build instructions from cached prompt content
+      const systemPrompt = promptContentCache.getSystemPromptContent();
+      const bestPractices = promptContentCache.getBestPracticesPromptContent();
+
+      const instructions = `# Bamboo Meta Ads AI Agent Instructions
 
 You are an expert Meta advertising specialist. Use these instructions and context for all interactions:
 
@@ -64,14 +44,52 @@ ${bestPractices || 'Best practices not available'}
 
 Use this context to provide expert guidance on Meta advertising operations, campaign optimization, and strategic recommendations.`;
 
-    // Update server with instructions - this gets sent during handshake
-    // TECHNICAL DEBT: MCP SDK v1.13.0 doesn't provide public API to update instructions post-init
-    // This private property access may break in future SDK versions
-    (this.server as any).server._instructions = instructions;
+      // Create the MCP server with proper instructions
+      mcpServer = new McpServer(
+        { name: 'Bamboo MCP', version: '0.1.0' },
+        {
+          capabilities: { tools: {}, resources: { subscribe: false }, prompts: {} },
+          instructions,
+        }
+      );
 
-    // Register prompts only after content is successfully cached
-    this.promptRegistry.register();
-    // Add any other async initialization here in the future
+      // Create the wrapper instance
+      const bambooServer = new BambooMCPServer(mcpServer);
+
+      // Initialize and register all components
+      const promptRegistry = new PromptRegistry(mcpServer);
+      const resourceRegistry = new ResourceRegistry(mcpServer);
+      const toolRegistry = new ToolRegistry(mcpServer, bambooServer.toolsHandler);
+
+      // Register all components (no async initialization needed for PromptRegistry)
+      promptRegistry.register();
+      resourceRegistry.register();
+      toolRegistry.register();
+
+      logger.info('BambooMCPServer created and initialized successfully');
+      return bambooServer;
+    } catch (error) {
+      // Cleanup any partially initialized resources
+      if (mcpServer) {
+        try {
+          await mcpServer.close();
+        } catch (cleanupError) {
+          logger.error('Error during cleanup after initialization failure', {
+            originalError: error instanceof Error ? error.message : 'Unknown error',
+            cleanupError:
+              cleanupError instanceof Error ? cleanupError.message : 'Unknown cleanup error',
+          });
+        }
+      }
+
+      // Add context and rethrow for consistent error handling
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`BambooMCPServer initialization failed: ${message}`);
+    }
+  }
+
+  public getServer(): McpServer {
+    return this.server;
   }
 
   /**
@@ -84,9 +102,6 @@ Use this context to provide expert guidance on Meta advertising operations, camp
   }
 
   public async runStdio() {
-    // Initialize the server first
-    await this.initialize();
-
     logger.info('Starting MCP server in stdio mode');
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
@@ -95,9 +110,10 @@ Use this context to provide expert guidance on Meta advertising operations, camp
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const bambooServer = new BambooMCPServer();
-  bambooServer.runStdio().catch((error) => {
-    logger.error('Failed to start MCP server', { error });
-    process.exit(1);
-  });
+  BambooMCPServer.create()
+    .then((bambooServer) => bambooServer.runStdio())
+    .catch((error) => {
+      logger.error('Failed to start MCP server', { error });
+      process.exit(1);
+    });
 }

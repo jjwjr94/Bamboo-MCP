@@ -2,7 +2,6 @@ import {
   AdAccount as MetaAdAccountSDK,
   Ad as MetaAdSDK,
   AdSet as MetaAdSetSDK,
-  Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
 import {
@@ -15,12 +14,11 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_ADS_TO_FETCH = 1000;
 
 export class MetaAdHandler {
   async getAds(
@@ -54,7 +52,7 @@ export class MetaAdHandler {
       } else if (params.campaignId) {
         // Get ads from a specific campaign
         logger.info('Fetching ads for campaign', { campaignId: params.campaignId });
-        adsCursor = await new MetaCampaignSDK(params.campaignId).getAds(fields);
+        adsCursor = await new MetaAdSetSDK(params.campaignId).getAds(fields);
       } else {
         // Get ads from ad account
         const adAccountId =
@@ -75,9 +73,9 @@ export class MetaAdHandler {
         allRawAds.push(...currentCursor);
 
         // Safety limit to prevent resource exhaustion
-        if (allRawAds.length >= MAX_ADS_TO_FETCH) {
+        if (allRawAds.length >= env.META_MAX_ADS_TO_FETCH) {
           logger.warn('Reached maximum ads limit, truncating results', {
-            limit: MAX_ADS_TO_FETCH,
+            limit: env.META_MAX_ADS_TO_FETCH,
           });
           break;
         }
