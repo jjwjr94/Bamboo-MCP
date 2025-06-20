@@ -53,6 +53,12 @@ export class RateLimitError extends BambooError {
   }
 }
 
+export class TimeoutError extends BambooError {
+  constructor(message = 'The operation timed out') {
+    super(message, 'REQUEST_TIMEOUT', 504, true); // 504 Gateway Timeout, retryable
+  }
+}
+
 export class MetaApiError extends BambooError {
   public readonly metaErrorCode?: string;
   public readonly metaErrorSubcode?: string;

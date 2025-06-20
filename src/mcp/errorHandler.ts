@@ -5,6 +5,7 @@ import {
   AuthorizationError,
   MetaApiError,
   RateLimitError,
+  TimeoutError,
   ValidationError,
   isBambooError,
 } from '../utils/errors.js';
@@ -72,12 +73,30 @@ export const mcpErrorSchema = z
 /**
  * Converts a BambooError or unknown exception into a structured MCP CallToolResult error object.
  *
- * @param error - The caught exception
- * @returns A CallToolResult object representing the error, with retry metadata
+ * This function provides centralized error handling for all MCP tools, ensuring consistent
+ * error responses across the API. It classifies errors by type and provides appropriate
+ * retry guidance to clients.
+ *
+ * **Response Structure:**
+ * - `content`: Array containing human-readable error message and JSON-serialized error details
+ * - `isError`: Always true for error responses
+ * - `_meta.errorMetadata`: Structured metadata for client error handling
+ * - `structuredContent`: Currently commented out due to MCP SDK limitations
+ *
+ * **Error Classification:**
+ * - `AuthenticationError`: Non-retryable auth failures
+ * - `AuthorizationError`: Non-retryable permission failures
+ * - `ValidationError`: Non-retryable input validation failures
+ * - `RateLimitError`: Retryable with delay
+ * - `TimeoutError`: Retryable with shorter delay
+ * - `MetaApiError`: Retryable based on Meta API error classification
+ * - `BambooError`: Retryable based on HTTP status code (5xx = retryable)
+ * - Unknown errors: Non-retryable (indicates server bugs)
+ *
+ * @param error - The caught exception of any type
+ * @returns A CallToolResult object with structured error information
  */
-export function createMcpErrorResult(
-  error: unknown
-): CallToolResult & { structuredContent: McpStructuredError } {
+export function createMcpErrorResult(error: unknown): CallToolResult {
   let message: string;
   let metadata: McpErrorMetadata;
 
@@ -124,6 +143,14 @@ export function createMcpErrorResult(
     if (isRetryable && isMetaRateLimitError(error)) {
       metadata.retryAfterMs = 60000; // 1 minute default
     }
+  } else if (error instanceof TimeoutError) {
+    message = 'The request timed out. Please try again later.';
+    metadata = {
+      retryable: true,
+      retryAfterMs: 5000, // Shorter retry delay for timeouts
+      errorCode: error.code,
+      category: 'internal',
+    };
   } else if (isBambooError(error)) {
     // Handle generic BambooError
     const isServerSideError = error.statusCode >= 500;
@@ -141,10 +168,10 @@ export function createMcpErrorResult(
       stack: unknownError.stack,
     });
     message =
-      'An unexpected internal server error occurred. This may be a transient issue. You can try again.';
+      'An unexpected internal server error occurred. Please contact support if the issue persists.';
     metadata = {
-      retryable: true,
-      errorCode: 'INTERNAL_ERROR',
+      retryable: false,
+      errorCode: 'INTERNAL_UNHANDLED_ERROR',
       category: 'internal',
     };
   }
@@ -166,14 +193,31 @@ export function createMcpErrorResult(
     },
   };
 
+  // Add structured error as JSON text content for visibility
+  const structuredErrorContent: TextContent = {
+    type: 'text',
+    text: `\n\nStructured Error Details:\n${JSON.stringify(structuredError, null, 2)}`,
+  };
+
   return {
-    content: [errorContent],
-    structuredContent: structuredError,
+    content: [errorContent, structuredErrorContent],
+    // NOTE: The `structuredContent` field is intentionally commented out due to MCP SDK limitations.
+    // The current MCP SDK version does not support discriminated unions in output schemas, causing
+    // validation to fail for error responses ({ type: 'error' }) against success-only schemas.
+    //
+    // **Workaround:** Structured error details are provided as:
+    // 1. JSON string in the `content` array (for immediate visibility)
+    // 2. Metadata in the `_meta.errorMetadata` field (for programmatic access)
+    //
+    // **Action Required:** This should be revisited when the MCP SDK supports discriminated
+    // union output schemas. At that time, uncomment the line below and update tool registrations
+    // to use `createMcpOutputSchema` from types.ts.
+    // structuredContent: structuredError,
     isError: true,
     _meta: {
       // NOTE: errorMetadata is included in _meta for backward compatibility.
       // New clients should prefer using the `structuredContent` field.
       errorMetadata: metadata,
     },
-  } as CallToolResult & { structuredContent: McpStructuredError };
+  } as CallToolResult;
 }

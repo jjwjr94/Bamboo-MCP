@@ -59,6 +59,12 @@ const DEPRECATED_CTA_TYPES = [
   'VIDEO_ANNOTATION', // Deprecated video interaction type
 ];
 
+// Deprecated special ad categories
+// Source: Meta policy updates - CREDIT replaced by FINANCIAL_PRODUCTS_SERVICES as of 2024/2025
+const DEPRECATED_SPECIAL_AD_CATEGORIES = [
+  'CREDIT', // Deprecated in favor of FINANCIAL_PRODUCTS_SERVICES
+];
+
 // Note: TARGET_COST bid strategy was deprecated in v9 but is no longer in the SDK
 
 // Configuration for constants to auto-generate from Meta SDK
@@ -68,7 +74,11 @@ const constantsToGenerate = [
   { name: 'CampaignConfiguredStatus', constant: Campaign.ConfiguredStatus },
   { name: 'CampaignEffectiveStatus', constant: Campaign.EffectiveStatus },
   { name: 'CampaignBidStrategy', constant: Campaign.BidStrategy },
-  { name: 'CampaignSpecialAdCategories', constant: Campaign.SpecialAdCategories },
+  {
+    name: 'CampaignSpecialAdCategories',
+    constant: Campaign.SpecialAdCategories,
+    filterDeprecated: true,
+  },
   { name: 'AdSetBillingEvent', constant: AdSet.BillingEvent },
   { name: 'AdSetOptimizationGoal', constant: AdSet.OptimizationGoal },
   { name: 'AdSetBidStrategy', constant: AdSet.BidStrategy },
@@ -181,6 +191,24 @@ function filterDeprecatedValues(name, values) {
     return validValues;
   }
 
+  if (name === 'CampaignSpecialAdCategories') {
+    const validValues = values.filter((value) => !DEPRECATED_SPECIAL_AD_CATEGORIES.includes(value));
+    const deprecatedValues = values.filter((value) =>
+      DEPRECATED_SPECIAL_AD_CATEGORIES.includes(value)
+    );
+
+    console.info(`\n📋 ${name} Filtering Results:`);
+    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+
+    // Log deprecation mappings
+    for (const deprecated of deprecatedValues) {
+      console.info(`   ${deprecated} → FINANCIAL_PRODUCTS_SERVICES (Policy update 2024/2025)`);
+    }
+
+    return validValues;
+  }
+
   return values; // No filtering for other enums
 }
 
@@ -278,6 +306,10 @@ function generateEnumSchemaAndType(name, constant, options = {}) {
     deprecationNotice = `
 // Note: Legacy/internal CTA types like SOTTO_SUBSCRIBE, WOODHENGE_SUPPORT have been filtered out
 // These appear to be deprecated internal Meta CTA types with no current equivalent`;
+  } else if (name === 'CampaignSpecialAdCategories') {
+    deprecationNotice = `
+// Note: CREDIT category has been filtered out as it's deprecated in favor of FINANCIAL_PRODUCTS_SERVICES
+// See: Meta policy updates 2024/2025 - use FINANCIAL_PRODUCTS_SERVICES for financial products`;
   }
 
   return `${deprecationNotice}
