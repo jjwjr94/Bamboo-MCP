@@ -66,47 +66,71 @@ export function removeUndefinedProperties(obj: Record<string, unknown>): void {
 
 /**
  * Recursively removes properties starting with an underscore `_` from an object or array.
- * This is used to sanitize Meta SDK responses and prevent leaking internal properties
- * such as access tokens that are stored in `_api` objects.
+ * This helper function contains the core logic for the recursion.
  *
- * Includes depth protection to prevent stack overflows from circular references or
- * excessively deep objects. Returns a type-safe result that accurately reflects
- * the structural transformation.
- *
- * @param data The data to sanitize (object, array, or primitive)
- * @param depth The current recursion depth (internal use)
- * @returns The sanitized data with underscore properties removed
- * @throws {Error} if the maximum recursion depth is exceeded
+ * @param data The data to sanitize
+ * @param visited A WeakSet to track visited objects for circular reference detection
+ * @param depth The current recursion depth
+ * @returns The sanitized data
  */
-export function removeUnderscoreProperties<T>(data: T, depth = 0): Sanitized<T> {
+function removeUnderscorePropertiesRecursively<T>(
+  data: T,
+  visited: WeakSet<object>,
+  depth: number
+): Sanitized<T> {
+  // 1. Base case for primitives and null
+  if (data === null || typeof data !== 'object') {
+    return data as Sanitized<T>;
+  }
+
+  // 2. Protect against deep recursion
   if (depth > MAX_SANITIZATION_DEPTH) {
-    // Log details for debugging without exposing potentially sensitive data
     logger.warn('Maximum sanitization depth exceeded. Potential circular reference in object.', {
       objectType: typeof data,
       keys: typeof data === 'object' && data !== null ? Object.keys(data).slice(0, 10) : undefined,
       depth,
     });
-    throw new Error('Maximum sanitization depth exceeded, potential circular reference.');
+    // Return an empty structure to gracefully handle the issue
+    return (Array.isArray(data) ? [] : {}) as Sanitized<T>;
   }
 
+  // 3. Handle circular references
+  if (visited.has(data)) {
+    // Return an empty structure to break the cycle
+    return (Array.isArray(data) ? [] : {}) as Sanitized<T>;
+  }
+  visited.add(data);
+
+  // 4. Recursive processing
   if (Array.isArray(data)) {
     // Recursively sanitize each array element
-    return data.map((item) => removeUnderscoreProperties(item, depth + 1)) as Sanitized<T>;
+    return data.map((item) =>
+      removeUnderscorePropertiesRecursively(item, visited, depth + 1)
+    ) as Sanitized<T>;
   }
 
-  if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
-    // For objects, create a new object excluding underscore properties
-    const sanitized = {} as Record<string, unknown>;
-
-    for (const [key, value] of Object.entries(data)) {
-      if (!key.startsWith('_')) {
-        sanitized[key] = removeUnderscoreProperties(value, depth + 1);
-      }
+  // For objects, create a new object excluding underscore properties
+  const sanitized = {} as Record<string, unknown>;
+  for (const [key, value] of Object.entries(data)) {
+    if (!key.startsWith('_')) {
+      sanitized[key] = removeUnderscorePropertiesRecursively(value, visited, depth + 1);
     }
-
-    return sanitized as Sanitized<T>;
   }
+  return sanitized as Sanitized<T>;
+}
 
-  // Return primitives and null as-is
-  return data as Sanitized<T>;
+/**
+ * Recursively removes properties starting with an underscore `_` from an object or array.
+ * This is used to sanitize Meta SDK responses and prevent leaking internal properties
+ * such as access tokens that are stored in `_api` objects.
+ *
+ * Includes circular reference and depth protection to prevent stack overflows.
+ * Returns a type-safe result that accurately reflects the structural transformation.
+ *
+ * @param data The data to sanitize (object, array, or primitive)
+ * @returns The sanitized data with underscore properties removed
+ */
+export function removeUnderscoreProperties<T>(data: T): Sanitized<T> {
+  const visited = new WeakSet<object>();
+  return removeUnderscorePropertiesRecursively(data, visited, 0);
 }

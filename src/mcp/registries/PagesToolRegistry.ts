@@ -56,7 +56,6 @@ export class PagesToolRegistry implements IToolRegistry {
                 z.object({
                   id: z.string(),
                   name: z.string(),
-                  access_token: z.string().optional().nullable(),
                   category: z.string().optional().nullable(),
                   link: z.string().optional().nullable(),
                   about: z.string().optional().nullable(),

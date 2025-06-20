@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { extractAuthPayload } from '../auth/mcpAuthUtils.js';
 import { NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
@@ -17,6 +18,14 @@ export class PromptRegistry {
 
   constructor(server: McpServer) {
     this.server = server;
+  }
+
+  public getSystemPromptContent(): string | null {
+    return this.systemPromptContent;
+  }
+
+  public getBestPracticesPromptContent(): string | null {
+    return this.bestPracticesPromptContent;
   }
 
   public async initialize(): Promise<void> {
@@ -125,6 +134,84 @@ export class PromptRegistry {
       }
     );
 
-    logger.info('MCP prompts registered successfully', { count: 2 });
+    // Register system prompt as a resource
+    this.server.registerResource(
+      'system-prompt-resource',
+      'bamboo://prompts/system',
+      {
+        title: 'System Prompt Resource',
+        description:
+          'Core system instructions defining the AI agent behavior and expertise, available as a resource',
+        mimeType: 'text/markdown',
+      },
+      async (uri: URL, extra: unknown) => {
+        const authPayload = extractAuthPayload(extra);
+        logger.info('Reading system prompt resource', {
+          userId: authPayload.userId,
+          uri: uri.href,
+        });
+
+        if (this.systemPromptContent === null) {
+          logger.error('System prompt content is not cached - initialization may have failed');
+          throw new NotFoundError('System prompt resource');
+        }
+
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              name: 'system-prompt',
+              title: 'System Prompt',
+              description:
+                'Core system instructions defining the AI agent behavior and expertise for Meta advertising operations',
+              mimeType: 'text/markdown',
+              text: this.systemPromptContent,
+            },
+          ],
+        };
+      }
+    );
+
+    // Register best practices prompt as a resource
+    this.server.registerResource(
+      'best-practices-prompt-resource',
+      'bamboo://prompts/best-practices',
+      {
+        title: 'Best Practices Resource',
+        description:
+          'Comprehensive Meta Ads best practices for expert guidance, available as a resource',
+        mimeType: 'text/markdown',
+      },
+      async (uri: URL, extra: unknown) => {
+        const authPayload = extractAuthPayload(extra);
+        logger.info('Reading best practices prompt resource', {
+          userId: authPayload.userId,
+          uri: uri.href,
+        });
+
+        if (this.bestPracticesPromptContent === null) {
+          logger.error(
+            'Best practices prompt content is not cached - initialization may have failed'
+          );
+          throw new NotFoundError('Best practices prompt resource');
+        }
+
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              name: 'best-practices-prompt',
+              title: 'Best Practices Prompt',
+              description:
+                'Comprehensive Meta Ads best practices organized by vertical and campaign objective for expert guidance',
+              mimeType: 'text/markdown',
+              text: this.bestPracticesPromptContent,
+            },
+          ],
+        };
+      }
+    );
+
+    logger.info('MCP prompts and resources registered successfully', { prompts: 2, resources: 2 });
   }
 }

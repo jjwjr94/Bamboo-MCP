@@ -20,7 +20,6 @@ import { fetchUserTokenString, handleMetaApiCall, initializeMetaApi } from './ap
 const StrictPageSchema = z.object({
   id: z.string(),
   name: z.string(),
-  access_token: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   link: z.string().optional().nullable(),
   about: z.string().optional().nullable(),
@@ -59,7 +58,6 @@ export class MetaPagesHandler {
       const fields = [
         MetaPageSDK.Fields.id,
         MetaPageSDK.Fields.name,
-        MetaPageSDK.Fields.access_token,
         MetaPageSDK.Fields.category,
         MetaPageSDK.Fields.link,
         MetaPageSDK.Fields.about,

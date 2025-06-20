@@ -326,6 +326,21 @@ Retrieves Facebook Pages accessible to the authenticated user.
 - Permission information
 - Verification status
 
+**Output:**
+```json
+{
+  "pages": [
+    {
+      "id": "page_123456789",
+      "name": "My Facebook Page",
+      "category": "Community",
+      "link": "https://www.facebook.com/my-page",
+      "about": "This is a description of my page."
+    }
+  ]
+}
+```
+
 ### get_page_posts
 
 Retrieves posts from a specific Facebook Page.

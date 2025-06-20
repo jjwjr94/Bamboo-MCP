@@ -1,13 +1,17 @@
 import type { CallToolResult, TextContent } from '@modelcontextprotocol/sdk/types.js';
 import type { Sanitized } from '../types/utils.js';
 import { removeUnderscoreProperties } from '../utils/objectUtils.js';
+import { redactSensitiveData } from '../utils/securityUtils.js';
 
 /**
  * Creates a success CallToolResult with both content and structuredContent fields.
- * This function automatically sanitizes the response data by recursively removing
- * any properties starting with an underscore (`_`). This prevents leaking internal
- * SDK properties (e.g., a `_api` object containing an access token) to the model
- * or end-user.
+ * This function automatically sanitizes the response data using a multi-layer approach
+ * for defense in depth:
+ *
+ * 1.  **Redaction Layer**: Recursively finds and redacts sensitive data fields
+ *     (e.g., `access_token`, `password`, `*_secret`) to prevent leakage.
+ * 2.  **Sanitization Layer**: Recursively removes any properties starting with an
+ *     underscore (`_`) to prevent leaking internal SDK properties.
  *
  * @param data - The successful result payload as an object
  * @param description - Optional description for the response's metadata
@@ -27,8 +31,11 @@ export function createMcpSuccessResult<T>(
   data: T,
   description?: string
 ): CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> } {
-  // Sanitize the data to remove internal properties (e.g., _api with access tokens)
-  const sanitizedData = removeUnderscoreProperties(data);
+  // Layer 1: Redact known sensitive fields first.
+  const redactedData = redactSensitiveData(data);
+
+  // Layer 2: Sanitize the redacted data to remove internal properties (e.g., _api).
+  const sanitizedData = removeUnderscoreProperties(redactedData);
 
   // Wrap the data in the standardized success structure
   const successContent: McpStructuredSuccess<Sanitized<T>> = {

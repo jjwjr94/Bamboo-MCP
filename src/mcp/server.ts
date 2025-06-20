@@ -15,7 +15,11 @@ export class BambooMCPServer {
   constructor() {
     this.server = new McpServer(
       { name: 'Bamboo MCP', version: '0.1.0' },
-      { capabilities: { tools: {}, resources: { subscribe: false }, prompts: {} } }
+      {
+        capabilities: { tools: {}, resources: { subscribe: false }, prompts: {} },
+        // Instructions will be set after prompt initialization
+        instructions: undefined,
+      }
     );
     this.toolsHandler = new MetaToolsHandler();
 
@@ -40,6 +44,29 @@ export class BambooMCPServer {
    */
   public async initialize(): Promise<void> {
     await this.promptRegistry.initialize();
+
+    // Create instructions from cached prompt content
+    // This is delivered during MCP handshake, so Claude gets context immediately
+    const systemPrompt = this.promptRegistry.getSystemPromptContent();
+    const bestPractices = this.promptRegistry.getBestPracticesPromptContent();
+
+    const instructions = `# Bamboo Meta Ads AI Agent Instructions
+
+You are an expert Meta advertising specialist. Use these instructions and context for all interactions:
+
+## System Context
+${systemPrompt || 'System prompt not available'}
+
+## Best Practices
+${bestPractices || 'Best practices not available'}
+
+Use this context to provide expert guidance on Meta advertising operations, campaign optimization, and strategic recommendations.`;
+
+    // Update server with instructions - this gets sent during handshake
+    // TECHNICAL DEBT: MCP SDK v1.13.0 doesn't provide public API to update instructions post-init
+    // This private property access may break in future SDK versions
+    (this.server as any).server._instructions = instructions;
+
     // Register prompts only after content is successfully cached
     this.promptRegistry.register();
     // Add any other async initialization here in the future
