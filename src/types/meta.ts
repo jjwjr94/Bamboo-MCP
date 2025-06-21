@@ -411,7 +411,7 @@ export interface MetaBusinessUsersResponse {
 
 // SDK API Node List types for better type safety
 export interface MetaApiNode {
-  _data: any;
+  _data: unknown;
   _fields: string[];
 }
 
@@ -424,6 +424,12 @@ export interface MetaApiNodeList extends Array<MetaApiNode> {
     next?: string;
     previous?: string;
   };
+}
+
+// Standardized pagination cursor type for Meta API SDK responses
+export interface MetaPaginatedCursor<T> extends Array<T> {
+  next?: () => Promise<MetaPaginatedCursor<T>>;
+  hasNext?: () => boolean;
 }
 
 // Re-export key auto-generated types for external use

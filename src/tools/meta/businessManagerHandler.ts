@@ -1,15 +1,14 @@
-import { Business as MetaBusinessSDK } from 'facebook-nodejs-business-sdk';
+import { Business as MetaBusinessSDK, User as MetaUserSDK } from 'facebook-nodejs-business-sdk';
 import {
   MetaBusinessResponseSchema,
   MetaBusinessUserResponseSchema,
 } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
+import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_BUSINESS_USERS_TO_FETCH = 1000;
-const MAX_BUSINESS_ACCOUNTS_TO_FETCH = 100; // Most users have limited business accounts
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaBusinessManagerHandler {
   async getBusinessAccounts(authPayload: JWTPayload) {
@@ -20,43 +19,15 @@ export class MetaBusinessManagerHandler {
       const fields = 'id,name,created_time,link,verification_status,vertical,timezone_id';
 
       try {
-        const business = new MetaBusinessSDK();
-        const businessesCursor = await business.getOwnedBusinesses([fields]);
+        const businessesCursor = await new MetaUserSDK('me').getBusinesses([fields]);
 
-        // Handle pagination - fetch all pages with safety limit
-        let currentCursor = businessesCursor as any; // Cast to access pagination methods
-        const allRawBusinesses: any[] = [];
-
-        // Check if we have data in the cursor
-        if (currentCursor && typeof currentCursor === 'object' && 'data' in currentCursor) {
-          // Handle the initial response structure
-          allRawBusinesses.push(...(currentCursor.data || []));
-
-          // Check for pagination
-          while (currentCursor?.paging?.next) {
-            // Safety limit to prevent resource exhaustion
-            if (allRawBusinesses.length >= MAX_BUSINESS_ACCOUNTS_TO_FETCH) {
-              logger.warn('Reached maximum business accounts limit, truncating results', {
-                limit: MAX_BUSINESS_ACCOUNTS_TO_FETCH,
-                userId: authPayload.userId,
-              });
-              break;
-            }
-
-            // Fetch next page
-            if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-              currentCursor = await currentCursor.next();
-              if (currentCursor?.data) {
-                allRawBusinesses.push(...currentCursor.data);
-              }
-            } else {
-              break;
-            }
-          }
-        } else if (Array.isArray(currentCursor)) {
-          // Handle array response
-          allRawBusinesses.push(...currentCursor);
-        }
+        // Use the common pagination utility to handle all edge cases
+        const allRawBusinesses = await fetchAllPaginatedData<unknown>({
+          cursor: businessesCursor,
+          limit: env.META_MAX_BUSINESS_ACCOUNTS_TO_FETCH,
+          entityName: 'business accounts',
+          userId: authPayload.userId,
+        });
 
         // Validate each business account using the generated schema
         const validatedBusinesses = [];
@@ -66,7 +37,7 @@ export class MetaBusinessManagerHandler {
             validatedBusinesses.push(result.data);
           } else {
             logger.warn('Skipping invalid business account data from Meta API', {
-              businessId: business?.id || 'unknown',
+              businessId: (business as { id?: string })?.id || 'unknown',
               errors: result.error.format(),
             });
           }
@@ -116,31 +87,19 @@ export class MetaBusinessManagerHandler {
       // Get business users using the SDK with proper pagination
       const businessUsersCursor = await business.getBusinessUsers(fields);
 
-      // Handle pagination - fetch all pages with safety limit
-      let currentCursor = businessUsersCursor as any; // Cast to access pagination methods
-      const allRawUsers: any[] = [];
+      // Custom extractor to handle the _data property from the SDK response
+      const userExtractor = (userNode: unknown) =>
+        (userNode as { _data?: unknown })._data || userNode;
 
-      while (currentCursor && currentCursor.length > 0) {
-        // Extract user data from the cursor
-        const userList = Array.from(currentCursor);
-        const users = userList.map((userNode: any) => userNode._data || userNode);
-        allRawUsers.push(...users);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawUsers.length >= MAX_BUSINESS_USERS_TO_FETCH) {
-          logger.warn('Reached maximum business users limit, truncating results', {
-            limit: MAX_BUSINESS_USERS_TO_FETCH,
-            businessId: params.businessId,
-          });
-          break;
-        }
-
-        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawUsers = await fetchAllPaginatedData<unknown>({
+        cursor: businessUsersCursor,
+        limit: env.META_MAX_BUSINESS_USERS_TO_FETCH,
+        entityName: 'business users',
+        userId: authPayload.userId,
+        apiContext: { businessId: params.businessId },
+        dataExtractor: userExtractor,
+      });
 
       // Validate each user using the generated schema
       const validatedUsers = [];
@@ -150,7 +109,7 @@ export class MetaBusinessManagerHandler {
           validatedUsers.push(result.data);
         } else {
           logger.warn('Skipping invalid business user data from Meta API', {
-            userId: userData?.id || 'unknown',
+            userId: (userData as { id?: string })?.id || 'unknown',
             businessId: params.businessId,
             errors: result.error.format(),
           });

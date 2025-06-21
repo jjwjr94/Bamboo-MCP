@@ -18,6 +18,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaCampaignHandler {
   async getCampaigns(authPayload: JWTPayload, params: { adAccountId?: string }) {
@@ -49,27 +50,14 @@ export class MetaCampaignHandler {
 
       const campaignsCursor = await new MetaAdAccountSDK(adAccountId).getCampaigns(fields);
 
-      // Handle pagination - fetch all pages with safety limit
-      let currentCursor = campaignsCursor as any; // Cast to access pagination methods
-      const allRawCampaigns: any[] = [];
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawCampaigns.push(...currentCursor);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawCampaigns.length >= env.META_MAX_CAMPAIGNS_TO_FETCH) {
-          logger.warn('Reached maximum campaigns limit, truncating results', {
-            limit: env.META_MAX_CAMPAIGNS_TO_FETCH,
-          });
-          break;
-        }
-
-        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawCampaigns = await fetchAllPaginatedData<unknown>({
+        cursor: campaignsCursor,
+        limit: env.META_MAX_CAMPAIGNS_TO_FETCH,
+        entityName: 'campaigns',
+        userId: authPayload.userId,
+        apiContext: { adAccountId },
+      });
 
       // Validate each campaign using the auto-generated schema
       const validatedCampaigns: z.infer<typeof MetaCampaignResponseSchema>[] = [];
@@ -246,6 +234,7 @@ export class MetaCampaignHandler {
 
       const result = {
         success: true, // Keep this as it indicates the outcome of the delete operation itself
+        campaignId: params.campaignId,
       };
 
       return createMcpSuccessResult(result, `Campaign ${params.campaignId} deleted successfully`);

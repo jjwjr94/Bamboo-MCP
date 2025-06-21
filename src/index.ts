@@ -19,7 +19,7 @@ export async function build(opts = {}) {
   const app = Fastify({
     // logger: true,
     logger: {
-      level: 'debug'
+      level: 'debug',
     },
     ...opts,
   });

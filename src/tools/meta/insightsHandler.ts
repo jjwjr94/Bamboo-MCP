@@ -13,18 +13,20 @@ import type {
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_INSIGHTS_TO_FETCH = 10000; // Insights can have many data points, so higher limit
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 // Since our friendly names match the API field names, no mapping is needed
 
 export class MetaInsightsHandler {
   private async fetchInsights(
     apiObject: MetaAdAccountSDK | MetaCampaignSDK | MetaAdSetSDK | MetaAdSDK,
-    params: GetAdInsightsInput | GetAdAccountInsightsInput
+    params: GetAdInsightsInput | GetAdAccountInsightsInput,
+    userId: string
   ) {
     // The metrics and breakdowns are already validated by Zod
     const fields = params.metrics;
@@ -48,36 +50,15 @@ export class MetaInsightsHandler {
     removeUndefinedProperties(apiParams);
 
     // Get insights using the SDK
-    let insightsCursor = await apiObject.getInsights(fields, apiParams);
-    const allRawInsights: unknown[] = [];
+    const insightsCursor = await apiObject.getInsights(fields, apiParams);
 
-    // Handle pagination - fetch all pages with safety limit
-    while (insightsCursor && Array.isArray(insightsCursor) && insightsCursor.length > 0) {
-      allRawInsights.push(...insightsCursor);
-
-      // Safety limit to prevent excessive data retrieval
-      if (allRawInsights.length >= MAX_INSIGHTS_TO_FETCH) {
-        logger.warn('Reached maximum insights limit, truncating results', {
-          limit: MAX_INSIGHTS_TO_FETCH,
-        });
-        break;
-      }
-
-      // Check if there's more data using the cursor's next method
-      if (
-        typeof (insightsCursor as any).hasNext === 'function' &&
-        (insightsCursor as any).hasNext()
-      ) {
-        insightsCursor = await (insightsCursor as any).next();
-      } else {
-        break;
-      }
-    }
-
-    // If insightsCursor is not an array, treat it as a single page
-    if (insightsCursor && !Array.isArray(insightsCursor)) {
-      allRawInsights.push(insightsCursor);
-    }
+    // Use the common pagination utility to handle all edge cases
+    const allRawInsights = await fetchAllPaginatedData<unknown>({
+      cursor: insightsCursor,
+      limit: env.META_MAX_INSIGHTS_TO_FETCH,
+      entityName: 'insights',
+      userId,
+    });
 
     const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
     for (const insight of allRawInsights) {
@@ -112,11 +93,14 @@ export class MetaInsightsHandler {
         apiObject = new MetaCampaignSDK(campaignId);
         objectName = `Campaign (${campaignId})`;
       } else {
-        // This case is handled by the initial check, but satisfies TypeScript.
-        throw new Error('Unreachable code');
+        // This case is theoretically handled by Zod input validation,
+        // but this provides a clear, consistent runtime error.
+        throw new ValidationError(
+          'Either campaignId, adSetId, or adId must be provided to fetch ad insights.'
+        );
       }
 
-      const insights = await this.fetchInsights(apiObject, params);
+      const insights = await this.fetchInsights(apiObject, params, authPayload.userId);
       return createMcpSuccessResult(
         { insights },
         `Retrieved ${insights.length} insight records for ${objectName}`
@@ -135,7 +119,7 @@ export class MetaInsightsHandler {
       );
       const apiObject = new MetaAdAccountSDK(adAccountId);
 
-      const insights = await this.fetchInsights(apiObject, params);
+      const insights = await this.fetchInsights(apiObject, params, authPayload.userId);
       return createMcpSuccessResult(
         { insights },
         `Retrieved ${insights.length} insight records for Ad Account (${adAccountId})`

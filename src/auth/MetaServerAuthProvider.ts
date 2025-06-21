@@ -148,7 +148,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       await this.sessionManager.storeSessionData(state, sessionData);
 
       // Redirect to Meta OAuth with the granted Facebook API scopes
-      const metaAuthUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth');
+      const metaAuthUrl = new URL(`https://www.facebook.com/${env.META_API_VERSION}/dialog/oauth`);
       metaAuthUrl.searchParams.append('client_id', env.FACEBOOK_APP_ID);
       metaAuthUrl.searchParams.append('redirect_uri', env.FACEBOOK_CALLBACK_URL);
       metaAuthUrl.searchParams.append('state', state);

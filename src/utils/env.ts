@@ -11,6 +11,7 @@ const envSchema = z.object({
   FACEBOOK_APP_ID: z.string(),
   FACEBOOK_APP_SECRET: z.string(),
   FACEBOOK_CALLBACK_URL: z.string().url(),
+  META_API_VERSION: z.string().default('v22.0'),
 
   // OAuth Scopes (comprehensive Meta API access)
   FACEBOOK_OAUTH_SCOPES: z
@@ -58,6 +59,12 @@ const envSchema = z.object({
   META_MAX_ADSETS_TO_FETCH: z.string().transform(Number).default('1000'),
   META_MAX_CREATIVES_TO_FETCH: z.string().transform(Number).default('1000'),
   META_MAX_INSIGHTS_TO_FETCH: z.string().transform(Number).default('10000'),
+  META_MAX_AD_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
+  META_MAX_BUSINESS_USERS_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_BUSINESS_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
+  META_MAX_AUDIENCES_TO_FETCH: z.string().transform(Number).default('1000'),
+  META_MAX_PAGES_TO_FETCH: z.string().transform(Number).default('100'),
+  META_MAX_POSTS_TO_FETCH: z.string().transform(Number).default('500'),
   MAX_RECURSION_DEPTH: z.string().transform(Number).default('20'),
   MAX_REDACTION_DEPTH: z.string().transform(Number).default('20'),
 });

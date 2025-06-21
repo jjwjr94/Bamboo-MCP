@@ -13,12 +13,12 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_CREATIVES_TO_FETCH = 1000;
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaAdCreativeHandler {
   async getAdCreatives(authPayload: JWTPayload, params: { adAccountId?: string }) {
@@ -44,27 +44,14 @@ export class MetaAdCreativeHandler {
 
       const creativesCursor = await new MetaAdAccountSDK(adAccountId).getAdCreatives(fields);
 
-      // Handle pagination - fetch all pages with safety limit
-      let currentCursor = creativesCursor as any; // Cast to access pagination methods
-      const allRawCreatives: any[] = [];
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawCreatives.push(...currentCursor);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawCreatives.length >= MAX_CREATIVES_TO_FETCH) {
-          logger.warn('Reached maximum ad creatives limit, truncating results', {
-            limit: MAX_CREATIVES_TO_FETCH,
-          });
-          break;
-        }
-
-        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawCreatives = await fetchAllPaginatedData<unknown>({
+        cursor: creativesCursor,
+        limit: env.META_MAX_CREATIVES_TO_FETCH,
+        entityName: 'ad creatives',
+        userId: authPayload.userId,
+        apiContext: { adAccountId },
+      });
 
       const validatedCreatives: z.infer<typeof MetaAdCreativeResponseSchema>[] = [];
       for (const creative of allRawCreatives) {
@@ -110,9 +97,13 @@ export class MetaAdCreativeHandler {
       // Treat response as unknown and validate
       const validationResult = MetaCreateSuccessResponseSchema.safeParse(creative);
       if (!validationResult.success) {
-        const errorMessage = 'Failed to create ad creative: Invalid response from Meta API.';
-        logger.error(errorMessage, { validationErrors: validationResult.error.format() });
-        throw new ValidationError(errorMessage);
+        logger.warn('Invalid createAdCreative response from Meta API', {
+          response: creative,
+          errors: validationResult.error.errors,
+        });
+        throw new ValidationError(
+          'Meta API returned an invalid response after creating the ad creative. The operation status is uncertain.'
+        );
       }
 
       const adCreativeId = validationResult.data.id;
@@ -142,9 +133,14 @@ export class MetaAdCreativeHandler {
       // Treat response as unknown and validate
       const validationResult = MetaUpdateSuccessResponseSchema.safeParse(updateResponse);
       if (!validationResult.success) {
-        const errorMessage = 'Failed to update ad creative: Invalid response from Meta API.';
-        logger.error(errorMessage, { validationErrors: validationResult.error.format() });
-        throw new ValidationError(errorMessage);
+        logger.warn('Invalid updateAdCreative response from Meta API', {
+          adCreativeId: params.adCreativeId,
+          response: updateResponse,
+          errors: validationResult.error.errors,
+        });
+        throw new ValidationError(
+          `Meta API returned an invalid response after updating ad creative ${params.adCreativeId}. The operation status is uncertain.`
+        );
       }
 
       const result = {
@@ -178,9 +174,14 @@ export class MetaAdCreativeHandler {
       // Treat response as unknown and validate
       const validationResult = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
       if (!validationResult.success) {
-        const errorMessage = 'Failed to delete ad creative: Invalid response from Meta API.';
-        logger.error(errorMessage, { validationErrors: validationResult.error.format() });
-        throw new ValidationError(errorMessage);
+        logger.warn('Invalid deleteAdCreative response from Meta API', {
+          adCreativeId: params.adCreativeId,
+          response: deleteResponse,
+          errors: validationResult.error.errors,
+        });
+        throw new ValidationError(
+          `Meta API returned an invalid response after deleting ad creative ${params.adCreativeId}. The operation status is uncertain.`
+        );
       }
 
       const result = {

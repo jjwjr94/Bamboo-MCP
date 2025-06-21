@@ -6,12 +6,12 @@ import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import { AuthenticationError } from '../../utils/errors.js';
+import { env } from '../../utils/env.js';
+import { TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { MetaApiService } from './ApiService.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_AD_ACCOUNTS_TO_FETCH = 100; // Most users have limited ad accounts
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaAdAccountHandler {
   private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
@@ -62,7 +62,7 @@ export class MetaAdAccountHandler {
     });
 
     if (!tokenAndMetaId.length || !tokenAndMetaId[0].accessToken || !tokenAndMetaId[0].metaUserId) {
-      throw new AuthenticationError(
+      throw new TokenError(
         'Could not find a valid Meta access token or Meta User ID for the user.'
       );
     }
@@ -81,28 +81,13 @@ export class MetaAdAccountHandler {
       // Get ad accounts using the SDK with proper pagination
       const adAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
 
-      // Handle pagination - fetch all pages with safety limit
-      let currentCursor = adAccountsCursor as any; // Cast to access pagination methods
-      const allRawAccounts: any[] = [];
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawAccounts.push(...currentCursor);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawAccounts.length >= MAX_AD_ACCOUNTS_TO_FETCH) {
-          logger.warn('Reached maximum ad accounts limit, truncating results', {
-            limit: MAX_AD_ACCOUNTS_TO_FETCH,
-            userId: authPayload.userId,
-          });
-          break;
-        }
-
-        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawAccounts = await fetchAllPaginatedData<unknown>({
+        cursor: adAccountsCursor,
+        limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
+        entityName: 'ad accounts',
+        userId: authPayload.userId,
+      });
 
       // Validate each account using the auto-generated schema
       const validatedAccounts: z.infer<typeof MetaAdAccountResponseSchema>[] = [];
@@ -180,8 +165,21 @@ export class MetaAdAccountHandler {
           };
         });
 
-        // Await all parallel operations to complete
-        const finalAccountsWithPermissions = await Promise.all(permissionUpdatePromises);
+        // Await all parallel operations to complete using Promise.allSettled for resilience
+        const permissionUpdateResults = await Promise.allSettled(permissionUpdatePromises);
+
+        const finalAccountsWithPermissions = [];
+        for (const result of permissionUpdateResults) {
+          if (result.status === 'fulfilled') {
+            finalAccountsWithPermissions.push(result.value);
+          } else {
+            // Log the failure for the specific account but don't fail the whole operation
+            logger.error('Failed to process permissions for an ad account', {
+              userId: authPayload.userId,
+              reason: result.reason instanceof Error ? result.reason.message : result.reason,
+            });
+          }
+        }
 
         return finalAccountsWithPermissions;
       });

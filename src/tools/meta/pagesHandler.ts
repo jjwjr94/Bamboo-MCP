@@ -6,44 +6,21 @@ import {
   Page as MetaPageSDK,
   User as MetaUserSDK,
 } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
-import { MetaCreateSuccessResponseSchema } from '../../generated/schemas.js';
+import type { z } from 'zod';
+import {
+  MetaCreateSuccessResponseSchema,
+  MetaPagePostResponseSchema,
+  MetaPageResponseSchema,
+} from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
 import { AuthorizationError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { fetchUserTokenString, handleMetaApiCall, initializeMetaApi } from './api.js';
-
-// Schema for an individual Page, matching the tool's output
-const StrictPageSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  category: z.string().optional().nullable(),
-  link: z.string().optional().nullable(),
-  about: z.string().optional().nullable(),
-});
-
-// Schema for an individual Page Post, matching the tool's output
-const StrictPagePostSchema = z.object({
-  id: z.string(),
-  message: z.string().optional().nullable(),
-  created_time: z.string().optional().nullable(),
-  permalink_url: z.string().optional().nullable(),
-  full_picture: z.string().optional().nullable(),
-  story: z.string().optional().nullable(),
-  status_type: z.string().optional().nullable(),
-});
-
-// Type for the cursor to improve type safety
-interface PaginatedCursor<T> extends Array<T> {
-  next?: () => Promise<PaginatedCursor<T>>;
-  hasNext?: () => boolean;
-}
-
-const MAX_PAGES_TO_FETCH = 100;
-const MAX_POSTS_TO_FETCH = 500;
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaPagesHandler {
   /**
@@ -65,33 +42,18 @@ export class MetaPagesHandler {
 
       const pagesCursor = await new MetaUserSDK('me').getAccounts(fields);
 
-      // Handle pagination with improved type safety and fetch limit
-      const allRawPages: unknown[] = [];
-      let currentCursor: PaginatedCursor<unknown> = pagesCursor;
+      // Use the common pagination utility to handle all edge cases
+      const allRawPages = await fetchAllPaginatedData<unknown>({
+        cursor: pagesCursor,
+        limit: env.META_MAX_PAGES_TO_FETCH,
+        entityName: 'pages',
+        userId: authPayload.userId,
+      });
 
-      while (currentCursor && currentCursor.length > 0) {
-        allRawPages.push(...currentCursor);
-
-        if (allRawPages.length >= MAX_PAGES_TO_FETCH) {
-          logger.warn('Reached maximum pages fetch limit', {
-            limit: MAX_PAGES_TO_FETCH,
-            userId: authPayload.userId,
-          });
-          break;
-        }
-
-        // Check for pagination
-        if (typeof currentCursor.next === 'function' && currentCursor.hasNext?.()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
-
-      // Validate and transform the response
-      const validatedPages: z.infer<typeof StrictPageSchema>[] = [];
+      // Validate and transform the response using auto-generated schema
+      const validatedPages: z.infer<typeof MetaPageResponseSchema>[] = [];
       for (const page of allRawPages) {
-        const result = StrictPageSchema.safeParse(page);
+        const result = MetaPageResponseSchema.safeParse(page);
         if (result.success) {
           validatedPages.push(result.data);
         } else {
@@ -160,34 +122,19 @@ export class MetaPagesHandler {
 
         const postsCursor = await new MetaPageSDK(params.pageId).getPosts(fields);
 
-        // Handle pagination with improved type safety and fetch limit
-        const allRawPosts: unknown[] = [];
-        let currentCursor: PaginatedCursor<unknown> = postsCursor;
+        // Use the common pagination utility to handle all edge cases
+        const allRawPosts = await fetchAllPaginatedData<unknown>({
+          cursor: postsCursor,
+          limit: env.META_MAX_POSTS_TO_FETCH,
+          entityName: 'page posts',
+          userId: authPayload.userId,
+          apiContext: { pageId: params.pageId },
+        });
 
-        while (currentCursor && currentCursor.length > 0) {
-          allRawPosts.push(...currentCursor);
-
-          if (allRawPosts.length >= MAX_POSTS_TO_FETCH) {
-            logger.warn('Reached maximum posts fetch limit', {
-              limit: MAX_POSTS_TO_FETCH,
-              userId: authPayload.userId,
-              pageId: params.pageId,
-            });
-            break;
-          }
-
-          // Check for pagination
-          if (typeof currentCursor.next === 'function' && currentCursor.hasNext?.()) {
-            currentCursor = await currentCursor.next();
-          } else {
-            break;
-          }
-        }
-
-        // Validate and transform the response
-        const validatedPosts: z.infer<typeof StrictPagePostSchema>[] = [];
+        // Validate and transform the response using auto-generated schema
+        const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
         for (const post of allRawPosts) {
-          const result = StrictPagePostSchema.safeParse(post);
+          const result = MetaPagePostResponseSchema.safeParse(post);
           if (result.success) {
             validatedPosts.push(result.data);
           } else {

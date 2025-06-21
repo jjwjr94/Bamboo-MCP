@@ -2,6 +2,7 @@ import {
   AdAccount as MetaAdAccountSDK,
   Ad as MetaAdSDK,
   AdSet as MetaAdSetSDK,
+  Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
 import {
@@ -19,6 +20,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaAdHandler {
   async getAds(
@@ -52,7 +54,7 @@ export class MetaAdHandler {
       } else if (params.campaignId) {
         // Get ads from a specific campaign
         logger.info('Fetching ads for campaign', { campaignId: params.campaignId });
-        adsCursor = await new MetaAdSetSDK(params.campaignId).getAds(fields);
+        adsCursor = await new MetaCampaignSDK(params.campaignId).getAds(fields);
       } else {
         // Get ads from ad account
         const adAccountId =
@@ -63,29 +65,14 @@ export class MetaAdHandler {
         // Meta API handles business context automatically via ad account
         adsCursor = await new MetaAdAccountSDK(adAccountId).getAds(fields);
       }
-
-      // The Meta SDK cursor is an array-like object for the first page.
-      // We'll process the first page and then loop if more pages exist.
-      let currentCursor = adsCursor as any; // Cast to any to access pagination methods
-      const allRawAds: any[] = [];
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawAds.push(...currentCursor);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawAds.length >= env.META_MAX_ADS_TO_FETCH) {
-          logger.warn('Reached maximum ads limit, truncating results', {
-            limit: env.META_MAX_ADS_TO_FETCH,
-          });
-          break;
-        }
-
-        if (currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawAds = await fetchAllPaginatedData<unknown>({
+        cursor: adsCursor,
+        limit: env.META_MAX_ADS_TO_FETCH,
+        entityName: 'ads',
+        userId: authPayload.userId,
+        apiContext: { ...params },
+      });
 
       const validatedAds: z.infer<typeof MetaAdResponseSchema>[] = [];
       // Use allRawAds which contains results from all pages

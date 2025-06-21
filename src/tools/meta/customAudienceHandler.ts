@@ -12,18 +12,25 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CustomAudienceRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
-// Type for the cursor to improve type safety
-interface PaginatedCursor<T> extends Array<T> {
-  next?: () => Promise<PaginatedCursor<T>>;
-  hasNext?: () => boolean;
-}
-
-const MAX_AUDIENCES_TO_FETCH = 1000;
+// Module-level constants for better performance and readability
+const CUSTOM_AUDIENCE_FIELDS = [
+  MetaCustomAudienceSDK.Fields.id,
+  MetaCustomAudienceSDK.Fields.name,
+  MetaCustomAudienceSDK.Fields.description,
+  MetaCustomAudienceSDK.Fields.subtype,
+  MetaCustomAudienceSDK.Fields.approximate_count_lower_bound,
+  MetaCustomAudienceSDK.Fields.approximate_count_upper_bound,
+  MetaCustomAudienceSDK.Fields.time_updated,
+  MetaCustomAudienceSDK.Fields.retention_days,
+  MetaCustomAudienceSDK.Fields.customer_file_source,
+];
 
 export class MetaCustomAudienceHandler {
   /**
@@ -38,43 +45,19 @@ export class MetaCustomAudienceHandler {
     await initializeMetaApi(authPayload.userId);
 
     return handleMetaApiCall(async () => {
-      const fields = [
-        MetaCustomAudienceSDK.Fields.id,
-        MetaCustomAudienceSDK.Fields.name,
-        MetaCustomAudienceSDK.Fields.description,
-        MetaCustomAudienceSDK.Fields.subtype,
-        MetaCustomAudienceSDK.Fields.approximate_count_lower_bound,
-        MetaCustomAudienceSDK.Fields.approximate_count_upper_bound,
-        MetaCustomAudienceSDK.Fields.time_updated,
-        MetaCustomAudienceSDK.Fields.retention_days,
-        MetaCustomAudienceSDK.Fields.customer_file_source,
-      ];
+      const audiencesCursor = await new MetaAdAccountSDK(adAccountId).getCustomAudiences(
+        CUSTOM_AUDIENCE_FIELDS
+      );
 
-      const audiencesCursor = await new MetaAdAccountSDK(adAccountId).getCustomAudiences(fields);
-
-      // Handle pagination with improved type safety and fetch limit
-      const allRawAudiences: unknown[] = [];
-      let currentCursor: PaginatedCursor<unknown> = audiencesCursor;
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawAudiences.push(...currentCursor);
-
-        if (allRawAudiences.length >= MAX_AUDIENCES_TO_FETCH) {
-          logger.warn('Reached maximum audience fetch limit', {
-            limit: MAX_AUDIENCES_TO_FETCH,
-            userId: authPayload.userId,
-            adAccountId,
-          });
-          break;
-        }
-
-        // Check for pagination
-        if (typeof currentCursor.next === 'function' && currentCursor.hasNext?.()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawAudiences = await fetchAllPaginatedData<unknown>({
+        cursor: audiencesCursor,
+        limit: env.META_MAX_AUDIENCES_TO_FETCH,
+        entityName: 'custom audiences',
+        userId: authPayload.userId,
+        apiContext: { adAccountId },
+        dataExtractor: (audience: unknown) => (audience as { _data?: unknown })._data,
+      });
 
       // Validate and transform the response
       const validatedAudiences: z.infer<

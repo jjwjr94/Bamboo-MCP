@@ -26,7 +26,7 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
       this.registerGetBusinessAccounts.bind(this),
       this.registerGetBusinessUsers.bind(this),
 
-      // TESTING ONLY 
+      // TESTING ONLY
       this.registerTestTool.bind(this),
     ];
   }
@@ -51,7 +51,6 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
 
     logger.info('Business Manager MCP tools registered', { count: this.getToolCount() });
   }
-
 
   private registerTestTool(): void {
     const outputSchema = z.object({

@@ -1,6 +1,7 @@
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { and, eq, isNull } from 'drizzle-orm';
 import { env } from '../utils/env.js';
+import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { db, withUserContext } from './client.js';
 import { oauthClients, oauthRefreshTokens, oauthTokens, users } from './schema.js';
@@ -181,7 +182,7 @@ export class OAuthDatabaseService {
         // Potential breach: an invalid token was used. Revoke the entire family.
         await this.revokeTokenFamily(storedToken.userId, clientId);
       }
-      throw new Error('Invalid refresh token');
+      throw new TokenError('Invalid refresh token');
     }
     return storedToken;
   }

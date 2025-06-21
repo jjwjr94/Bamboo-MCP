@@ -14,11 +14,12 @@ import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { env } from '../../utils/env.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
-
-const MAX_ADSETS_TO_FETCH = 1000;
+import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaAdSetHandler {
   async getAdSets(authPayload: JWTPayload, params: { campaignId?: string; adAccountId?: string }) {
@@ -48,7 +49,7 @@ export class MetaAdSetHandler {
         MetaAdSetSDK.Fields.promoted_object,
       ];
 
-      let adSetsCursor: any;
+      let adSetsCursor: unknown;
 
       if (params.campaignId) {
         // Get ad sets from a specific campaign
@@ -63,27 +64,14 @@ export class MetaAdSetHandler {
         adSetsCursor = await new MetaAdAccountSDK(adAccountId).getAdSets(fields);
       }
 
-      // Handle pagination - fetch all pages with safety limit
-      let currentCursor = adSetsCursor as any; // Cast to access pagination methods
-      const allRawAdSets: any[] = [];
-
-      while (currentCursor && currentCursor.length > 0) {
-        allRawAdSets.push(...currentCursor);
-
-        // Safety limit to prevent resource exhaustion
-        if (allRawAdSets.length >= MAX_ADSETS_TO_FETCH) {
-          logger.warn('Reached maximum ad sets limit, truncating results', {
-            limit: MAX_ADSETS_TO_FETCH,
-          });
-          break;
-        }
-
-        if (typeof currentCursor.hasNext === 'function' && currentCursor.hasNext()) {
-          currentCursor = await currentCursor.next();
-        } else {
-          break;
-        }
-      }
+      // Use the common pagination utility to handle all edge cases
+      const allRawAdSets = await fetchAllPaginatedData<unknown>({
+        cursor: adSetsCursor,
+        limit: env.META_MAX_ADSETS_TO_FETCH,
+        entityName: 'ad sets',
+        userId: authPayload.userId,
+        apiContext: { campaignId: params.campaignId, adAccountId: params.adAccountId },
+      });
 
       // Validate each ad set using the auto-generated schema
       const validatedAdSets: z.infer<typeof MetaAdSetResponseSchema>[] = [];
@@ -143,7 +131,9 @@ export class MetaAdSetHandler {
           response: adSet,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to create ad set: Invalid response from Meta API.');
+        throw new ValidationError(
+          'Meta API returned an invalid response after creating the ad set. The operation status is uncertain.'
+        );
       }
 
       const adSetId = validationResult.data.id;
@@ -203,7 +193,9 @@ export class MetaAdSetHandler {
           response: updateResponse,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to update ad set: Invalid response from Meta API.');
+        throw new ValidationError(
+          'Meta API returned an invalid response after updating the ad set. The operation status is uncertain.'
+        );
       }
 
       logger.info('Ad set updated successfully', { adSetId: params.adSetId });
@@ -233,7 +225,9 @@ export class MetaAdSetHandler {
           response: deleteResponse,
           errors: validationResult.error.errors,
         });
-        throw new Error('Failed to delete ad set: Invalid response from Meta API.');
+        throw new ValidationError(
+          'Meta API returned an invalid response after deleting the ad set. The operation status is uncertain.'
+        );
       }
 
       logger.info('Ad set deleted successfully', { adSetId: params.adSetId });
