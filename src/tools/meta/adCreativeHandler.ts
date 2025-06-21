@@ -17,14 +17,16 @@ import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaAdCreativeHandler {
   async getAdCreatives(authPayload: JWTPayload, params: { adAccountId?: string }) {
     logger.info('Executing get_ad_creatives', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
+
     return await handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const adAccountId =
         params.adAccountId ||
         (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
@@ -42,7 +44,9 @@ export class MetaAdCreativeHandler {
         MetaAdCreativeSDK.Fields.link_url,
       ];
 
-      const creativesCursor = await new MetaAdAccountSDK(adAccountId).getAdCreatives(fields);
+      const creativesCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAdCreatives(
+        fields
+      );
 
       // Use the common pagination utility to handle all edge cases
       const allRawCreatives = await fetchAllPaginatedData<unknown>({
@@ -66,7 +70,7 @@ export class MetaAdCreativeHandler {
         }
       }
 
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         { adCreatives: validatedCreatives },
         `Retrieved ${validatedCreatives.length} ad creatives`
       );
@@ -78,8 +82,10 @@ export class MetaAdCreativeHandler {
     params: CreateAdCreativeRequest & { adAccountId?: string }
   ) {
     logger.info('Executing create_ad_creative', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
+
     return await handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const adAccountId =
         params.adAccountId ||
         (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
@@ -92,7 +98,10 @@ export class MetaAdCreativeHandler {
       // Ensure no undefined values are passed to Meta API
       removeUndefinedProperties(creativeData);
 
-      const creative = await new MetaAdAccountSDK(adAccountId).createAdCreative([], creativeData);
+      const creative = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAdCreative(
+        [],
+        creativeData
+      );
 
       // Treat response as unknown and validate
       const validationResult = MetaCreateSuccessResponseSchema.safeParse(creative);
@@ -111,7 +120,7 @@ export class MetaAdCreativeHandler {
         adCreativeId: adCreativeId,
         name: params.name,
       };
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         result,
         `Ad creative "${params.name}" created successfully with ID: ${adCreativeId}`
       );
@@ -120,14 +129,16 @@ export class MetaAdCreativeHandler {
 
   async updateAdCreative(authPayload: JWTPayload, params: { adCreativeId: string; name: string }) {
     logger.info('Executing update_ad_creative', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
+
     return await handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const updateData = { [MetaAdCreativeSDK.Fields.name]: params.name };
 
       // Ensure no undefined values are passed to Meta API
       removeUndefinedProperties(updateData);
 
-      const creative = new MetaAdCreativeSDK(params.adCreativeId);
+      const creative = new MetaAdCreativeSDK(params.adCreativeId, {}, null, api);
       const updateResponse = await creative.update([], updateData);
 
       // Treat response as unknown and validate
@@ -147,7 +158,7 @@ export class MetaAdCreativeHandler {
         adCreativeId: params.adCreativeId,
         updatedFields: Object.keys(updateData), // Make this dynamic
       };
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         result,
         `Ad creative ${params.adCreativeId} updated successfully`
       );
@@ -159,8 +170,10 @@ export class MetaAdCreativeHandler {
     params: { adCreativeId: string; confirmPermanentDelete?: boolean }
   ) {
     logger.info('Executing delete_ad_creative', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
+
     return await handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       // Safety check: require explicit confirmation for permanent deletion
       if (!params.confirmPermanentDelete) {
         throw new ValidationError(
@@ -168,7 +181,7 @@ export class MetaAdCreativeHandler {
         );
       }
 
-      const creative = new MetaAdCreativeSDK(params.adCreativeId);
+      const creative = new MetaAdCreativeSDK(params.adCreativeId, {}, null, api);
       const deleteResponse = await creative.delete([]);
 
       // Treat response as unknown and validate
@@ -187,7 +200,7 @@ export class MetaAdCreativeHandler {
       const result = {
         adCreativeId: params.adCreativeId,
       };
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         result,
         `Ad creative ${params.adCreativeId} deleted successfully`
       );

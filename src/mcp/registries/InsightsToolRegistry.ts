@@ -75,9 +75,10 @@ export class InsightsToolRegistry implements IToolRegistry {
       .array(z.enum(VALID_METRICS))
       .default(DEFAULT_METRICS)
       .describe('List of metrics to retrieve.'),
-    breakdowns: AdsInsightsBreakdownsSchema.optional().describe(
-      'Breakdown dimensions for the insights.'
-    ),
+    breakdowns: z
+      .array(AdsInsightsBreakdownsSchema)
+      .optional()
+      .describe('Breakdown dimensions for the insights.'),
     limit: z
       .number()
       .int()
@@ -128,9 +129,10 @@ export class InsightsToolRegistry implements IToolRegistry {
       .array(z.enum(VALID_METRICS))
       .default(DEFAULT_METRICS)
       .describe('List of metrics to retrieve.'),
-    breakdowns: AdsInsightsBreakdownsSchema.optional().describe(
-      'Breakdown dimensions for the insights.'
-    ),
+    breakdowns: z
+      .array(AdsInsightsBreakdownsSchema)
+      .optional()
+      .describe('Breakdown dimensions for the insights.'),
     limit: z
       .number()
       .int()

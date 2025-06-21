@@ -97,6 +97,14 @@ const envSchema = z.object({
   META_MAX_POSTS_TO_FETCH: z.string().transform(Number).default('500'),
   MAX_RECURSION_DEPTH: z.string().transform(Number).default('20'),
   MAX_REDACTION_DEPTH: z.string().transform(Number).default('20'),
+
+  // Image fetching configuration
+  IMAGE_FETCH_ENABLED: z
+    .string()
+    .transform((val) => val !== 'false')
+    .default('true'),
+  IMAGE_FETCH_TIMEOUT_MS: z.string().transform(Number).default('10000'),
+  IMAGE_MAX_SIZE_BYTES: z.string().transform(Number).default('2097152'), // 2MB
 });
 
 export const env = envSchema.parse(process.env);

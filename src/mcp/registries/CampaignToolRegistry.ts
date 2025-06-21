@@ -179,10 +179,7 @@ export class CampaignToolRegistry implements IToolRegistry {
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to update.'),
           name: z.string().optional().describe('New name for the campaign.'),
-          status: z
-            .enum(['ACTIVE', 'PAUSED', 'DELETED'])
-            .optional()
-            .describe('New status for the campaign.'),
+          status: CampaignStatusSchema.optional().describe('New status for the campaign.'),
           dailyBudget: z
             .number()
             .int()

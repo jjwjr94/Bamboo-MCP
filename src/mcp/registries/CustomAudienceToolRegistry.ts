@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   CustomAudienceCustomerFileSourceSchema,
-  CustomAudienceSubtypeSchema,
   MetaCustomAudienceResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
@@ -102,7 +101,9 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
               "The ad account ID (e.g., 'act_12345'). If not provided, the selected account will be used."
             ),
           name: z.string().describe('The name of the custom audience.'),
-          subtype: CustomAudienceSubtypeSchema.describe('The subtype of the audience.'),
+          subtype: z
+            .literal('CUSTOM')
+            .describe("The audience subtype. Must be 'CUSTOM' for list-based audiences."),
           description: z.string().optional().describe('A description for the audience.'),
           customerFileSource: CustomAudienceCustomerFileSourceSchema.optional().describe(
             'The source of the customer data.'

@@ -6,124 +6,243 @@ import {
 } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
 import { MetaAdsInsightsResponseSchema } from '../../generated/schemas.js';
-import type {
-  GetAdAccountInsightsInput,
-  GetAdInsightsInput,
-} from '../../mcp/registries/InsightsToolRegistry.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
-import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 
-// Since our friendly names match the API field names, no mapping is needed
+// Define a lightweight interface for SDK objects that support the getInsights call
+interface InsightsGetter {
+  getInsights(fields: string[], params: Record<string, unknown>): Promise<unknown>;
+}
 
 export class MetaInsightsHandler {
-  private async fetchInsights(
-    apiObject: MetaAdAccountSDK | MetaCampaignSDK | MetaAdSetSDK | MetaAdSDK,
-    params: GetAdInsightsInput | GetAdAccountInsightsInput,
-    userId: string
-  ) {
-    // The metrics and breakdowns are already validated by Zod
-    const fields = params.metrics;
-
-    // Build complete API parameters object using build-then-sanitize pattern
-    const apiParams: Record<string, unknown> = {
-      level: (params as GetAdInsightsInput).adId
-        ? 'ad'
-        : (params as GetAdInsightsInput).adSetId
-          ? 'adset'
-          : (params as GetAdInsightsInput).campaignId
-            ? 'campaign'
-            : 'account',
-      limit: params.limit ?? 250,
-      breakdowns: params.breakdowns && params.breakdowns.length > 0 ? params.breakdowns : undefined,
-      time_range: params.timeRange,
-      date_preset: params.timeRange ? undefined : params.datePreset || 'last_30d',
-    };
-
-    // Ensure no undefined values are passed to Meta API
-    removeUndefinedProperties(apiParams);
-
-    // Get insights using the SDK
-    const insightsCursor = await apiObject.getInsights(fields, apiParams);
-
-    // Use the common pagination utility to handle all edge cases
-    const allRawInsights = await fetchAllPaginatedData<unknown>({
-      cursor: insightsCursor,
-      limit: env.META_MAX_INSIGHTS_TO_FETCH,
-      entityName: 'insights',
-      userId,
-    });
-
-    const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
-    for (const insight of allRawInsights) {
-      const result = MetaAdsInsightsResponseSchema.safeParse(insight);
-      if (result.success) {
-        validatedInsights.push(result.data);
-      } else {
-        logger.warn('Skipping invalid insight data from Meta API', {
-          errors: result.error.format(),
-        });
-      }
+  /**
+   * Retrieves insights for ads, ad sets, campaigns, or ad accounts.
+   * The type of insight depends on which ID parameter is provided.
+   */
+  async getAdInsights(
+    authPayload: JWTPayload,
+    params: {
+      adId?: string;
+      adSetId?: string;
+      campaignId?: string;
+      adAccountId?: string;
+      fields?: string[];
+      timeRange?: {
+        since: string;
+        until: string;
+      };
+      datePreset?: string;
+      level?: 'ad' | 'adset' | 'campaign' | 'account';
+      breakdowns?: string[];
     }
-    return validatedInsights;
-  }
-
-  async getAdInsights(authPayload: JWTPayload, params: GetAdInsightsInput) {
+  ) {
     logger.info('Executing get_ad_insights', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
 
     return handleMetaApiCall(async () => {
-      const { campaignId, adSetId, adId } = params;
+      const api = await createMetaApiInstance(authPayload.userId);
 
-      let apiObject: MetaAdSDK | MetaAdSetSDK | MetaCampaignSDK;
-      let objectName = '';
-      if (adId) {
-        apiObject = new MetaAdSDK(adId);
-        objectName = `Ad (${adId})`;
-      } else if (adSetId) {
-        apiObject = new MetaAdSetSDK(adSetId);
-        objectName = `Ad Set (${adSetId})`;
-      } else if (campaignId) {
-        apiObject = new MetaCampaignSDK(campaignId);
-        objectName = `Campaign (${campaignId})`;
+      // Default insights fields if none provided
+      const insightsFields = params.fields || [
+        'impressions',
+        'clicks',
+        'spend',
+        'reach',
+        'frequency',
+        'cpm',
+        'cpc',
+        'ctr',
+        'cost_per_unique_click',
+        'unique_clicks',
+        'unique_ctr',
+        'date_start',
+        'date_stop',
+      ];
+
+      // Prepare insights parameters
+      const insightsParams: Record<string, unknown> = {
+        fields: insightsFields,
+        time_range: params.timeRange,
+        date_preset: params.datePreset || 'last_30d',
+        level: params.level || 'ad',
+        breakdowns: params.breakdowns,
+      };
+
+      // Remove undefined properties in-place to prevent Meta API errors
+      removeUndefinedProperties(insightsParams);
+
+      let insightsCursor: unknown;
+
+      // Determine which object to get insights from based on provided parameters
+      if (params.adId) {
+        const apiObject = new MetaAdSDK(params.adId, {}, null, api) as unknown as InsightsGetter;
+        insightsCursor = await apiObject.getInsights([], insightsParams);
+      } else if (params.adSetId) {
+        const apiObject = new MetaAdSetSDK(
+          params.adSetId,
+          {},
+          null,
+          api
+        ) as unknown as InsightsGetter;
+        insightsCursor = await apiObject.getInsights([], insightsParams);
+      } else if (params.campaignId) {
+        const apiObject = new MetaCampaignSDK(
+          params.campaignId,
+          {},
+          null,
+          api
+        ) as unknown as InsightsGetter;
+        insightsCursor = await apiObject.getInsights([], insightsParams);
       } else {
-        // This case is theoretically handled by Zod input validation,
-        // but this provides a clear, consistent runtime error.
-        throw new ValidationError(
-          'Either campaignId, adSetId, or adId must be provided to fetch ad insights.'
+        // Default to ad account insights
+        const adAccountId = await accountManager.requireAccountSelection(
+          authPayload.userId,
+          params.adAccountId
         );
+        const apiObject = new MetaAdAccountSDK(
+          adAccountId,
+          {},
+          null,
+          api
+        ) as unknown as InsightsGetter;
+        insightsCursor = await apiObject.getInsights([], insightsParams);
       }
 
-      const insights = await this.fetchInsights(apiObject, params, authPayload.userId);
-      return createMcpSuccessResult(
-        { insights },
-        `Retrieved ${insights.length} insight records for ${objectName}`
-      );
+      // Use the common pagination utility to handle all edge cases
+      const allRawInsights = await fetchAllPaginatedData<unknown>({
+        cursor: insightsCursor,
+        limit: env.META_MAX_INSIGHTS_TO_FETCH,
+        entityName: 'insights',
+        userId: authPayload.userId,
+        apiContext: params,
+      });
+
+      // Validate and transform the response using auto-generated schema
+      const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
+      for (const insight of allRawInsights) {
+        const result = MetaAdsInsightsResponseSchema.safeParse(insight);
+        if (result.success) {
+          validatedInsights.push(result.data);
+        } else {
+          logger.warn('Invalid insights data received from Meta API, skipping.', {
+            error: result.error.format(),
+            insight,
+            userId: authPayload.userId,
+            params,
+          });
+        }
+      }
+
+      const response = { insights: validatedInsights };
+      logger.info('Successfully retrieved insights', {
+        userId: authPayload.userId,
+        count: validatedInsights.length,
+        params,
+      });
+
+      return await createMcpSuccessResult(response);
     });
   }
 
-  async getAdAccountInsights(authPayload: JWTPayload, params: GetAdAccountInsightsInput) {
+  /**
+   * Retrieves account-level insights.
+   */
+  async getAdAccountInsights(
+    authPayload: JWTPayload,
+    params: {
+      adAccountId?: string;
+      fields?: string[];
+      timeRange?: {
+        since: string;
+        until: string;
+      };
+      datePreset?: string;
+    }
+  ) {
     logger.info('Executing get_ad_account_insights', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
 
     return handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const adAccountId = await accountManager.requireAccountSelection(
         authPayload.userId,
         params.adAccountId
       );
-      const apiObject = new MetaAdAccountSDK(adAccountId);
 
-      const insights = await this.fetchInsights(apiObject, params, authPayload.userId);
-      return createMcpSuccessResult(
-        { insights },
-        `Retrieved ${insights.length} insight records for Ad Account (${adAccountId})`
-      );
+      // Default insights fields if none provided
+      const insightsFields = params.fields || [
+        'impressions',
+        'clicks',
+        'spend',
+        'reach',
+        'frequency',
+        'cpm',
+        'cpc',
+        'ctr',
+        'cost_per_unique_click',
+        'unique_clicks',
+        'unique_ctr',
+        'date_start',
+        'date_stop',
+      ];
+
+      // Prepare insights parameters
+      const insightsParams: Record<string, unknown> = {
+        fields: insightsFields,
+        time_range: params.timeRange,
+        date_preset: params.datePreset || 'last_30d',
+        level: 'account',
+      };
+
+      // Remove undefined properties in-place to prevent Meta API errors
+      removeUndefinedProperties(insightsParams);
+
+      const apiObject = new MetaAdAccountSDK(
+        adAccountId,
+        {},
+        null,
+        api
+      ) as unknown as InsightsGetter;
+      const insightsCursor = await apiObject.getInsights([], insightsParams);
+
+      // Use the common pagination utility to handle all edge cases
+      const allRawInsights = await fetchAllPaginatedData<unknown>({
+        cursor: insightsCursor,
+        limit: env.META_MAX_INSIGHTS_TO_FETCH,
+        entityName: 'account insights',
+        userId: authPayload.userId,
+        apiContext: { adAccountId },
+      });
+
+      // Validate and transform the response using auto-generated schema
+      const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
+      for (const insight of allRawInsights) {
+        const result = MetaAdsInsightsResponseSchema.safeParse(insight);
+        if (result.success) {
+          validatedInsights.push(result.data);
+        } else {
+          logger.warn('Invalid account insights data received from Meta API, skipping.', {
+            error: result.error.format(),
+            insight,
+            userId: authPayload.userId,
+            adAccountId,
+          });
+        }
+      }
+
+      const response = { insights: validatedInsights };
+      logger.info('Successfully retrieved account insights', {
+        userId: authPayload.userId,
+        adAccountId,
+        count: validatedInsights.length,
+      });
+
+      return await createMcpSuccessResult(response);
     });
   }
 }

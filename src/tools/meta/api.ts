@@ -30,18 +30,30 @@ export async function fetchUserTokenString(userId: string): Promise<string> {
   return tokenRecord.accessToken;
 }
 
-export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi> {
-  const token = await fetchUserToken(userId);
+/**
+ * Creates a new FacebookAdsApi instance from an access token.
+ * This is used for creating isolated API instances with specific tokens (e.g., page tokens).
+ */
+export function createApiInstanceFromToken(accessToken: string): FacebookAdsApi {
+  return new FacebookAdsApi(accessToken);
+}
 
-  if (token.expiresAt && new Date() >= new Date(token.expiresAt)) {
-    logger.warn('Meta access token has expired', { userId, expiresAt: token.expiresAt });
+/**
+ * Creates a new request-scoped Meta API instance for a user.
+ * This replaces the global singleton pattern with safe per-request instances.
+ */
+export async function createMetaApiInstance(userId: string): Promise<FacebookAdsApi> {
+  const tokenRecord = await fetchUserToken(userId);
+
+  if (tokenRecord.expiresAt && new Date() >= new Date(tokenRecord.expiresAt)) {
+    logger.warn('Meta access token has expired', { userId, expiresAt: tokenRecord.expiresAt });
     throw new TokenError('Meta access token has expired. Please re-authenticate.');
   }
 
   // Warn if token expires soon (within 7 days)
-  if (token.expiresAt) {
+  if (tokenRecord.expiresAt) {
     const daysUntilExpiry =
-      (new Date(token.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
+      (new Date(tokenRecord.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
     if (daysUntilExpiry <= 7) {
       logger.warn('Meta access token expires soon', {
         userId,
@@ -50,9 +62,9 @@ export async function initializeMetaApi(userId: string): Promise<FacebookAdsApi>
     }
   }
 
-  const api = FacebookAdsApi.init(token.accessToken);
-
-  logger.info('Meta Ads API initialized', { userId });
+  // Create and return a new, isolated instance instead of initializing a global singleton.
+  const api = createApiInstanceFromToken(tokenRecord.accessToken);
+  logger.info('New request-scoped Meta Ads API instance created', { userId });
   return api;
 }
 

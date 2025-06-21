@@ -277,11 +277,10 @@ export class MetaApiService {
     businessId?: string | null,
     attempt = 1
   ): Promise<string[]> {
-    const maxAttempts = 2;
     const defaultPermissions = ['UNKNOWN'];
+    const maxAttempts = 2;
 
     try {
-      // Strategy 1: Use provided business context or lookup from database
       const resolvedBusinessId = await MetaApiService._resolveBusinessContext(
         businessId,
         userId,
@@ -289,145 +288,39 @@ export class MetaApiService {
         accessToken
       );
 
-      const url = MetaApiService._buildAssignedUsersUrl(
+      // Make the actual API request
+      const response = await MetaApiService._callAssignedUsersApi(
         adAccountId,
         accessToken,
         resolvedBusinessId
       );
 
-      logger.debug('Fetching ad account permissions', {
-        adAccountId,
-        attempt,
-        businessIdStrategy: businessId !== undefined ? 'provided' : 'database_lookup',
-        resolvedBusinessId: resolvedBusinessId || 'none',
-        hasBusinessContext: resolvedBusinessId !== null,
-      });
-
-      const response = await handleMetaApiCall(async () => {
-        return await fetch(url, {
-          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
-        });
-      });
-
+      // Handle non-200 responses with potential retry logic
       if (!response.ok) {
-        const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
-
-        // Handle business parameter requirement error with retry
-        if (
-          errorData.error?.code === 100 &&
-          errorData.error?.message?.includes('business is required') &&
-          attempt === 1
-        ) {
-          logger.warn(
-            'Business parameter required, attempting retry with enhanced business lookup',
-            {
-              adAccountId,
-              currentUserId,
-              userId,
-              originalBusinessContext: resolvedBusinessId,
-              attempt,
-            }
-          );
-
-          // Strategy 2: Enhanced retry with direct API business lookup
+        const shouldRetry = await MetaApiService._shouldRetryBusinessRequired(response, attempt);
+        if (shouldRetry) {
+          // Retry once without a business context to trigger enhanced lookup
           return await MetaApiService._fetchAdAccountPermissionsWithRetry(
             adAccountId,
             accessToken,
             currentUserId,
             userId,
-            undefined, // Force enhanced business context resolution with API fallback
+            undefined,
             attempt + 1
           );
         }
-
-        // Log specific error types for debugging
-        if (errorData.error?.code === 100) {
-          if (errorData.error?.message?.includes('business is required')) {
-            logger.warn('Ad account requires business parameter but context unavailable', {
-              adAccountId,
-              currentUserId,
-              userId,
-              businessIdResolved: resolvedBusinessId,
-              message: 'This ad account is business-managed but business ID could not be resolved',
-              suggestion: 'Verify ad account is properly synced with business information',
-            });
-          } else {
-            logger.warn('Meta API parameter error', {
-              adAccountId,
-              currentUserId,
-              userId,
-              status: response.status,
-              error: errorData.error?.message,
-              code: errorData.error?.code,
-            });
-          }
-        } else {
-          logger.warn('Failed to fetch ad account permissions', {
-            adAccountId,
-            currentUserId,
-            userId,
-            status: response.status,
-            error: errorData.error?.message,
-            code: errorData.error?.code,
-          });
-        }
         return defaultPermissions;
       }
 
-      // Parse successful response
-      const permissionsData = (await response.json()) as MetaAdAccountAssignedUsersResponse;
-      const userPermissions = permissionsData.data?.find((user) => user.id === currentUserId);
-
-      if (!userPermissions) {
-        // Enhanced user lookup strategy - try to find user by different identifiers
-        const fallbackUser = await MetaApiService._findUserInPermissionsResponse(
-          permissionsData,
-          currentUserId,
-          adAccountId,
-          userId
-        );
-
-        if (fallbackUser) {
-          logger.info('User found via enhanced lookup strategy', {
-            adAccountId,
-            currentUserId,
-            userId,
-            fallbackUserId: fallbackUser.id,
-            permissions: fallbackUser.tasks,
-          });
-          return fallbackUser.tasks || defaultPermissions;
-        }
-
-        logger.warn('User not found in ad account permissions response', {
-          adAccountId,
-          currentUserId,
-          userId,
-          totalUsersInResponse: permissionsData.data?.length || 0,
-          suggestion:
-            'User may not have permissions on this ad account or business context may be incorrect',
-        });
-        return defaultPermissions;
-      }
-
-      if (!userPermissions.tasks || userPermissions.tasks.length === 0) {
-        logger.warn('User found but no tasks/permissions assigned', {
-          adAccountId,
-          currentUserId,
-          userId,
-          userPermissions,
-        });
-        return defaultPermissions;
-      }
-
-      logger.info('Successfully fetched ad account permissions', {
-        adAccountId,
+      // Successful HTTP 200 – extract permissions from payload
+      return await MetaApiService._extractPermissionsFromResponse(
+        response,
         currentUserId,
+        adAccountId,
         userId,
-        permissions: userPermissions.tasks,
-        businessContext: resolvedBusinessId || 'none',
-      });
-
-      return userPermissions.tasks;
+        defaultPermissions,
+        resolvedBusinessId || 'none'
+      );
     } catch (error) {
       if (attempt < maxAttempts) {
         logger.warn('Permission fetch attempt failed, retrying', {
@@ -438,9 +331,8 @@ export class MetaApiService {
           error: error instanceof Error ? error.message : 'Unknown error',
         });
 
-        // Exponential backoff for retry
-        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
-
+        // Simple exponential back-off
+        await new Promise((res) => setTimeout(res, 1000 * attempt));
         return await MetaApiService._fetchAdAccountPermissionsWithRetry(
           adAccountId,
           accessToken,
@@ -451,7 +343,13 @@ export class MetaApiService {
         );
       }
 
-      throw error;
+      logger.error('All permission fetch strategies failed', {
+        adAccountId,
+        currentUserId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return defaultPermissions;
     }
   }
 
@@ -470,110 +368,28 @@ export class MetaApiService {
     adAccountId: string,
     accessToken?: string
   ): Promise<string | null> {
-    // Strategy 1: Use explicitly provided business context
+    // Strategy 1: Use explicitly provided business context when available (string | null)
     if (businessId !== undefined) {
-      // businessId is either a string (business-managed) or null (non-business)
       return businessId;
     }
 
-    // Strategy 2: Lookup from database
-    try {
-      const dbBusinessId = await getBusinessIdForAdAccount(userId, adAccountId);
-      // If the database lookup succeeds (doesn't throw), trust the result (string or null)
-      logger.debug('Business ID resolved from database', {
-        adAccountId,
-        userId,
-        businessId: dbBusinessId,
-      });
-      return dbBusinessId;
-    } catch (error) {
-      logger.warn('Database business context lookup failed, proceeding to API lookup', {
-        adAccountId,
-        userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+    // Strategy 2: Lookup from database (returns string | null on success, undefined on failure)
+    const dbResult = await MetaApiService._getBusinessIdFromDb(userId, adAccountId);
+    if (dbResult !== undefined) {
+      return dbResult; // can be null meaning non-business account
     }
 
-    // Strategy 3: Direct Meta API lookup as fallback
-    if (accessToken) {
-      try {
-        logger.debug('Attempting direct Meta API business context lookup', {
-          adAccountId,
-          userId,
-        });
-
-        const response = await fetch(
-          `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business`,
-          {
-            signal: AbortSignal.timeout(env.META_API_TIMEOUT),
-          }
-        );
-
-        if (response.ok) {
-          const data = (await response.json()) as { business?: { id?: string } };
-          const directBusinessId = data.business?.id || null;
-
-          logger.debug('Direct Meta API business context lookup result', {
-            adAccountId,
-            userId,
-            businessId: directBusinessId,
-            isBusinessManaged: directBusinessId !== null,
-          });
-
-          // Store the resolved business ID in the database for future use
-          if (directBusinessId) {
-            try {
-              await withUserContext(userId, async (tx) => {
-                await tx
-                  .insert(adAccounts)
-                  .values({
-                    id: adAccountId,
-                    userId: userId,
-                    name: 'Temp Account', // Temporary name, will be updated later
-                    status: 'UNKNOWN',
-                    businessId: directBusinessId,
-                  })
-                  .onConflictDoUpdate({
-                    target: [adAccounts.id, adAccounts.userId],
-                    set: {
-                      businessId: sql`excluded.business_id`,
-                    },
-                  });
-              });
-              logger.debug('Cached business ID from direct API lookup', {
-                adAccountId,
-                userId,
-                businessId: directBusinessId,
-              });
-            } catch (dbError) {
-              logger.warn('Failed to cache business ID from direct API lookup', {
-                adAccountId,
-                userId,
-                businessId: directBusinessId,
-                error: dbError instanceof Error ? dbError.message : 'Unknown error',
-              });
-            }
-          }
-
-          return directBusinessId;
-        }
-      } catch (apiError) {
-        logger.warn('Direct Meta API business context lookup failed', {
-          adAccountId,
-          userId,
-          error: apiError instanceof Error ? apiError.message : 'Unknown error',
-        });
-      }
+    // Strategy 3: Fallback to direct Graph API lookup if we have a token
+    const apiResult = await MetaApiService._getBusinessIdViaApi(adAccountId, accessToken, userId);
+    if (apiResult !== undefined) {
+      return apiResult; // can be null meaning non-business account
     }
 
-    // Strategy 4: Return null as final fallback (treat as non-business account)
-    logger.debug(
-      'All business context resolution strategies failed, treating as non-business account',
-      {
-        adAccountId,
-        userId,
-      }
-    );
+    // Final fallback – treat as non-business account
+    logger.debug('All business context resolution strategies failed – defaulting to null', {
+      adAccountId,
+      userId,
+    });
     return null;
   }
 
@@ -693,5 +509,212 @@ export class MetaApiService {
         response.status
       );
     });
+  }
+
+  // --- Helper methods extracted to lower cognitive complexity above ---
+
+  /**
+   * Performs the network call to the assigned_users endpoint.
+   */
+  private static async _callAssignedUsersApi(
+    adAccountId: string,
+    accessToken: string,
+    businessId: string | null
+  ): Promise<Response> {
+    const url = MetaApiService._buildAssignedUsersUrl(adAccountId, accessToken, businessId);
+    logger.debug('Fetching ad account permissions', {
+      adAccountId,
+      businessContext: businessId ?? 'none',
+    });
+    return await handleMetaApiCall(async () => {
+      return await fetch(url, {
+        signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+      });
+    });
+  }
+
+  /**
+   * Determines if we should retry the request due to a missing business parameter error.
+   */
+  private static async _shouldRetryBusinessRequired(
+    response: Response,
+    attempt: number
+  ): Promise<boolean> {
+    if (attempt !== 1) return false;
+
+    const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
+
+    const requiresBusiness =
+      errorData.error?.code === 100 && errorData.error?.message?.includes('business is required');
+
+    if (requiresBusiness) {
+      logger.warn('Business parameter required – will retry with enhanced lookup', {
+        attempt,
+      });
+    }
+
+    return requiresBusiness;
+  }
+
+  /**
+   * Extracts the permissions array for the current user from the API response.
+   */
+  private static async _extractPermissionsFromResponse(
+    response: Response,
+    currentUserId: string,
+    adAccountId: string,
+    userId: string,
+    defaultPermissions: string[],
+    resolvedBusinessContext: string | null
+  ): Promise<string[]> {
+    const permissionsData = (await response.json()) as MetaAdAccountAssignedUsersResponse;
+
+    const directMatch = permissionsData.data?.find((u) => u.id === currentUserId);
+    if (directMatch?.tasks?.length) {
+      logger.info('Successfully fetched ad account permissions', {
+        adAccountId,
+        currentUserId,
+        userId,
+        permissions: directMatch.tasks,
+        businessContext: resolvedBusinessContext,
+      });
+      return directMatch.tasks;
+    }
+
+    // Fall-back to enhanced lookup
+    const fallbackUser = await MetaApiService._findUserInPermissionsResponse(
+      permissionsData,
+      currentUserId,
+      adAccountId,
+      userId
+    );
+
+    if (fallbackUser?.tasks?.length) {
+      logger.info('User found via enhanced lookup strategy', {
+        adAccountId,
+        currentUserId,
+        userId,
+        fallbackUserId: fallbackUser.id,
+        permissions: fallbackUser.tasks,
+      });
+      return fallbackUser.tasks;
+    }
+
+    logger.warn('User not found or no permissions assigned', {
+      adAccountId,
+      currentUserId,
+      userId,
+      totalUsersInResponse: permissionsData.data?.length ?? 0,
+    });
+    return defaultPermissions;
+  }
+
+  // --- Helper methods extracted to simplify _resolveBusinessContext ---
+
+  private static async _getBusinessIdFromDb(
+    userId: string,
+    adAccountId: string
+  ): Promise<string | null | undefined> {
+    try {
+      const dbBusinessId = await getBusinessIdForAdAccount(userId, adAccountId);
+      logger.debug('Business ID resolved from database', {
+        adAccountId,
+        userId,
+        businessId: dbBusinessId,
+      });
+      return dbBusinessId; // can be null meaning non-business account
+    } catch (error) {
+      logger.warn('Database lookup for business ID failed', {
+        adAccountId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return undefined; // signal lookup failure
+    }
+  }
+
+  private static async _getBusinessIdViaApi(
+    adAccountId: string,
+    accessToken: string | undefined,
+    userId: string
+  ): Promise<string | null | undefined> {
+    if (!accessToken) return undefined;
+
+    try {
+      logger.debug('Attempting direct Meta API business context lookup', {
+        adAccountId,
+        userId,
+      });
+
+      const response = await fetch(
+        `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business`,
+        {
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        }
+      );
+
+      if (!response.ok) {
+        return undefined;
+      }
+
+      const data = (await response.json()) as { business?: { id?: string } };
+      const businessId = data.business?.id ?? null;
+
+      logger.debug('Direct Meta API business context lookup result', {
+        adAccountId,
+        userId,
+        businessId,
+      });
+
+      if (businessId) {
+        await MetaApiService._cacheBusinessId(userId, adAccountId, businessId);
+      }
+      return businessId; // can be null meaning non-business account
+    } catch (apiError) {
+      logger.warn('Direct Meta API lookup for business ID failed', {
+        adAccountId,
+        userId,
+        error: apiError instanceof Error ? apiError.message : 'Unknown error',
+      });
+      return undefined;
+    }
+  }
+
+  private static async _cacheBusinessId(
+    userId: string,
+    adAccountId: string,
+    businessId: string
+  ): Promise<void> {
+    try {
+      await withUserContext(userId, async (tx) => {
+        await tx
+          .insert(adAccounts)
+          .values({
+            id: adAccountId,
+            userId,
+            name: 'Temp Account', // Temporary name; updated elsewhere
+            status: 'UNKNOWN',
+            businessId,
+          })
+          .onConflictDoUpdate({
+            target: [adAccounts.id, adAccounts.userId],
+            set: {
+              businessId: sql`excluded.business_id`,
+            },
+          });
+      });
+      logger.debug('Cached business ID from direct API lookup', {
+        adAccountId,
+        userId,
+        businessId,
+      });
+    } catch (dbError) {
+      logger.warn('Failed to cache business ID from direct API lookup', {
+        adAccountId,
+        userId,
+        businessId,
+        error: dbError instanceof Error ? dbError.message : 'Unknown error',
+      });
+    }
   }
 }

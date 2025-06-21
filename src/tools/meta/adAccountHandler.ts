@@ -14,8 +14,9 @@ import {
   createPermissionsFetchRequest,
   executeBatchRequests,
 } from '../../utils/metaBatchHelper.js';
-import { handleMetaApiCall, initializeMetaApi } from './api.js';
+import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type { BatchResponse } from '../../utils/metaBatchHelper.js';
 
 export class MetaAdAccountHandler {
   private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
@@ -46,10 +47,70 @@ export class MetaAdAccountHandler {
     };
   }
 
+  private extractPermissionsFromBatchResponse(
+    response: BatchResponse | undefined,
+    metaUserId: string,
+    adAccountId: string
+  ): string[] {
+    const defaultPermissions = ['UNKNOWN'];
+
+    if (!response || response.code !== 200 || !response.body) {
+      logger.error('Failed batch request for ad account permissions', {
+        adAccountId,
+        responseCode: response?.code,
+      });
+      return defaultPermissions;
+    }
+
+    try {
+      const permissionData = JSON.parse(response.body) as MetaAdAccountAssignedUsersResponse;
+      const userPermissions = permissionData.data?.find((user) => user.id === metaUserId);
+
+      if (userPermissions?.tasks && userPermissions.tasks.length > 0) {
+        return userPermissions.tasks;
+      }
+
+      logger.warn('User not found in batch permissions response or no tasks assigned', {
+        adAccountId,
+        metaUserId,
+      });
+      return defaultPermissions;
+    } catch (error) {
+      logger.error('Failed to parse permissions from batch response', {
+        adAccountId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return defaultPermissions;
+    }
+  }
+
+  private async handleAccountPermissionUpdate(
+    tx: any,
+    accountData: { id: string; [key: string]: unknown },
+    response: BatchResponse | undefined,
+    metaUserId: string,
+    userId: string
+  ) {
+    const permissions = this.extractPermissionsFromBatchResponse(
+      response,
+      metaUserId,
+      accountData.id
+    );
+
+    // Update the permissions for the specific ad account within the transaction.
+    await tx
+      .update(adAccounts)
+      .set({ permissions })
+      .where(and(eq(adAccounts.id, accountData.id), eq(adAccounts.userId, userId)));
+
+    return {
+      ...accountData,
+      permissions,
+    };
+  }
+
   async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
     logger.info('Executing get_ad_accounts', { userId: authPayload.userId, params });
-
-    await initializeMetaApi(authPayload.userId);
 
     // Fetch the user's most recent access token and their Meta ID
     const tokenAndMetaId = await withUserContext(authPayload.userId, async (tx) => {
@@ -73,6 +134,8 @@ export class MetaAdAccountHandler {
     const { accessToken, metaUserId } = tokenAndMetaId[0];
 
     return await handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const fields = [
         MetaAdAccountSDK.Fields.id,
         MetaAdAccountSDK.Fields.name,
@@ -82,8 +145,8 @@ export class MetaAdAccountHandler {
         MetaAdAccountSDK.Fields.business,
       ];
 
-      // Get ad accounts using the SDK with proper pagination
-      const adAccountsCursor = await new MetaUserSDK('me').getAdAccounts(fields);
+      // Get ad accounts using the SDK with proper pagination and request-scoped API instance
+      const adAccountsCursor = await new MetaUserSDK('me', {}, null, api).getAdAccounts(fields);
 
       // Use the common pagination utility to handle all edge cases
       const allRawAccounts = await fetchAllPaginatedData<unknown>({
@@ -162,52 +225,15 @@ export class MetaAdAccountHandler {
         );
 
         // 4. Process each account (ensuring all accounts are included even if permission fetch failed).
-        const finalAccountUpdatePromises = extractedAccounts.map(async (accountData) => {
-          const response = responseMap.get(accountData.id);
-          let permissions = ['UNKNOWN']; // Default value on failure
-
-          if (response && response.code === 200 && response.body) {
-            try {
-              const permissionData = JSON.parse(
-                response.body
-              ) as MetaAdAccountAssignedUsersResponse;
-              const userPermissions = permissionData.data?.find((user) => user.id === metaUserId);
-
-              if (userPermissions?.tasks && userPermissions.tasks.length > 0) {
-                permissions = userPermissions.tasks;
-              } else {
-                logger.warn('User not found in batch permissions response or no tasks assigned', {
-                  adAccountId: accountData.id,
-                  metaUserId,
-                });
-              }
-            } catch (e) {
-              logger.error('Failed to parse permissions from batch response', {
-                adAccountId: accountData.id,
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          } else {
-            logger.error('Failed batch request for ad account permissions', {
-              adAccountId: accountData.id,
-              responseCode: response?.code,
-            });
-          }
-
-          // Update the permissions for the specific ad account within the transaction.
-          await tx
-            .update(adAccounts)
-            .set({ permissions })
-            .where(
-              and(eq(adAccounts.id, accountData.id), eq(adAccounts.userId, authPayload.userId))
-            );
-
-          // Return the final data structure, same as the original implementation.
-          return {
-            ...accountData,
-            permissions,
-          };
-        });
+        const finalAccountUpdatePromises = extractedAccounts.map((accountData) =>
+          this.handleAccountPermissionUpdate(
+            tx,
+            accountData,
+            responseMap.get(accountData.id),
+            metaUserId,
+            authPayload.userId
+          )
+        );
 
         // Await all parallel database operations to complete using Promise.allSettled for resilience
         const permissionUpdateResults = await Promise.allSettled(finalAccountUpdatePromises);
@@ -229,7 +255,7 @@ export class MetaAdAccountHandler {
       });
 
       logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         { accounts: accountsToStore },
         `Retrieved ${accountsToStore.length} ad accounts`,
         { attachPrompts: true }

@@ -1,5 +1,4 @@
 import {
-  FacebookAdsApi,
   AdAccount as MetaAdAccountSDK,
   AdCreative as MetaAdCreativeSDK,
   PagePost as MetaPagePostSDK,
@@ -19,7 +18,7 @@ import { env } from '../../utils/env.js';
 import { AuthorizationError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { fetchUserTokenString, handleMetaApiCall, initializeMetaApi } from './api.js';
+import { createApiInstanceFromToken, createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 
 export class MetaPagesHandler {
@@ -29,9 +28,9 @@ export class MetaPagesHandler {
    */
   async getPages(authPayload: JWTPayload) {
     logger.info('Executing get_pages', { userId: authPayload.userId });
-    await initializeMetaApi(authPayload.userId);
 
     return handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
       const fields = [
         MetaPageSDK.Fields.id,
         MetaPageSDK.Fields.name,
@@ -40,7 +39,7 @@ export class MetaPagesHandler {
         MetaPageSDK.Fields.about,
       ];
 
-      const pagesCursor = await new MetaUserSDK('me').getAccounts(fields);
+      const pagesCursor = await new MetaUserSDK('me', {}, null, api).getAccounts(fields);
 
       // Use the common pagination utility to handle all edge cases
       const allRawPages = await fetchAllPaginatedData<unknown>({
@@ -71,7 +70,7 @@ export class MetaPagesHandler {
         count: validatedPages.length,
       });
 
-      return createMcpSuccessResult(response);
+      return await createMcpSuccessResult(response);
     });
   }
 
@@ -82,86 +81,80 @@ export class MetaPagesHandler {
   async getPagePosts(authPayload: JWTPayload, params: { pageId: string }) {
     logger.info('Executing get_page_posts', { userId: authPayload.userId, params });
 
-    // Fetch the original user token to restore it later
-    const userAccessToken = await fetchUserTokenString(authPayload.userId);
-    await initializeMetaApi(authPayload.userId);
+    return handleMetaApiCall(async () => {
+      // 1. Create a user-scoped API instance to fetch the page's access token
+      const userApi = await createMetaApiInstance(authPayload.userId);
 
-    try {
-      return await handleMetaApiCall(async () => {
-        // Fetch the page object to get its specific access token
-        logger.info('Fetching page access token', {
-          userId: authPayload.userId,
-          pageId: params.pageId,
-        });
-
-        const page = await new MetaPageSDK(params.pageId).read([MetaPageSDK.Fields.access_token]);
-        const pageAccessToken = page.access_token;
-
-        // Validate that a page access token was retrieved
-        if (!pageAccessToken) {
-          throw new AuthorizationError(
-            `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
-          );
-        }
-
-        // Re-initialize the API with the page-specific token for this scope
-        FacebookAdsApi.init(pageAccessToken as string);
-        logger.info('API re-initialized with page-specific access token', {
-          pageId: params.pageId,
-        });
-
-        const fields = [
-          MetaPagePostSDK.Fields.id,
-          MetaPagePostSDK.Fields.message,
-          MetaPagePostSDK.Fields.created_time,
-          MetaPagePostSDK.Fields.permalink_url,
-          MetaPagePostSDK.Fields.full_picture,
-          MetaPagePostSDK.Fields.story,
-          MetaPagePostSDK.Fields.status_type,
-        ];
-
-        const postsCursor = await new MetaPageSDK(params.pageId).getPosts(fields);
-
-        // Use the common pagination utility to handle all edge cases
-        const allRawPosts = await fetchAllPaginatedData<unknown>({
-          cursor: postsCursor,
-          limit: env.META_MAX_POSTS_TO_FETCH,
-          entityName: 'page posts',
-          userId: authPayload.userId,
-          apiContext: { pageId: params.pageId },
-        });
-
-        // Validate and transform the response using auto-generated schema
-        const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
-        for (const post of allRawPosts) {
-          const result = MetaPagePostResponseSchema.safeParse(post);
-          if (result.success) {
-            validatedPosts.push(result.data);
-          } else {
-            logger.warn('Invalid post data received from Meta API, skipping.', {
-              error: result.error.format(),
-              post,
-              userId: authPayload.userId,
-              pageId: params.pageId,
-            });
-          }
-        }
-
-        const response = { posts: validatedPosts };
-        logger.info('Successfully retrieved page posts', {
-          userId: authPayload.userId,
-          pageId: params.pageId,
-          count: validatedPosts.length,
-        });
-
-        return createMcpSuccessResult(response);
+      logger.info('Fetching page access token', {
+        userId: authPayload.userId,
+        pageId: params.pageId,
       });
-    } finally {
-      // CRITICAL: Restore the API to use the original user access token
-      // to prevent breaking other tools in the same request flow.
-      FacebookAdsApi.init(userAccessToken);
-      logger.info('API restored with user-specific access token', { userId: authPayload.userId });
-    }
+
+      const page = await new MetaPageSDK(params.pageId, {}, null, userApi).read([
+        MetaPageSDK.Fields.access_token,
+      ]);
+      const pageAccessToken = page.access_token;
+
+      // Validate that a page access token was retrieved
+      if (!pageAccessToken) {
+        throw new AuthorizationError(
+          `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
+        );
+      }
+
+      // 2. Create a new, isolated page-scoped API instance
+      const pageApi = createApiInstanceFromToken(pageAccessToken as string);
+      logger.info('API instance created with page-specific access token', {
+        pageId: params.pageId,
+      });
+
+      const fields = [
+        MetaPagePostSDK.Fields.id,
+        MetaPagePostSDK.Fields.message,
+        MetaPagePostSDK.Fields.created_time,
+        MetaPagePostSDK.Fields.permalink_url,
+        MetaPagePostSDK.Fields.full_picture,
+        MetaPagePostSDK.Fields.story,
+        MetaPagePostSDK.Fields.status_type,
+      ];
+
+      // 3. Use the page-scoped API instance to get posts
+      const postsCursor = await new MetaPageSDK(params.pageId, {}, null, pageApi).getPosts(fields);
+
+      // Use the common pagination utility to handle all edge cases
+      const allRawPosts = await fetchAllPaginatedData<unknown>({
+        cursor: postsCursor,
+        limit: env.META_MAX_POSTS_TO_FETCH,
+        entityName: 'page posts',
+        userId: authPayload.userId,
+        apiContext: { pageId: params.pageId },
+      });
+
+      // Validate and transform the response using auto-generated schema
+      const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
+      for (const post of allRawPosts) {
+        const result = MetaPagePostResponseSchema.safeParse(post);
+        if (result.success) {
+          validatedPosts.push(result.data);
+        } else {
+          logger.warn('Invalid post data received from Meta API, skipping.', {
+            error: result.error.format(),
+            post,
+            userId: authPayload.userId,
+            pageId: params.pageId,
+          });
+        }
+      }
+
+      const response = { posts: validatedPosts };
+      logger.info('Successfully retrieved page posts', {
+        userId: authPayload.userId,
+        pageId: params.pageId,
+        count: validatedPosts.length,
+      });
+
+      return await createMcpSuccessResult(response);
+    });
   }
 
   /**
@@ -179,9 +172,10 @@ export class MetaPagesHandler {
     }
   ) {
     logger.info('Executing create_page_post_ad', { userId: authPayload.userId, params });
-    await initializeMetaApi(authPayload.userId);
 
     return handleMetaApiCall(async () => {
+      const api = await createMetaApiInstance(authPayload.userId);
+
       const adAccountId = await accountManager.requireAccountSelection(
         authPayload.userId,
         params.adAccountId
@@ -195,7 +189,10 @@ export class MetaPagesHandler {
 
       removeUndefinedProperties(creativeData);
 
-      const adCreative = await new MetaAdAccountSDK(adAccountId).createAdCreative([], creativeData);
+      const adCreative = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAdCreative(
+        [],
+        creativeData
+      );
       const creativeValidation = MetaCreateSuccessResponseSchema.safeParse(adCreative);
 
       if (!creativeValidation.success) {
@@ -218,7 +215,7 @@ export class MetaPagesHandler {
 
       removeUndefinedProperties(adData);
 
-      const ad = await new MetaAdAccountSDK(adAccountId).createAd([], adData);
+      const ad = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAd([], adData);
       const adValidation = MetaCreateSuccessResponseSchema.safeParse(ad);
 
       if (!adValidation.success) {
@@ -244,7 +241,7 @@ export class MetaPagesHandler {
         postId: params.postId,
       });
 
-      return createMcpSuccessResult(
+      return await createMcpSuccessResult(
         result,
         `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`
       );

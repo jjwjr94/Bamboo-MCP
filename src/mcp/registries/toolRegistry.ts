@@ -138,7 +138,10 @@ export class ToolRegistry {
             selectedAccount: adAccountId,
           };
 
-          return createMcpSuccessResult(result, `Successfully selected ad account ${adAccountId}`);
+          return await createMcpSuccessResult(
+            result,
+            `Successfully selected ad account ${adAccountId}`
+          );
         } catch (error) {
           return createMcpErrorResult(error);
         }

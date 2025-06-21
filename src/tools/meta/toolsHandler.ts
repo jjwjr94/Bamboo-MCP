@@ -166,7 +166,12 @@ export class MetaToolsHandler {
     authPayload: JWTPayload,
     params: CustomAudienceRequest & { adAccountId?: string }
   ) {
-    return this.customAudienceHandler.createCustomAudience(authPayload, params);
+    // Ensure subtype is 'CUSTOM' as required by the handler
+    const customParams = {
+      ...params,
+      subtype: 'CUSTOM' as const,
+    };
+    return this.customAudienceHandler.createCustomAudience(authPayload, customParams);
   }
 
   async deleteCustomAudience(

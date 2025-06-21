@@ -164,6 +164,25 @@ export class AdSetToolRegistry implements IToolRegistry {
           startTime: z.string().optional().describe('Start time in ISO format.'),
           endTime: z.string().optional().describe('End time in ISO format.'),
           status: AdSetStatusSchema.default('PAUSED').describe('The ad set status.'),
+          attributionSpec: z
+            .array(
+              z.object({
+                event_type: z
+                  .string()
+                  .describe('Event type for attribution (e.g., IMPRESSION, CLICK)'),
+                window_days: z.number().int().positive().describe('Attribution window in days'),
+              })
+            )
+            .optional()
+            .describe(
+              'Attribution spec for the ad set. Required when using certain optimization goals.'
+            ),
+          promotedObject: z
+            .record(z.string(), z.any())
+            .optional()
+            .describe(
+              'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives.'
+            ),
         },
         outputSchema: outputSchema.shape,
       },

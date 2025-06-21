@@ -63,6 +63,7 @@ export interface CreateCampaignRequest {
 }
 
 export interface CreateAdSetRequest {
+  adAccountId?: string;
   campaignId: string;
   name: string;
   dailyBudget?: number; // in cents
@@ -74,6 +75,8 @@ export interface CreateAdSetRequest {
   startTime?: string; // ISO date
   endTime?: string; // ISO date
   status?: CampaignStatus;
+  promotedObject?: unknown;
+  attributionSpec?: unknown;
 }
 
 export interface CreateAdRequest {
