@@ -75,121 +75,142 @@ export const mcpErrorSchema = z
   })
   .passthrough();
 
-/**
- * Converts a BambooError or unknown exception into a structured MCP CallToolResult error object.
- *
- * This function provides centralized error handling for all MCP tools, ensuring consistent
- * error responses across the API. It classifies errors by type and provides appropriate
- * retry guidance to clients.
- *
- * **Response Structure:**
- * - `content`: Array containing human-readable error message and JSON-serialized error details
- * - `isError`: Always true for error responses
- * - `_meta.errorMetadata`: Structured metadata for client error handling
- * - `structuredContent`: Currently commented out due to MCP SDK limitations
- *
- * **Error Classification:**
- * - `AuthenticationError`: Non-retryable auth failures
- * - `AuthorizationError`: Non-retryable permission failures
- * - `ValidationError`: Non-retryable input validation failures
- * - `RateLimitError`: Retryable with delay
- * - `TimeoutError`: Retryable with shorter delay
- * - `MetaApiError`: Retryable based on Meta API error classification
- * - `BambooError`: Retryable based on HTTP status code (5xx = retryable)
- * - Unknown errors: Non-retryable (indicates server bugs)
- *
- * @param error - The caught exception of any type
- * @returns A CallToolResult object with structured error information
- */
-export function createMcpErrorResult(error: unknown): CallToolResult {
-  let message: string;
-  let metadata: McpErrorMetadata;
-
-  if (error instanceof AuthenticationError || error instanceof TokenError) {
-    message =
-      'Authentication failed. The provided credentials may be invalid or expired. Please re-authenticate.';
-    metadata = {
-      retryable: false,
-      errorCode: error.code,
-      category: 'authentication',
-    };
-  } else if (error instanceof AuthorizationError) {
-    message = 'Authorization failed. You do not have permission to perform this action.';
-    metadata = {
-      retryable: false,
-      errorCode: error.code,
-      category: 'authorization',
-    };
-  } else if (error instanceof RateLimitError) {
-    message = 'The API rate limit has been exceeded. Please wait a moment before trying again.';
-    metadata = {
-      retryable: true,
-      retryAfterMs: 60000, // 1 minute default
-      errorCode: error.code,
-      category: 'rate_limit',
-    };
-  } else if (error instanceof ValidationError) {
-    message = `Invalid input provided: ${error.message}. Please correct the parameters and try again.`;
-    metadata = {
-      retryable: false,
-      errorCode: error.code,
-      category: 'validation',
-    };
-  } else if (error instanceof MetaApiError) {
-    if (isMetaOAuthTokenError(error)) {
-      message =
-        'Authentication failed. The access token is invalid or has expired. Please re-authenticate and try again.';
-      metadata = {
+export function deriveMetaApiErrorDetails(error: MetaApiError): {
+  message: string;
+  metadata: McpErrorMetadata;
+} {
+  if (isMetaOAuthTokenError(error)) {
+    return {
+      message:
+        'Authentication failed. The access token is invalid or has expired. Please re-authenticate and try again.',
+      metadata: {
         retryable: false,
         errorCode: error.metaErrorCode || error.code,
         category: 'authentication',
-      };
-    } else {
-      message = `Meta API error: ${error.message}`;
-      const isRetryable = shouldRetryMetaError(error);
-      metadata = {
-        retryable: isRetryable,
-        errorCode: error.metaErrorCode || error.code,
-        category: 'api_error',
-      };
+      },
+    };
+  }
 
-      // Add retry delay for rate limit errors
-      if (isRetryable && isMetaRateLimitError(error)) {
-        metadata.retryAfterMs = 60000; // 1 minute default
-      }
-    }
-  } else if (error instanceof TimeoutError) {
-    message = 'The request timed out. Please try again later.';
-    metadata = {
-      retryable: true,
-      retryAfterMs: 5000, // Shorter retry delay for timeouts
-      errorCode: error.code,
-      category: 'internal',
-    };
-  } else if (isBambooError(error)) {
-    // Handle generic BambooError
-    const isServerSideError = error.statusCode >= 500;
-    message = `An error occurred: ${error.message}`;
-    metadata = {
-      retryable: isServerSideError,
-      errorCode: error.code,
-      category: isServerSideError ? 'internal' : 'api_error',
-    };
-  } else {
-    // Handle unexpected, non-operational errors
-    const unknownError = error instanceof Error ? error : new Error('An unknown error occurred.');
-    logger.error('Unhandled exception in MCP tool execution', {
-      error: unknownError.message,
-      stack: unknownError.stack,
-    });
-    message =
-      'An unexpected internal server error occurred. Please contact support if the issue persists.';
-    metadata = {
+  const isRetryable = shouldRetryMetaError(error);
+  const metadata: McpErrorMetadata = {
+    retryable: isRetryable,
+    errorCode: error.metaErrorCode || error.code,
+    category: 'api_error',
+  };
+
+  if (isRetryable && isMetaRateLimitError(error)) {
+    metadata.retryAfterMs = 60000; // 1 minute default
+  }
+
+  return {
+    message: `Meta API error: ${error.message}`,
+    metadata,
+  };
+}
+
+export function deriveUnknownErrorDetails(error: unknown): {
+  message: string;
+  metadata: McpErrorMetadata;
+} {
+  const unknownError = error instanceof Error ? error : new Error('An unknown error occurred.');
+  logger.error('Unhandled exception in MCP tool execution', {
+    error: unknownError.message,
+    stack: unknownError.stack,
+  });
+  return {
+    message:
+      'An unexpected internal server error occurred. Please contact support if the issue persists.',
+    metadata: {
       retryable: false,
       errorCode: 'INTERNAL_UNHANDLED_ERROR',
       category: 'internal',
+    },
+  };
+}
+
+export function deriveErrorDetails(error: unknown): {
+  message: string;
+  metadata: McpErrorMetadata;
+} {
+  if (error instanceof AuthenticationError || error instanceof TokenError) {
+    return {
+      message:
+        'Authentication failed. The provided credentials may be invalid or expired. Please re-authenticate.',
+      metadata: {
+        retryable: false,
+        errorCode: error.code,
+        category: 'authentication',
+      },
     };
   }
+
+  if (error instanceof AuthorizationError) {
+    return {
+      message: 'Authorization failed. You do not have permission to perform this action.',
+      metadata: {
+        retryable: false,
+        errorCode: error.code,
+        category: 'authorization',
+      },
+    };
+  }
+
+  if (error instanceof RateLimitError) {
+    return {
+      message: 'The API rate limit has been exceeded. Please wait a moment before trying again.',
+      metadata: {
+        retryable: true,
+        retryAfterMs: 60000,
+        errorCode: error.code,
+        category: 'rate_limit',
+      },
+    };
+  }
+
+  if (error instanceof ValidationError) {
+    return {
+      message: `Invalid input provided: ${error.message}. Please correct the parameters and try again.`,
+      metadata: {
+        retryable: false,
+        errorCode: error.code,
+        category: 'validation',
+      },
+    };
+  }
+
+  if (error instanceof MetaApiError) {
+    return deriveMetaApiErrorDetails(error);
+  }
+
+  if (error instanceof TimeoutError) {
+    return {
+      message: 'The request timed out. Please try again later.',
+      metadata: {
+        retryable: true,
+        retryAfterMs: 5000,
+        errorCode: error.code,
+        category: 'internal',
+      },
+    };
+  }
+
+  if (isBambooError(error)) {
+    const isServerSideError = error.statusCode >= 500;
+    return {
+      message: `An error occurred: ${error.message}`,
+      metadata: {
+        retryable: isServerSideError,
+        errorCode: error.code,
+        category: isServerSideError ? 'internal' : 'api_error',
+      },
+    };
+  }
+
+  return deriveUnknownErrorDetails(error);
+}
+
+export function createMcpErrorResult(error: unknown): CallToolResult {
+  const { message, metadata } = deriveErrorDetails(error);
 
   const errorContent: TextContent = {
     type: 'text',
@@ -199,7 +220,7 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
   // Structured error content following discriminated union pattern
   const structuredError: McpStructuredError = {
     type: 'error',
-    message: message,
+    message,
     error: {
       retryable: metadata.retryable,
       retryAfterMs: metadata.retryAfterMs,

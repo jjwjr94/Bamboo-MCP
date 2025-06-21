@@ -16,6 +16,22 @@ export function removeUndefinedProperties(obj: Record<string, unknown>): void {
   // Use a WeakSet to keep track of visited objects to handle circular references.
   const visited = new WeakSet<object>();
 
+  const cleanArray = (arr: unknown[], nextDepth: number): void => {
+    for (const item of arr) {
+      removeRecursively(item, nextDepth);
+    }
+  };
+
+  const cleanObject = (obj: Record<string, unknown>, nextDepth: number): void => {
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === undefined) {
+        delete obj[key];
+      } else {
+        removeRecursively(value, nextDepth);
+      }
+    }
+  };
+
   function removeRecursively(current: unknown, depth: number): void {
     // 1. Guard Clause: Stop if not an object, null, or already visited.
     if (current === null || typeof current !== 'object') {
@@ -36,26 +52,9 @@ export function removeUndefinedProperties(obj: Record<string, unknown>): void {
 
     // 4. Recursive Traversal: Process arrays and objects.
     if (Array.isArray(current)) {
-      // For arrays, recurse on each item.
-      // Note: This does not remove 'undefined' elements from the array itself,
-      // only cleans 'undefined' properties from objects within the array.
-      for (const item of current) {
-        removeRecursively(item, depth + 1);
-      }
+      cleanArray(current, depth + 1);
     } else {
-      // For objects, iterate over keys to find and remove undefined properties.
-      for (const key in current) {
-        // We check hasOwnProperty to ensure we're not operating on prototype properties.
-        if (Object.prototype.hasOwnProperty.call(current, key)) {
-          const value = (current as Record<string, unknown>)[key];
-          if (value === undefined) {
-            delete (current as Record<string, unknown>)[key];
-          } else {
-            // If the value is not undefined, recurse into it.
-            removeRecursively(value, depth + 1);
-          }
-        }
-      }
+      cleanObject(current as Record<string, unknown>, depth + 1);
     }
   }
 

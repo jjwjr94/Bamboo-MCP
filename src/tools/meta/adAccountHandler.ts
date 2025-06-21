@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { AdAccount as MetaAdAccountSDK, User as MetaUserSDK } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
-import { withUserContext } from '../../db/client.js';
+import { type DbTransaction, withUserContext } from '../../db/client.js';
 import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
@@ -14,9 +14,9 @@ import {
   createPermissionsFetchRequest,
   executeBatchRequests,
 } from '../../utils/metaBatchHelper.js';
+import type { BatchResponse } from '../../utils/metaBatchHelper.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
-import type { BatchResponse } from '../../utils/metaBatchHelper.js';
 
 export class MetaAdAccountHandler {
   private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
@@ -85,7 +85,7 @@ export class MetaAdAccountHandler {
   }
 
   private async handleAccountPermissionUpdate(
-    tx: any,
+    tx: DbTransaction,
     accountData: { id: string; [key: string]: unknown },
     response: BatchResponse | undefined,
     metaUserId: string,

@@ -61,32 +61,38 @@ export interface McpStructuredSuccess<T> {
 function extractThumbnailUrls(data: unknown, visited: WeakSet<object> = new WeakSet()): string[] {
   const urls = new Set<string>();
 
-  function traverse(obj: unknown): void {
-    // Handle null/undefined
-    if (obj == null) return;
+  // Predicate helper to keep the thumbnail check logic in one place.
+  function isThumbnailField(key: string, value: unknown): value is string {
+    return key === 'thumbnail_url' && typeof value === 'string' && value.trim() !== '';
+  }
 
-    // Handle primitive types
-    if (typeof obj !== 'object') return;
-
-    // Prevent circular references by tracking visited objects
-    if (visited.has(obj)) return;
-    visited.add(obj);
-
-    // Handle arrays
-    if (Array.isArray(obj)) {
-      for (const item of obj) {
-        traverse(item);
-      }
-      return;
+  function handleArray(arr: unknown[]): void {
+    for (const item of arr) {
+      traverse(item);
     }
+  }
 
-    // Handle objects
+  function handleObject(obj: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(obj)) {
-      if (key === 'thumbnail_url' && typeof value === 'string' && value.trim() !== '') {
+      if (isThumbnailField(key, value)) {
         urls.add(value);
       } else {
         traverse(value);
       }
+    }
+  }
+
+  function traverse(node: unknown): void {
+    if (node == null || typeof node !== 'object') return;
+
+    // Prevent circular references
+    if (visited.has(node as object)) return;
+    visited.add(node as object);
+
+    if (Array.isArray(node)) {
+      handleArray(node);
+    } else {
+      handleObject(node as Record<string, unknown>);
     }
   }
 

@@ -78,6 +78,60 @@ function sendInternalError(reply: FastifyReply, id: string | number | null): voi
   );
 }
 
+// Centralised error processing to keep the primary route handler concise
+interface McpPostErrorContext {
+  error: unknown;
+  request: FastifyRequest<{ Body: JsonRpcRequestBody }>;
+  reply: FastifyReply;
+  id: string | number | null;
+  method: string;
+  authPayload?: JWTPayload;
+  startTime: number;
+}
+
+async function processMcpPostError({
+  error,
+  request,
+  reply,
+  id,
+  method,
+  authPayload,
+  startTime,
+}: McpPostErrorContext): Promise<void> {
+  const duration = Date.now() - startTime;
+  const userId = authPayload?.userId;
+  logger.mcpRequest(method, userId, false, duration);
+
+  if (error instanceof TimeoutError) {
+    logger.error('MCP request timed out', {
+      method,
+      userId,
+      error: error.message,
+      requestId: request.id,
+    });
+    sendInternalError(reply, id);
+    return;
+  }
+
+  if (error instanceof TokenError) {
+    sendAuthError(reply, new AuthenticationError(error.message), id);
+    return;
+  }
+
+  if (error instanceof AuthenticationError) {
+    sendAuthError(reply, error, id);
+    return;
+  }
+
+  logger.error('MCP HTTP transport error', {
+    method,
+    userId,
+    error: error instanceof Error ? error.message : 'Unknown error',
+    requestId: request.id,
+  });
+  sendInternalError(reply, id);
+}
+
 async function handleMCPRequest(
   request: FastifyRequest<{ Body: JsonRpcRequestBody }>,
   reply: FastifyReply,
@@ -162,42 +216,15 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
         const duration = Date.now() - startTime;
         logger.mcpRequest(method, authPayload.userId, true, duration);
       } catch (error) {
-        const duration = Date.now() - startTime;
-        const userId = authPayload?.userId;
-        logger.mcpRequest(method, userId, false, duration);
-
-        if (error instanceof TimeoutError) {
-          logger.error('MCP request timed out', {
-            method,
-            userId,
-            error: error.message,
-            requestId: request.id,
-          });
-          sendInternalError(reply, id);
-          return;
-        }
-
-        // Handle TokenError as authentication error
-        if (error instanceof TokenError) {
-          sendAuthError(reply, new AuthenticationError(error.message), id);
-          return;
-        }
-
-        // Handle authentication errors
-        if (error instanceof AuthenticationError) {
-          sendAuthError(reply, error, id);
-          return;
-        }
-
-        // Handle other errors
-        logger.error('MCP HTTP transport error', {
+        await processMcpPostError({
+          error,
+          request,
+          reply,
+          id,
           method,
-          userId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          requestId: request.id,
+          authPayload,
+          startTime,
         });
-
-        sendInternalError(reply, id);
       } finally {
         // Ensure shutdown is called for the per-request instance
         if (bambooServer) {
