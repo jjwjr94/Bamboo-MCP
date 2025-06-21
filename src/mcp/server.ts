@@ -48,7 +48,7 @@ Use this context to provide expert guidance on Meta advertising operations, camp
       mcpServer = new McpServer(
         { name: 'Bamboo MCP', version: '0.1.0' },
         {
-          capabilities: { tools: {}, resources: { subscribe: false }, prompts: {} },
+          capabilities: { tools: {}, resources: {}, prompts: {} },
           instructions,
         }
       );

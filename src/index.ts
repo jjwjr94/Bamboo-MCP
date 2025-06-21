@@ -17,7 +17,10 @@ const __dirname = dirname(__filename);
 
 export async function build(opts = {}) {
   const app = Fastify({
-    logger: true,
+    // logger: true,
+    logger: {
+      level: 'debug'
+    },
     ...opts,
   });
 
