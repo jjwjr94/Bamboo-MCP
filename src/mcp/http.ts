@@ -7,7 +7,8 @@ import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { AuthenticationError, TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import type { BambooMCPServer } from './server.js';
+import type { CoreServices } from './coreServices.js';
+import { BambooMCPServer } from './server.js';
 
 // Removed createMCPServerInstance function - using singleton pattern instead
 
@@ -26,7 +27,15 @@ function setupTransportCleanup(
     transport.close();
   };
 
+  // Handle successful response completion
+  reply.raw.on('finish', () => {
+    logger.debug('MCP response successfully completed');
+  });
+
+  // Handle connection close (client disconnect, network error, or after finish)
   reply.raw.on('close', cleanup);
+
+  // Handle stream errors (must be handled to prevent process crashes)
   reply.raw.on('error', (error) => {
     logger.error('Request error, cleaning up MCP resources', { error });
     cleanup();
@@ -120,10 +129,7 @@ async function handleMCPRequest(
   }
 }
 
-export function setupMCPHttpTransport(
-  fastify: FastifyInstance,
-  bambooServer: BambooMCPServer
-): void {
+export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: CoreServices): void {
   fastify.post(
     '/',
     {
@@ -135,13 +141,21 @@ export function setupMCPHttpTransport(
       const startTime = Date.now();
       const { id = null, method = 'unknown' } = request.body ?? {};
       let authPayload: JWTPayload | undefined;
-
-      reply.hijack();
+      let bambooServer: BambooMCPServer | undefined;
 
       try {
         const token = extractTokenFromHeader(request.headers.authorization);
         authPayload = await verifyJWT(token);
-        logger.info(`HTTP MCP: Authenticated user ${authPayload.userId}`);
+
+        // Hijack ONLY after successful authentication
+        reply.hijack();
+
+        logger.info(`HTTP MCP: Authenticated user ${authPayload.userId}`, {
+          requestId: request.id,
+        });
+
+        // Create a new server instance for this request
+        bambooServer = new BambooMCPServer(coreServices);
 
         await handleMCPRequest(request, reply, token, authPayload, method, bambooServer);
 
@@ -157,6 +171,7 @@ export function setupMCPHttpTransport(
             method,
             userId,
             error: error.message,
+            requestId: request.id,
           });
           sendInternalError(reply, id);
           return;
@@ -179,9 +194,15 @@ export function setupMCPHttpTransport(
           method,
           userId,
           error: error instanceof Error ? error.message : 'Unknown error',
+          requestId: request.id,
         });
 
         sendInternalError(reply, id);
+      } finally {
+        // Ensure shutdown is called for the per-request instance
+        if (bambooServer) {
+          await bambooServer.shutdown();
+        }
       }
     }
   );

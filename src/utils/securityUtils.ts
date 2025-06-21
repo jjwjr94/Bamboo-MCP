@@ -6,9 +6,10 @@ const REDACTION_PLACEHOLDER = '[REDACTED]';
 
 /**
  * A curated list of regular expressions to detect sensitive field names.
- * This pattern-based approach is flexible and covers variations.
- * - `i` flag for case-insensitivity.
- * - `_` or `$` to match prefixes or suffixes.
+ * This pattern-based approach is flexible and covers variations by using
+ * case-insensitive substring matching. It is designed to catch sensitive
+ * keywords across different naming conventions (camelCase, snake_case,
+ * PascalCase, kebab-case).
  *
  * IMPORTANT: This list is a critical security control. Developers must
  * update it if new sensitive data fields are introduced in API responses.
@@ -16,10 +17,11 @@ const REDACTION_PLACEHOLDER = '[REDACTED]';
 const SENSITIVE_KEY_PATTERNS: readonly RegExp[] = [
   /password/i,
   /credential/i,
-  /secret/i,
-  /token$/i, // e.g., access_token, refresh_token
-  /_key$/i, // e.g., api_key, private_key
-  /^auth/i, // e.g., auth, authorization
+  /secret/i, // Catches client_secret, appSecret, etc.
+  /token/i, // Catches accessToken, refresh_token, page_token, etc.
+  /(api|private|public|session|encryption|signing)[\-_]?key/i, // Catches apiKey, private_key, etc.
+  // Removed overly broad /auth/i and /\bkey\b/i patterns to prevent redaction
+  // of non-sensitive business data like authorization_category and location keys.
 ];
 
 /**

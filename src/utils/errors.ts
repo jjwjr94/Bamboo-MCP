@@ -93,6 +93,12 @@ export class PKCEError extends BambooError {
   }
 }
 
+export class InitializationError extends BambooError {
+  constructor(message = 'Service not initialized') {
+    super(message, 'INITIALIZATION_ERROR', 500, false); // Not an operational error
+  }
+}
+
 // Error response helpers
 export interface ErrorResponse {
   success: false;

@@ -25,9 +25,6 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
     this.registrationMethods = [
       this.registerGetBusinessAccounts.bind(this),
       this.registerGetBusinessUsers.bind(this),
-
-      // TESTING ONLY
-      this.registerTestTool.bind(this),
     ];
   }
 
@@ -52,43 +49,6 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
     logger.info('Business Manager MCP tools registered', { count: this.getToolCount() });
   }
 
-  private registerTestTool(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        businesses: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            created_time: z.string().optional(),
-            link: z.string().optional(),
-            verification_status: z.string().optional(),
-            vertical: z.string().optional(),
-            timezone_id: z.number().optional(),
-          })
-        ),
-      }),
-    });
-
-    this.server.registerTool(
-      'test_tool_0',
-      {
-        title: 'Test tool',
-        description:
-          'List business manager accounts that the user has access to. Requires business_management permission.',
-        inputSchema: {},
-        outputSchema: outputSchema.shape,
-      },
-      async (_params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getBusinessAccounts(authPayload);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
-    );
-  }
   private registerGetBusinessAccounts(): void {
     const outputSchema = z.object({
       type: z.literal('success'),

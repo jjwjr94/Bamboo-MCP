@@ -162,7 +162,9 @@ export class OAuthDatabaseService {
       token: hashedToken,
       userId,
       clientId,
-      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90-day expiry
+      expiresAt: new Date(
+        Date.now() + env.OAUTH_REFRESH_TOKEN_EXPIRATION_DAYS * 24 * 60 * 60 * 1000
+      ),
     });
   }
 
@@ -217,7 +219,9 @@ export class OAuthDatabaseService {
         token: newHashedToken,
         userId: userId,
         clientId: clientId,
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(
+          Date.now() + env.OAUTH_REFRESH_TOKEN_EXPIRATION_DAYS * 24 * 60 * 60 * 1000
+        ),
       });
     });
   }

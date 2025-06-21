@@ -8,10 +8,21 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, testConnection } from './db/client.js';
+import { CoreServices } from './mcp/coreServices.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
-import { BambooMCPServer } from './mcp/server.js';
 import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
+
+// Global unhandled promise rejection handler for process resilience
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', {
+    promise,
+    reason: reason instanceof Error ? reason.message : reason,
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+  // For a server, it's often better to log and let a process manager restart it
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -21,6 +32,8 @@ export async function build(opts = {}) {
     logger: {
       level: 'debug',
     },
+    requestTimeout: env.FASTIFY_REQUEST_TIMEOUT,
+    connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT,
     ...opts,
   });
 
@@ -100,12 +113,12 @@ export async function build(opts = {}) {
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
 
-  // Create and initialize the singleton MCP server instance
-  const bambooServer = await BambooMCPServer.create();
-  logger.info('Bamboo MCP Server initialized for HTTP transport');
+  // Initialize CoreServices once at startup
+  const coreServices = await CoreServices.initialize();
+  logger.info('CoreServices initialized for HTTP transport');
 
-  // Pass the initialized instance to the transport setup
-  setupMCPHttpTransport(app, bambooServer);
+  // Pass the CoreServices instance to the transport setup
+  setupMCPHttpTransport(app, coreServices);
 
   app.setErrorHandler(async (error, request, reply) => {
     logger.error('Unhandled request error', {
@@ -126,7 +139,8 @@ export async function build(opts = {}) {
 
     try {
       await app.close();
-      await bambooServer.shutdown();
+      // Per-request bambooServer instances are cleaned up automatically
+      // We only need to close the shared database connection pool
       await closeDatabase();
       logger.info('Graceful shutdown completed');
       process.exit(0);

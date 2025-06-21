@@ -5,34 +5,21 @@ import { MetaToolsHandler } from '../tools/meta/toolsHandler.js';
 import { logger } from '../utils/logger.js';
 import { PromptRegistry } from './PromptRegistry.js';
 import { ResourceRegistry } from './ResourceRegistry.js';
-import { promptContentCache } from './promptContent.js';
+import { CoreServices } from './coreServices.js';
 import { ToolRegistry } from './registries/toolRegistry.js';
 
 export class BambooMCPServer {
   private server: McpServer;
-  private toolsHandler: MetaToolsHandler;
-
-  private constructor(server: McpServer) {
-    this.server = server;
-    this.toolsHandler = new MetaToolsHandler();
-  }
 
   /**
-   * Creates a new BambooMCPServer instance with fully initialized prompts and server.
-   * This static factory method handles all server creation and async initialization.
+   * Creates a new, lightweight BambooMCPServer instance for a single request.
+   * All expensive resources are passed in via the CoreServices singleton.
    */
-  public static async create(): Promise<BambooMCPServer> {
-    let mcpServer: McpServer | undefined;
-
-    try {
-      // Initialize prompt content cache first
-      await promptContentCache.initialize();
-
-      // Build instructions from cached prompt content
-      const systemPrompt = promptContentCache.getSystemPromptContent();
-      const bestPractices = promptContentCache.getBestPracticesPromptContent();
-
-      const instructions = `# Bamboo Meta Ads AI Agent Instructions
+  constructor(coreServices: CoreServices) {
+    const promptCache = coreServices.promptCache;
+    const systemPrompt = promptCache.getSystemPromptContent();
+    const bestPractices = promptCache.getBestPracticesPromptContent();
+    const instructions = `# Bamboo Meta Ads AI Agent Instructions
 
 You are an expert Meta advertising specialist. Use these instructions and context for all interactions:
 
@@ -44,48 +31,33 @@ ${bestPractices || 'Best practices not available'}
 
 Use this context to provide expert guidance on Meta advertising operations, campaign optimization, and strategic recommendations.`;
 
-      // Create the MCP server with proper instructions
-      mcpServer = new McpServer(
-        { name: 'Bamboo MCP', version: '0.1.0' },
-        {
-          capabilities: { tools: {}, resources: {}, prompts: {} },
-          instructions,
-        }
-      );
-
-      // Create the wrapper instance
-      const bambooServer = new BambooMCPServer(mcpServer);
-
-      // Initialize and register all components
-      const promptRegistry = new PromptRegistry(mcpServer);
-      const resourceRegistry = new ResourceRegistry(mcpServer);
-      const toolRegistry = new ToolRegistry(mcpServer, bambooServer.toolsHandler);
-
-      // Register all components (no async initialization needed for PromptRegistry)
-      promptRegistry.register();
-      resourceRegistry.register();
-      toolRegistry.register();
-
-      logger.info('BambooMCPServer created and initialized successfully');
-      return bambooServer;
-    } catch (error) {
-      // Cleanup any partially initialized resources
-      if (mcpServer) {
-        try {
-          await mcpServer.close();
-        } catch (cleanupError) {
-          logger.error('Error during cleanup after initialization failure', {
-            originalError: error instanceof Error ? error.message : 'Unknown error',
-            cleanupError:
-              cleanupError instanceof Error ? cleanupError.message : 'Unknown cleanup error',
-          });
-        }
+    // Create a new McpServer instance for this request
+    this.server = new McpServer(
+      { name: 'Bamboo MCP', version: '0.1.0' },
+      {
+        capabilities: { tools: {}, resources: {}, prompts: {} },
+        instructions,
       }
+    );
 
-      // Add context and rethrow for consistent error handling
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`BambooMCPServer initialization failed: ${message}`);
-    }
+    // Instantiate handlers and registries for this specific server instance
+    const toolsHandler = new MetaToolsHandler();
+    const promptRegistry = new PromptRegistry(this.server);
+    const resourceRegistry = new ResourceRegistry(this.server);
+    const toolRegistry = new ToolRegistry(this.server, toolsHandler);
+
+    // Register all components
+    promptRegistry.register();
+    resourceRegistry.register();
+    toolRegistry.register();
+
+    logger.debug('Per-request BambooMCPServer instance created.');
+  }
+
+  // Keep the original create method for backward compatibility (stdio mode)
+  public static async create(): Promise<BambooMCPServer> {
+    const coreServices = await CoreServices.initialize();
+    return new BambooMCPServer(coreServices);
   }
 
   public getServer(): McpServer {
@@ -93,12 +65,12 @@ Use this context to provide expert guidance on Meta advertising operations, camp
   }
 
   /**
-   * Gracefully shuts down the MCP server and releases all resources.
+   * Gracefully shuts down the per-request MCP server instance.
    */
   public async shutdown(): Promise<void> {
-    logger.info('Shutting down Bamboo MCP Server...');
+    logger.debug('Shutting down per-request Bamboo MCP Server...');
     await this.server.close();
-    logger.info('Bamboo MCP Server shutdown complete');
+    logger.debug('Per-request Bamboo MCP Server shutdown complete.');
   }
 
   public async runStdio() {
@@ -110,10 +82,11 @@ Use this context to provide expert guidance on Meta advertising operations, camp
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // The create method now handles all initialization via CoreServices
   BambooMCPServer.create()
     .then((bambooServer) => bambooServer.runStdio())
     .catch((error) => {
-      logger.error('Failed to start MCP server', { error });
+      logger.error('Failed to start MCP server in stdio mode', { error });
       process.exit(1);
     });
 }

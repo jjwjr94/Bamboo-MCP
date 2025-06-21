@@ -6,10 +6,14 @@ import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
+import type { MetaAdAccountAssignedUsersResponse } from '../../types/meta.js';
 import { env } from '../../utils/env.js';
 import { TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { MetaApiService } from './ApiService.js';
+import {
+  createPermissionsFetchRequest,
+  executeBatchRequests,
+} from '../../utils/metaBatchHelper.js';
 import { handleMetaApiCall, initializeMetaApi } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 
@@ -136,22 +140,61 @@ export class MetaAdAccountHandler {
             },
           });
 
-        // --- Phase 2: Fetch and update permissions (Optimized) ---
+        // --- Phase 2: Fetch and update permissions (Optimized with Batching) ---
         // With the basic account info, including businessId, now stored in the database
-        // (within this transaction), we can process all accounts in parallel to improve performance.
-        // The underlying call to fetchAdAccountPermissions can now look up the businessId if needed.
-        const permissionUpdatePromises = extractedAccounts.map(async (accountData) => {
-          // This call now works for business-managed accounts because the businessId
-          // was stored in Phase 1 and is available within this transaction.
-          const permissions = await MetaApiService.fetchAdAccountPermissions(
-            accountData.id,
-            accessToken,
-            metaUserId,
-            authPayload.userId
-          );
+        // (within this transaction), we can process all accounts with a single batch request.
+        // This eliminates the N+1 query problem and dramatically improves performance.
 
-          // Update the permissions for the specific ad account
-          // This DB update can also run in parallel within the transaction.
+        // 1. Create a batch request for each account's permissions.
+        const permissionRequests = extractedAccounts.map((account) =>
+          createPermissionsFetchRequest(account.id, account.businessId || undefined)
+        );
+
+        // 2. Execute the batch request to fetch all permissions in one API call.
+        const batchResponses = await executeBatchRequests(permissionRequests, accessToken);
+
+        // 3. Create a lookup map for efficient response processing.
+        const responseMap = new Map(
+          batchResponses.map((res) => [
+            res.id.replace('permissions_', ''), // Key by ad account ID
+            res,
+          ])
+        );
+
+        // 4. Process each account (ensuring all accounts are included even if permission fetch failed).
+        const finalAccountUpdatePromises = extractedAccounts.map(async (accountData) => {
+          const response = responseMap.get(accountData.id);
+          let permissions = ['UNKNOWN']; // Default value on failure
+
+          if (response && response.code === 200 && response.body) {
+            try {
+              const permissionData = JSON.parse(
+                response.body
+              ) as MetaAdAccountAssignedUsersResponse;
+              const userPermissions = permissionData.data?.find((user) => user.id === metaUserId);
+
+              if (userPermissions?.tasks && userPermissions.tasks.length > 0) {
+                permissions = userPermissions.tasks;
+              } else {
+                logger.warn('User not found in batch permissions response or no tasks assigned', {
+                  adAccountId: accountData.id,
+                  metaUserId,
+                });
+              }
+            } catch (e) {
+              logger.error('Failed to parse permissions from batch response', {
+                adAccountId: accountData.id,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          } else {
+            logger.error('Failed batch request for ad account permissions', {
+              adAccountId: accountData.id,
+              responseCode: response?.code,
+            });
+          }
+
+          // Update the permissions for the specific ad account within the transaction.
           await tx
             .update(adAccounts)
             .set({ permissions })
@@ -159,14 +202,15 @@ export class MetaAdAccountHandler {
               and(eq(adAccounts.id, accountData.id), eq(adAccounts.userId, authPayload.userId))
             );
 
+          // Return the final data structure, same as the original implementation.
           return {
             ...accountData,
             permissions,
           };
         });
 
-        // Await all parallel operations to complete using Promise.allSettled for resilience
-        const permissionUpdateResults = await Promise.allSettled(permissionUpdatePromises);
+        // Await all parallel database operations to complete using Promise.allSettled for resilience
+        const permissionUpdateResults = await Promise.allSettled(finalAccountUpdatePromises);
 
         const finalAccountsWithPermissions = [];
         for (const result of permissionUpdateResults) {

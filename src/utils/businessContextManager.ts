@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { withUserContext } from '../db/client.js';
 import { adAccounts } from '../db/schema.js';
+import { env } from './env.js';
 import { NotFoundError } from './errors.js';
 import { logger } from './logger.js';
 
@@ -159,9 +160,9 @@ export async function discoverAndCacheBusinessContext(
   const discoveryPromises = adAccountIds.map(async (adAccountId) => {
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${adAccountId}?access_token=${accessToken}&fields=business,name,status`,
+        `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business,name,status`,
         {
-          signal: AbortSignal.timeout(10000), // 10 second timeout for discovery
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT), // Use configured timeout
         }
       );
 

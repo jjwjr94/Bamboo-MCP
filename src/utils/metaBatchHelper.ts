@@ -56,7 +56,7 @@ export async function executeBatchRequests(
       ...(req.body && { body: req.body }),
     }));
 
-    const response = await fetch('https://graph.facebook.com/v22.0/', {
+    const response = await fetch(`https://graph.facebook.com/${env.META_API_VERSION}/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

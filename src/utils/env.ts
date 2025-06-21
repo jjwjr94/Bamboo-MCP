@@ -7,6 +7,9 @@ const envSchema = z.object({
   // Database (Direct PostgreSQL connection)
   DATABASE_URL: z.string().url(),
 
+  // OAuth Refresh Token Configuration
+  OAUTH_REFRESH_TOKEN_EXPIRATION_DAYS: z.string().transform(Number).default('90'),
+
   // Facebook OAuth
   FACEBOOK_APP_ID: z.string(),
   FACEBOOK_APP_SECRET: z.string(),
@@ -38,9 +41,36 @@ const envSchema = z.object({
   // Server
   BASE_URL: z.string().url(),
 
+  // Database Connection Pool Configuration
+  DB_POOL_MAX: z.string().transform(Number).default('10'),
+  DB_POOL_IDLE_TIMEOUT: z.string().transform(Number).default('30'),
+  DB_POOL_MAX_LIFETIME: z.string().transform(Number).default('900'), // 15 minutes in seconds
+  DB_POOL_CONNECT_TIMEOUT: z.string().transform(Number).default('10'),
+
   // Timeout Configurations
   META_API_TIMEOUT: z.string().transform(Number).default('15000'),
   DB_STATEMENT_TIMEOUT: z.string().transform(Number).default('10000'),
+
+  // Server Timeout Configurations
+  FASTIFY_REQUEST_TIMEOUT: z.string().transform(Number).default('60000'),
+  FASTIFY_CONNECTION_TIMEOUT: z.string().transform(Number).default('60000'),
+
+  // Upload-Specific Timeout Configurations
+  // These timeouts are designed for image/video upload endpoints that tunnel to Meta API
+  // Regular endpoints should use FASTIFY_REQUEST_TIMEOUT (60s) for security
+  // Upload endpoints should override with FASTIFY_UPLOAD_REQUEST_TIMEOUT (10min) per route
+  // Example usage:
+  //   fastify.route({
+  //     method: 'POST', url: '/mcp/upload',
+  //     handler: async (request, reply) => {
+  //       request.raw.setTimeout(env.FASTIFY_UPLOAD_REQUEST_TIMEOUT);
+  //       // handle upload with extended timeout
+  //     }
+  //   });
+  FASTIFY_UPLOAD_REQUEST_TIMEOUT: z.string().transform(Number).default('600000'),
+  FASTIFY_UPLOAD_CONNECTION_TIMEOUT: z.string().transform(Number).default('600000'),
+  META_UPLOAD_TIMEOUT: z.string().transform(Number).default('480000'),
+  META_UPLOAD_CHUNK_SIZE: z.string().transform(Number).default('4194304'),
 
   // MCP Configuration
   MCP_REQUEST_TIMEOUT: z.string().transform(Number).default('30000'),

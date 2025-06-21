@@ -43,6 +43,18 @@ JWT_EXPIRES_IN=24h
 
 # Server
 BASE_URL=https://yourdomain.com
+
+# Server Timeout Configuration
+FASTIFY_REQUEST_TIMEOUT=60000
+FASTIFY_CONNECTION_TIMEOUT=60000
+
+# Upload-Specific Timeout Configuration
+FASTIFY_UPLOAD_REQUEST_TIMEOUT=600000    # 10 minutes for large file uploads
+FASTIFY_UPLOAD_CONNECTION_TIMEOUT=600000 # 10 minutes for upload connections
+META_UPLOAD_TIMEOUT=480000               # 8 minutes for Meta API uploads
+META_UPLOAD_CHUNK_SIZE=4194304           # 4MB chunks for resumable uploads
+
+# Application Timeouts
 MCP_REQUEST_TIMEOUT=30000
 META_API_TIMEOUT=15000
 

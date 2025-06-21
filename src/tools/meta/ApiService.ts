@@ -33,17 +33,20 @@ export class MetaApiService {
     code: string
   ): Promise<{ accessToken: string; expiresIn?: number }> {
     return handleMetaApiCall(async () => {
-      const tokenResponse = await fetch('https://graph.facebook.com/v22.0/oauth/access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: env.FACEBOOK_APP_ID,
-          client_secret: env.FACEBOOK_APP_SECRET,
-          code: code,
-          redirect_uri: env.FACEBOOK_CALLBACK_URL,
-        }),
-        signal: AbortSignal.timeout(env.META_API_TIMEOUT),
-      });
+      const tokenResponse = await fetch(
+        `https://graph.facebook.com/${env.META_API_VERSION}/oauth/access_token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: env.FACEBOOK_APP_ID,
+            client_secret: env.FACEBOOK_APP_SECRET,
+            code: code,
+            redirect_uri: env.FACEBOOK_CALLBACK_URL,
+          }),
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        }
+      );
 
       if (!tokenResponse.ok) {
         const errorData = (await tokenResponse.json().catch(() => ({}))) as MetaGraphApiError;
@@ -75,7 +78,7 @@ export class MetaApiService {
   public static async getMetaUserInfo(accessToken: string): Promise<{ id: string }> {
     return handleMetaApiCall(async () => {
       const userResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`,
+        `https://graph.facebook.com/${env.META_API_VERSION}/me?access_token=${accessToken}&fields=id`,
         {
           signal: AbortSignal.timeout(env.META_API_TIMEOUT),
         }
@@ -125,7 +128,7 @@ export class MetaApiService {
     }
 
     let nextUrl: string | undefined =
-      `https://graph.facebook.com/v22.0/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name,business&limit=100`;
+      `https://graph.facebook.com/${env.META_API_VERSION}/me/adaccounts?access_token=${accessToken}&fields=id,name,account_status,currency,timezone_name,business&limit=100`;
 
     try {
       while (nextUrl) {
@@ -500,7 +503,7 @@ export class MetaApiService {
         });
 
         const response = await fetch(
-          `https://graph.facebook.com/v22.0/${adAccountId}?access_token=${accessToken}&fields=business`,
+          `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business`,
           {
             signal: AbortSignal.timeout(env.META_API_TIMEOUT),
           }
@@ -649,7 +652,7 @@ export class MetaApiService {
       params.set('business', businessId);
     }
 
-    return `https://graph.facebook.com/v22.0/${adAccountId}/assigned_users?${params.toString()}`;
+    return `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}/assigned_users?${params.toString()}`;
   }
 
   /**
@@ -662,7 +665,7 @@ export class MetaApiService {
   public static async validateAccessToken(accessToken: string): Promise<boolean> {
     return handleMetaApiCall(async () => {
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/me?access_token=${accessToken}&fields=id`,
+        `https://graph.facebook.com/${env.META_API_VERSION}/me?access_token=${accessToken}&fields=id`,
         {
           signal: AbortSignal.timeout(env.META_API_TIMEOUT),
         }

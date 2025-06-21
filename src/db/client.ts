@@ -9,12 +9,12 @@ import * as schema from './schema.js';
 // prepare: false is required for Supabase connection pooling
 const client = postgres(env.DATABASE_URL, {
   prepare: false,
-  max: 10,
+  max: env.DB_POOL_MAX,
   onnotice: () => {},
 
-  idle_timeout: 30,
-  max_lifetime: 60 * 15,
-  connect_timeout: 10,
+  idle_timeout: env.DB_POOL_IDLE_TIMEOUT,
+  max_lifetime: env.DB_POOL_MAX_LIFETIME,
+  connect_timeout: env.DB_POOL_CONNECT_TIMEOUT,
 
   connection: {
     statement_timeout: env.DB_STATEMENT_TIMEOUT,
