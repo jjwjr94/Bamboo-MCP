@@ -197,7 +197,8 @@ export class AdCreativeUploadHandler {
           const accountSegment = uploadRequest.adAccountId.startsWith('act_')
             ? uploadRequest.adAccountId
             : `act_${uploadRequest.adAccountId}`;
-          const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
+          const uploadUrl = 'https://httpbin.org/post';
+          logger.warn('DEBUG MODE: Uploads are being sent to httpbin.org/post instead of Meta API');
 
           // Enhanced logging to validate request parameters before streaming
           const formHeaders = form.getHeaders();
