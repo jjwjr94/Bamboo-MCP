@@ -517,7 +517,6 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
       // Simulate concurrent operations from different users
       const concurrentOperations = Array.from({ length: 5 }, (_, i) => {
         const userId = i % 2 === 0 ? user1.id : user2.id;
-        const expectedAccountId = i % 2 === 0 ? 'act_rls_1' : 'act_rls_2';
 
         return withUserContext(userId, async (tx) => {
           const accounts = await tx.select().from(adAccounts);
@@ -556,7 +555,7 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
             await tx.execute(sql`SET LOCAL ROLE app_user`);
             const result = await tx.select().from(users);
             return result.length === 0; // Should be empty due to RLS
-          } catch (error) {
+          } catch (_error) {
             // If error due to missing user context, that's also valid RLS behavior
             return true;
           }
@@ -571,7 +570,7 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
 
     it('should maintain transaction isolation during context switches', async () => {
       // Test that switching user context within a transaction is properly isolated
-      const operations: Array<{ userId: string; data: any }> = [];
+      const operations: Array<{ userId: string; data: Array<{ id?: string }> }> = [];
 
       await withUserContext(user1.id, async (tx) => {
         const user1Data = await tx.select().from(users);

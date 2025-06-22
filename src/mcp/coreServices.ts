@@ -1,4 +1,7 @@
-import { MetaServerAuthProvider } from '../auth/MetaServerAuthProvider.js';
+import {
+  type MetaServerAuthProvider,
+  composeMetaServerAuthProvider,
+} from '../auth/MetaServerAuthProvider.js';
 import { InitializationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { promptContentCache } from './promptContent.js';
@@ -16,7 +19,7 @@ export class CoreServices {
   public readonly promptCache: typeof promptContentCache;
 
   private constructor() {
-    this.authProvider = MetaServerAuthProvider.getInstance();
+    this.authProvider = composeMetaServerAuthProvider();
     this.promptCache = promptContentCache;
     logger.info('CoreServices singleton constructor called.');
   }
@@ -65,5 +68,12 @@ export class CoreServices {
       throw new InitializationError('CoreServices not initialized. Call initialize() first.');
     }
     return CoreServices.instance;
+  }
+
+  /**
+   * Cleanup method for graceful shutdown
+   */
+  public destroy(): void {
+    this.authProvider.destroy();
   }
 }

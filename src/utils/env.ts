@@ -23,6 +23,12 @@ const envSchema = z.object({
       'ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read'
     ),
 
+  // CORS Configuration
+  ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((s) => s.trim()) : [])),
+
   // JWT - EdDSA (Ed25519) asymmetric keys only
   JWT_PRIVATE_KEY: z
     .string()

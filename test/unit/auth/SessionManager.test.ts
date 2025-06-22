@@ -5,7 +5,6 @@ import { db } from '../../../src/db/client.js';
 import { oauthSessions, oauthTempAuthCodes } from '../../../src/db/schema.js';
 import type { SessionData, TempAuthCodeData } from '../../../src/types/auth.js';
 import { DatabaseError, ValidationError } from '../../../src/utils/errors.js';
-import { lt } from 'drizzle-orm';
 
 describe('SessionManager', () => {
   let sessionManager: SessionManager;
@@ -466,7 +465,7 @@ describe('SessionManager', () => {
         expect(initialSessions).toHaveLength(2);
         expect(initialCodes).toHaveLength(2);
 
-        // Run cleanup
+        // Run cleanup using the SessionManager's helper to ensure real implementation is tested
         await sessionManager.cleanupExpiredSessions();
 
         // Verify only valid records remain
@@ -530,13 +529,8 @@ describe('SessionManager', () => {
         // Add a small delay to ensure timing consistency
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        // Run cleanup using direct database operations to avoid transaction conflicts
-        // This tests the same logic as cleanupExpiredSessions() but without withUserContext
-        const cleanupTime = new Date();
-        await db.transaction(async (tx) => {
-          await tx.delete(oauthSessions).where(lt(oauthSessions.expiresAt, cleanupTime));
-          await tx.delete(oauthTempAuthCodes).where(lt(oauthTempAuthCodes.expiresAt, cleanupTime));
-        });
+        // Run cleanup using the SessionManager's helper to ensure real implementation is tested
+        await sessionManager.cleanupExpiredSessions();
 
         // Verify both records still exist (cleanup should preserve non-expired records)
         const remainingSessions = await db.select().from(oauthSessions);

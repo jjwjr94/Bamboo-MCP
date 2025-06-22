@@ -53,6 +53,18 @@ export default defineConfig({
 
     // Disable watch mode by default - tests should run once and exit
     watch: false,
+
+    // Force single-threaded execution to prevent database deadlocks.
+    // Integration tests share a single PostgreSQL container, so concurrent
+    // workers can create lock contention and deadlocks. Running sequentially
+    // ensures deterministic test execution and eliminates race conditions.
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
+    maxConcurrency: 1,
   },
 
   // Path aliases for clean imports

@@ -14,7 +14,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
 
   // Input schema for general ads archive search
   public static readonly SearchAdsArchiveInputSchema = z.object({
-    searchTerms: z.string().optional().describe('Keywords to search for in ad creative content.'),
+    searchTerms: z.string().optional().describe('Keywords to search for in ad content.'),
     searchPageIds: z
       .array(z.string())
       .max(10)
@@ -24,6 +24,11 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.enum(['FACEBOOK', 'INSTAGRAM', 'MESSENGER', 'AUDIENCE_NETWORK']))
       .optional()
       .describe('Platforms where ads were published.'),
+    adReachedCountries: z
+      .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
+      .min(1, 'At least one country must be specified')
+      .max(50, 'Maximum 50 countries allowed')
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
     limit: z
       .number()
       .int()
@@ -35,16 +40,21 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
 
   // Input schema for political ads search
   public static readonly GetPoliticalAdsInputSchema = z.object({
-    searchTerms: z.string().optional().describe('Keywords to search for in political ad content.'),
+    searchTerms: z.string().optional().describe('Keywords to search for in ad content.'),
     searchPageIds: z
       .array(z.string())
       .max(10)
       .optional()
-      .describe('Facebook Page IDs to filter political ads by (maximum 10 pages).'),
+      .describe('Facebook Page IDs to filter ads by (maximum 10 pages).'),
     publisherPlatforms: z
       .array(z.enum(['FACEBOOK', 'INSTAGRAM', 'MESSENGER', 'AUDIENCE_NETWORK']))
       .optional()
-      .describe('Platforms where political ads were published.'),
+      .describe('Platforms where ads were published.'),
+    adReachedCountries: z
+      .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
+      .min(1, 'At least one country must be specified')
+      .max(50, 'Maximum 50 countries allowed')
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
     limit: z
       .number()
       .int()
@@ -69,6 +79,11 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.enum(['FACEBOOK', 'INSTAGRAM', 'MESSENGER', 'AUDIENCE_NETWORK']))
       .optional()
       .describe('Platforms where ads from these pages were published.'),
+    adReachedCountries: z
+      .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
+      .min(1, 'At least one country must be specified')
+      .max(50, 'Maximum 50 countries allowed')
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
     limit: z
       .number()
       .int()
@@ -94,6 +109,11 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.enum(['FACEBOOK', 'INSTAGRAM', 'MESSENGER', 'AUDIENCE_NETWORK']))
       .optional()
       .describe('Platforms where ads were published.'),
+    adReachedCountries: z
+      .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
+      .min(1, 'At least one country must be specified')
+      .max(50, 'Maximum 50 countries allowed')
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
     includeRegionalData: z
       .boolean()
       .optional()
@@ -211,7 +231,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
 
   private registerGetAdsArchiveInsights(): void {
     const successDataSchema = z.object({
-      insights: z
+      ads_insights: z
         .array(MetaAdsArchiveResponseSchema)
         .describe('Enhanced archived ads data with demographic and regional insights.'),
     });

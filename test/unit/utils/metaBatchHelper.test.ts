@@ -499,7 +499,7 @@ describe('metaBatchHelper', () => {
       ];
 
       for (const error of testCases) {
-        // Cast through unknown followed by the test-local MetaApiErrorObject type to avoid the `any` type.
+        // Cast through unknown to MetaApiErrorObject to maintain type safety without using `any`.
         expect(classifyMetaPermissionError(error as unknown as MetaApiErrorObject)).toBe('unknown');
       }
     });
@@ -517,7 +517,8 @@ describe('metaBatchHelper', () => {
       ];
 
       for (const error of malformedErrors) {
-        expect(classifyMetaPermissionError(error as any)).toBe('unknown');
+        // Cast through unknown to MetaApiErrorObject to maintain type safety without using `any`.
+        expect(classifyMetaPermissionError(error as unknown as MetaApiErrorObject)).toBe('unknown');
       }
     });
   });

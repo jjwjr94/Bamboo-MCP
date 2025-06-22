@@ -27,12 +27,16 @@ export class MetaAdsArchiveHandler {
     searchPageIds?: string[];
     adType?: string;
     publisherPlatforms?: string[];
+    adReachedCountries: string[];
     fields: string[];
     limit?: number;
     after?: string;
   }): string {
     const baseUrl = `https://graph.facebook.com/${env.META_API_VERSION}/ads_archive`;
     const urlParams = new URLSearchParams();
+
+    // Required parameter - must be set
+    urlParams.set('ad_reached_countries', JSON.stringify(params.adReachedCountries));
 
     if (params.searchTerms) {
       urlParams.set('search_terms', params.searchTerms);
@@ -67,6 +71,7 @@ export class MetaAdsArchiveHandler {
       searchPageIds?: string[];
       adType?: string;
       publisherPlatforms?: string[];
+      adReachedCountries: string[];
       fields: string[];
     },
     maxResults: number,
@@ -167,6 +172,7 @@ export class MetaAdsArchiveHandler {
       searchTerms?: string;
       searchPageIds?: string[];
       publisherPlatforms?: string[];
+      adReachedCountries: string[];
       limit?: number;
     }
   ): Promise<SearchAdsArchiveResult> {
@@ -200,6 +206,7 @@ export class MetaAdsArchiveHandler {
             searchTerms: params.searchTerms,
             searchPageIds: params.searchPageIds,
             publisherPlatforms: params.publisherPlatforms,
+            adReachedCountries: params.adReachedCountries,
             fields,
           },
           maxResults,
@@ -224,7 +231,7 @@ export class MetaAdsArchiveHandler {
   }
 
   /**
-   * Specialized search for political and social issue ads
+   * Search for political and social issue ads
    */
   async getPoliticalAds(
     authPayload: JWTPayload,
@@ -232,6 +239,7 @@ export class MetaAdsArchiveHandler {
       searchTerms?: string;
       searchPageIds?: string[];
       publisherPlatforms?: string[];
+      adReachedCountries: string[];
       limit?: number;
     }
   ): Promise<GetPoliticalAdsResult> {
@@ -241,7 +249,7 @@ export class MetaAdsArchiveHandler {
       async () => {
         const accessToken = await fetchUserTokenString(authPayload.userId);
 
-        // Enhanced fields for political ads including transparency data
+        // Enhanced fields for political ads transparency
         const fields = [
           'id',
           'ad_creation_time',
@@ -271,6 +279,7 @@ export class MetaAdsArchiveHandler {
             searchPageIds: params.searchPageIds,
             publisherPlatforms: params.publisherPlatforms,
             adType: 'POLITICAL_AND_ISSUE_ADS', // Filter for political ads only
+            adReachedCountries: params.adReachedCountries,
             fields,
           },
           maxResults,
@@ -303,6 +312,7 @@ export class MetaAdsArchiveHandler {
       pageIds: string[];
       searchTerms?: string;
       publisherPlatforms?: string[];
+      adReachedCountries: string[];
       limit?: number;
     }
   ): Promise<GetPageArchiveAdsResult> {
@@ -345,6 +355,7 @@ export class MetaAdsArchiveHandler {
             searchPageIds: params.pageIds,
             searchTerms: params.searchTerms,
             publisherPlatforms: params.publisherPlatforms,
+            adReachedCountries: params.adReachedCountries,
             fields,
           },
           maxResults,
@@ -379,6 +390,7 @@ export class MetaAdsArchiveHandler {
       searchPageIds?: string[];
       adType?: 'ALL' | 'POLITICAL_AND_ISSUE_ADS';
       publisherPlatforms?: string[];
+      adReachedCountries: string[];
       includeRegionalData?: boolean;
       includeDemographicData?: boolean;
       limit?: number;
@@ -428,6 +440,7 @@ export class MetaAdsArchiveHandler {
             searchPageIds: params.searchPageIds,
             adType: params.adType,
             publisherPlatforms: params.publisherPlatforms,
+            adReachedCountries: params.adReachedCountries,
             fields: enhancedFields,
           },
           maxResults,

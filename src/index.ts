@@ -18,6 +18,15 @@ import { env } from './utils/env.js';
 import { ValidationError } from './utils/errors.js';
 import { logger } from './utils/logger.js';
 
+import {
+  categorizeUploadError,
+  renderServerErrorPage,
+  renderUploadFailedPage,
+  renderUploadFormPage,
+  renderUploadSessionNotFoundPage,
+  renderUploadSuccessPage,
+} from './utils/uploadTemplates.js';
+
 // Global unhandled promise rejection handler for process resilience
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', {
@@ -31,212 +40,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Helper functions extracted to keep route handler below cognitive-complexity limits
-// -----------------------------------------------------------------------------
-
-type UploadSuccessResult = {
-  assetType: string;
-  metaAssetId: string;
-};
-
-/**
- * Generates the HTML markup for a successful upload response.
- */
-function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSuccessResult): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Complete</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-</head>
-<body>
-  <main class="container">
-    <article>
-      <h1>✅ Upload Complete!</h1>
-      <p><strong>Asset Type:</strong> ${assetType}</p>
-      <p><strong>Meta Asset ID:</strong> ${metaAssetId}</p>
-      <p>Your file has been successfully uploaded to Meta. You can now close this window.</p>
-    </article>
-  </main>
-</body>
-</html>`;
-}
-
-// Troubleshooting blocks broken out to avoid inline cognitive overload
-const TROUBLESHOOTING_TEMPLATES = {
-  metaApi: `
-    <div class="troubleshooting">
-      <h3>Possible Solutions:</h3>
-      <ul>
-        <li><strong>Check Ad Account Access:</strong> Verify the ad account still exists and you have access to it in Meta Business Manager</li>
-        <li><strong>Verify Permissions:</strong> Ensure your account has Admin or Advertiser role on the ad account</li>
-        <li><strong>Check Account Status:</strong> The ad account may be disabled, under review, or restricted by Meta</li>
-        <li><strong>Token Issues:</strong> Your access token may have expired or been revoked</li>
-      </ul>
-      <p><strong>Next Steps:</strong> Please check your Meta Business Manager and try again, or contact your account administrator.</p>
-    </div>
-  `,
-  permission: `
-    <div class="troubleshooting">
-      <h3>Permission Issue Detected:</h3>
-      <ul>
-        <li>Verify you have the required permissions for this ad account</li>
-        <li>Check if your access token is still valid</li>
-        <li>Ensure you have the 'ads_management' permission scope</li>
-      </ul>
-    </div>
-  `,
-  fileFormat: `
-    <div class="troubleshooting">
-      <h3>File Format Issue:</h3>
-      <ul>
-        <li><strong>Supported Image Formats:</strong> JPEG, PNG, GIF, WebP</li>
-        <li><strong>Supported Video Formats:</strong> MP4, MOV</li>
-        <li>Check that your file is not corrupted</li>
-        <li>Ensure the file extension matches the actual file type</li>
-      </ul>
-    </div>
-  `,
-  network: `
-    <div class="troubleshooting">
-      <h3>Network Issue:</h3>
-      <ul>
-        <li>Check your internet connection</li>
-        <li>The file may be too large - try a smaller file</li>
-        <li>Try uploading again in a few minutes</li>
-      </ul>
-    </div>
-  `,
-  general: `
-    <div class="troubleshooting">
-      <h3>General Troubleshooting:</h3>
-      <ul>
-        <li>Try refreshing the page and uploading again</li>
-        <li>Check that your file is not corrupted</li>
-        <li>Ensure you have a stable internet connection</li>
-        <li>If the problem persists, please contact support with the error details</li>
-      </ul>
-    </div>
-  `,
-} as const;
-
-/**
- * Determines the error category and corresponding troubleshooting steps from an error message.
- */
-function categorizeUploadError(errorMessage: string): {
-  errorCategory: string;
-  troubleshootingSteps: string;
-} {
-  // Order matters – first match wins
-  const checks: Array<{ predicate: (msg: string) => boolean; category: string; steps: string }> = [
-    {
-      predicate: (msg) =>
-        msg.includes('does not exist, cannot be loaded due to missing permissions'),
-      category: 'Meta API Permission Error',
-      steps: TROUBLESHOOTING_TEMPLATES.metaApi,
-    },
-    {
-      predicate: (msg) => msg.includes('permissions') || msg.includes('access'),
-      category: 'Permission Error',
-      steps: TROUBLESHOOTING_TEMPLATES.permission,
-    },
-    {
-      predicate: (msg) => msg.includes('Unsupported file type') || msg.includes('MIME type'),
-      category: 'File Format Error',
-      steps: TROUBLESHOOTING_TEMPLATES.fileFormat,
-    },
-    {
-      predicate: (msg) =>
-        msg.includes('timeout') || msg.includes('network') || msg.includes('fetch'),
-      category: 'Network Error',
-      steps: TROUBLESHOOTING_TEMPLATES.network,
-    },
-  ];
-
-  for (const check of checks) {
-    if (check.predicate(errorMessage)) {
-      return { errorCategory: check.category, troubleshootingSteps: check.steps };
-    }
-  }
-
-  return {
-    errorCategory: 'Upload Error',
-    troubleshootingSteps: TROUBLESHOOTING_TEMPLATES.general,
-  };
-}
-
-/**
- * Generates the HTML markup for a failed upload response.
- */
-function renderUploadFailedPage(
-  errorCategory: string,
-  errorMessage: string,
-  troubleshootingSteps: string
-): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Failed</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <style>
-    .troubleshooting {
-      background-color: var(--pico-card-background-color);
-      border: 1px solid var(--pico-border-color);
-      border-radius: var(--pico-border-radius);
-      padding: 1rem;
-      margin-top: 1rem;
-    }
-    .troubleshooting h3 { margin-top: 0; color: var(--pico-color); }
-    .troubleshooting ul { margin-bottom: 0; }
-    .troubleshooting li { margin-bottom: 0.5rem; }
-    .error-details {
-      background-color: var(--pico-del-background-color);
-      border-left: 4px solid var(--pico-del-color);
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0;
-    }
-    .error-details code {
-      background-color: rgba(0,0,0,0.1);
-      padding: 0.2rem 0.4rem;
-      border-radius: 0.2rem;
-      font-size: 0.9rem;
-    }
-  </style>
-</head>
-<body>
-  <main class="container">
-    <article>
-      <h1>❌ Upload Failed</h1>
-      <h2>${errorCategory}</h2>
-      <div class="error-details">
-        <p><strong>Error Details:</strong></p>
-        <code>${errorMessage}</code>
-      </div>
-      ${troubleshootingSteps}
-      <div style="margin-top: 2rem;">
-        <p><strong>Need Help?</strong> If you continue to experience issues, please:</p>
-        <ul>
-          <li>Copy the error details above</li>
-          <li>Note the time when the error occurred</li>
-          <li>Contact your system administrator or support team</li>
-        </ul>
-      </div>
-      <div style="margin-top: 2rem; text-align: center;">
-        <button onclick="window.location.reload()" style="margin-right: 1rem;">Try Again</button>
-        <button onclick="window.close()" class="secondary">Close Window</button>
-      </div>
-    </article>
-  </main>
-</body>
-</html>`;
-}
-
-// -----------------------------------------------------------------------------
+// Upload template utilities have been extracted to src/utils/uploadTemplates.ts
 
 export async function build(opts = {}) {
   const app = Fastify({
@@ -253,9 +57,19 @@ export async function build(opts = {}) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
+        // Allow stylesheets from self only. External CSS moved to self-hosted Bamboo UI.
+        styleSrc: ["'self'"],
+        // Allow scripts from self plus specific, trusted inline scripts via hashes.
+        scriptSrc: [
+          "'self'",
+          "'sha256-A40REw02TMNUgLngo/AHwyI0JYfT/WJkYhjTGB725ec='", // Hash for upload form script
+          "'sha256-2mtpGNqfVsBgxnI38W6i6CpnoCU7onmd5xFhbSS8lfY='", // Hash for failed page script
+        ],
         imgSrc: ["'self'", 'data:', 'https:'],
+        // Prevent clickjacking by disallowing the page to be framed.
+        frameAncestors: ["'none'"],
+        // Ensure forms can only be submitted to our own origin.
+        formAction: ["'self'"],
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -279,8 +93,24 @@ export async function build(opts = {}) {
     },
   });
 
+  // Validate that ALLOWED_ORIGINS is set in production.
+  if (env.NODE_ENV === 'production' && env.ALLOWED_ORIGINS.length === 0) {
+    logger.error(
+      'CRITICAL: ALLOWED_ORIGINS environment variable is not defined for production. Server is shutting down.'
+    );
+    process.exit(1);
+  }
+
+  // Log a warning if no origins are set in a non-production environment.
+  if (env.ALLOWED_ORIGINS.length === 0) {
+    logger.warn(
+      'SECURITY_RISK: No ALLOWED_ORIGINS defined. CORS is set to permissive mode. This is insecure for production.'
+    );
+  }
+
   app.register(cors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || true,
+    // If origins are defined, use them. Otherwise, fall back to permissive mode in non-production.
+    origin: env.ALLOWED_ORIGINS.length > 0 ? env.ALLOWED_ORIGINS : env.NODE_ENV !== 'production',
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -363,91 +193,14 @@ export async function build(opts = {}) {
         uploadRecord.status !== 'pending' ||
         new Date() > uploadRecord.expiresAt
       ) {
-        return reply
-          .status(404)
-          .type('text/html')
-          .send(`
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Upload Session Not Found</title>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-          </head>
-          <body>
-            <main class="container">
-              <article>
-                <h1>Upload Session Not Found</h1>
-                <p>This upload session is invalid, expired, or has already been used.</p>
-              </article>
-            </main>
-          </body>
-          </html>
-        `);
+        return reply.status(404).type('text/html').send(renderUploadSessionNotFoundPage());
       }
 
       // Serve upload form
-      return reply.type('text/html').send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Upload Creative Asset</title>
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-          <style>
-            button[aria-busy="true"] { color: transparent; }
-          </style>
-        </head>
-        <body>
-          <main class="container">
-            <article>
-              <h1>Upload Creative Asset</h1>
-              <p>Upload file: <strong>${uploadRecord.filename}</strong></p>
-              <p>The file type (image or video) will be automatically detected.</p>
-              <p><small>Supported formats: JPEG, PNG, GIF, WebP, MP4, MOV</small></p>
-              
-              <form id="uploadForm" action="/v1/assets/upload/${uploadId}" method="post" enctype="multipart/form-data">
-                <label for="file">
-                  Select file to upload:
-                  <input type="file" id="file" name="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mov,video/quicktime" required>
-                </label>
-                <button id="submitBtn" type="submit">Upload File</button>
-              </form>
-            </article>
-          </main>
-          <script>
-            const form = document.getElementById('uploadForm');
-            const submitBtn = document.getElementById('submitBtn');
-            const fileInput = document.getElementById('file');
-
-            form.addEventListener('submit', () => {
-              if (fileInput.files.length > 0) {
-                submitBtn.setAttribute('aria-busy', 'true');
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Uploading...';
-              }
-            });
-          </script>
-        </body>
-        </html>
-      `);
+      return reply.type('text/html').send(renderUploadFormPage(uploadId, uploadRecord.filename));
     } catch (error) {
       logger.error('Failed to serve upload form', { uploadId, error });
-      return reply
-        .status(500)
-        .type('text/html')
-        .send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head><title>Error</title></head>
-        <body>
-          <h1>Server Error</h1>
-          <p>Unable to load upload form. Please try again later.</p>
-        </body>
-        </html>
-      `);
+      return reply.status(500).type('text/html').send(renderServerErrorPage());
     }
   });
 
@@ -488,13 +241,23 @@ export async function build(opts = {}) {
         });
 
         // Return success page
-        return reply.type('text/html').send(renderUploadSuccessPage(result));
+        return reply.type('text/html').send(
+          renderUploadSuccessPage({
+            assetType: result.assetType,
+            metaAssetId: result.metaAssetId,
+          })
+        );
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'File upload failed';
-        logger.error('File upload failed', { uploadId, error: errorMessage });
+        const { errorCategory, troubleshootingSteps } = categorizeUploadError(errorMessage);
+
+        logger.error('File upload failed', {
+          uploadId,
+          error: errorMessage,
+          category: errorCategory,
+        });
 
         const statusCode = error instanceof ValidationError ? 400 : 500;
-        const { errorCategory, troubleshootingSteps } = categorizeUploadError(errorMessage);
 
         return reply
           .status(statusCode)
@@ -523,6 +286,8 @@ export async function build(opts = {}) {
 
     try {
       await app.close();
+      // Cleanup CoreServices
+      coreServices.destroy();
       // Per-request bambooServer instances are cleaned up automatically
       // We only need to close the shared database connection pool
       await closeDatabase();

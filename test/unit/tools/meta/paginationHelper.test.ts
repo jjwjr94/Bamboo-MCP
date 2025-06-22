@@ -136,19 +136,22 @@ describe('fetchAllPaginatedData', () => {
 
     it('should return an empty array for an empty initial cursor', async () => {
       const emptyCursor = createMockCursor<TestItem>([], null);
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor: emptyCursor });
+      const result = await fetchAllPaginatedData<TestItem>({
+        ...commonOptions,
+        cursor: emptyCursor,
+      });
       expect(result).toEqual([]);
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
     it('should return an empty array for a null cursor', async () => {
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor: null });
+      const result = await fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor: null });
       expect(result).toEqual([]);
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
     it('should return an empty array for an undefined cursor', async () => {
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor: undefined });
+      const result = await fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor: undefined });
       expect(result).toEqual([]);
       expect(logger.warn).not.toHaveBeenCalled();
     });
@@ -159,7 +162,10 @@ describe('fetchAllPaginatedData', () => {
       expect(Array.isArray(zeroCursor)).toBe(true);
       expect(zeroCursor.length).toBe(0);
 
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor: zeroCursor });
+      const result = await fetchAllPaginatedData<TestItem>({
+        ...commonOptions,
+        cursor: zeroCursor,
+      });
       expect(result).toEqual([]);
       expect(logger.warn).not.toHaveBeenCalled();
     });
@@ -167,7 +173,10 @@ describe('fetchAllPaginatedData', () => {
     it('should handle single item in cursor array', async () => {
       const singleItemCursor = createMockCursor<TestItem>([{ id: 42, name: 'Lone Item' }], null);
 
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor: singleItemCursor });
+      const result = await fetchAllPaginatedData<TestItem>({
+        ...commonOptions,
+        cursor: singleItemCursor,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ id: 42, name: 'Lone Item' });
@@ -286,9 +295,9 @@ describe('fetchAllPaginatedData', () => {
       const page1 = createMockCursor<TestItem>([{ id: 1, name: 'Item 1' }], mockNextPage);
       page1.next = vi.fn().mockRejectedValue(apiError);
 
-      await expect(fetchAllPaginatedData({ ...commonOptions, cursor: page1 })).rejects.toThrow(
-        'Meta API Failed'
-      );
+      await expect(
+        fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor: page1 })
+      ).rejects.toThrow('Meta API Failed');
 
       expect(logger.warn).not.toHaveBeenCalled();
     });
@@ -296,9 +305,10 @@ describe('fetchAllPaginatedData', () => {
     it('should terminate gracefully if hasNext() exists but next() is missing', async () => {
       const mockNextPage = createMockCursor<TestItem>([{ id: 2, name: 'Item 2' }], null);
       const cursor = createMockCursor<TestItem>([{ id: 1, name: 'Item 1' }], mockNextPage);
-      (cursor as any).next = undefined; // Break the cursor
+      // Intentionally remove the `next` method by casting through `unknown` to a generic record.
+      (cursor as unknown as Record<string, unknown>).next = undefined; // Break the cursor
 
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor });
+      const result = await fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor });
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe(1);
@@ -307,9 +317,10 @@ describe('fetchAllPaginatedData', () => {
 
     it('should terminate gracefully if next() exists but hasNext() is missing', async () => {
       const cursor = createMockCursor<TestItem>([{ id: 1, name: 'Item 1' }], null);
-      (cursor as any).hasNext = undefined; // Break the cursor
+      // Intentionally remove the `hasNext` method by casting through `unknown` to a generic record.
+      (cursor as unknown as Record<string, unknown>).hasNext = undefined; // Break the cursor
 
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor });
+      const result = await fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor });
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe(1);
@@ -321,7 +332,7 @@ describe('fetchAllPaginatedData', () => {
         throw new Error('hasNext failed');
       });
 
-      await expect(fetchAllPaginatedData({ ...commonOptions, cursor })).rejects.toThrow(
+      await expect(fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor })).rejects.toThrow(
         'hasNext failed'
       );
     });
@@ -331,7 +342,7 @@ describe('fetchAllPaginatedData', () => {
       cursor.hasNext = vi.fn().mockReturnValue(true);
       cursor.next = vi.fn().mockResolvedValue(null);
 
-      const result = await fetchAllPaginatedData({ ...commonOptions, cursor });
+      const result = await fetchAllPaginatedData<TestItem>({ ...commonOptions, cursor });
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe(1);

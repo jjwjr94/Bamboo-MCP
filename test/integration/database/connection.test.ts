@@ -1,7 +1,7 @@
 // Import test environment setup FIRST
 import '../../helpers/testEnv.js';
 
-import { sql, eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db, testConnection } from '../../../src/db/client.js';
 import { users } from '../../../src/db/schema.js';
@@ -19,13 +19,15 @@ const tableNames = [
 ];
 
 beforeEach(async () => {
-  // Use a transaction and reset role to the owner for cleanup.
-  // This ensures sufficient permissions, bypasses RLS policies,
-  // and makes the cleanup operation atomic, preventing deadlocks.
+  // Use individual DELETE operations instead of TRUNCATE to avoid acquiring
+  // AccessExclusive locks that can deadlock with concurrent test transactions.
+  // Row-level exclusive locks taken by DELETE are compatible with the locks
+  // held by other tests performing standard DML, dramatically reducing the
+  // likelihood of deadlocks while still guaranteeing a clean slate.
   await db.transaction(async (tx) => {
     await tx.execute(sql`RESET ROLE`);
     for (const tableName of tableNames) {
-      await tx.execute(sql.raw(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`));
+      await tx.execute(sql.raw(`DELETE FROM ${tableName}`));
     }
   });
 });
@@ -41,7 +43,7 @@ describe('Database Connection', () => {
     // Verify that our schema tables exist using pure Drizzle
     // Test that we can interact with the users table (which confirms it exists)
     const result = await db.select().from(users);
-    
+
     // If the table exists, we should get an empty array (not an error)
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(0); // Should be empty in test environment
@@ -58,7 +60,7 @@ describe('Database Connection', () => {
     // This prevents deadlocks from concurrent test operations
     // Note: This bypasses RLS by using database owner permissions (default)
     // RLS functionality is comprehensively tested in rls.test.ts
-    
+
     await db.transaction(async (tx) => {
       const testUser = {
         facebookUserId: 'test_fb_user_123',

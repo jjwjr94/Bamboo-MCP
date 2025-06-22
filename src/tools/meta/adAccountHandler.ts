@@ -22,7 +22,10 @@ import {
 import type { BatchResponse } from '../../utils/metaBatchHelper.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
-import { MetaPermissionHandler } from './permissionHandler.js';
+import {
+  MetaPermissionHandler,
+  PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS,
+} from './permissionHandler.js';
 import type { GetAdAccountsResult } from './types.js';
 
 export class MetaAdAccountHandler {
@@ -319,7 +322,35 @@ export class MetaAdAccountHandler {
   ) {
     if (accounts.length === 0) return [];
 
-    const permissionRequests = accounts.map((a) =>
+    const finalAccountsWithPermissions: Array<
+      ReturnType<typeof this.extractAccountData> & { permissions: string[] }
+    > = [];
+
+    // Separate personal accounts from those requiring batch API calls
+    const personalAccounts = accounts.filter((acc) => acc.businessId === null);
+    const accountsToBatch = accounts.filter((acc) => acc.businessId !== null);
+
+    // Handle personal accounts locally by assigning default owner permissions
+    for (const acc of personalAccounts) {
+      logger.info('Assigning default permissions for personal ad account in batch flow', {
+        adAccountId: acc.id,
+        userId,
+        reason: 'Personal account detected (businessId is null)',
+        defaultPermissions: PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS,
+      });
+      finalAccountsWithPermissions.push({
+        ...acc,
+        permissions: PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS,
+      });
+    }
+
+    // If no other accounts need batch processing, return early
+    if (accountsToBatch.length === 0) {
+      return finalAccountsWithPermissions;
+    }
+
+    // Process business-managed accounts using the batch API
+    const permissionRequests = accountsToBatch.map((a) =>
       createPermissionsFetchRequest(a.id, a.businessId)
     );
 
@@ -328,25 +359,24 @@ export class MetaAdAccountHandler {
       batchResponses.map((res) => [res.id.replace('permissions_', ''), res])
     );
 
-    const promises = accounts.map((acc) =>
+    const promises = accountsToBatch.map((acc) =>
       this.processAccountPermissions(acc, responseMap, accessToken, userId, metaUserId)
     );
     const settled = await Promise.allSettled(promises);
 
-    const final: Array<ReturnType<typeof this.extractAccountData> & { permissions: string[] }> = [];
-
+    // Combine batch results with the locally-handled personal accounts
     for (const result of settled) {
       if (result.status === 'fulfilled') {
-        final.push(result.value);
+        finalAccountsWithPermissions.push(result.value);
       } else {
-        logger.error('Failed to process permissions for an ad account', {
+        logger.error('Failed to process permissions for a batched ad account', {
           userId,
           reason: result.reason instanceof Error ? result.reason.message : result.reason,
         });
       }
     }
 
-    return final;
+    return finalAccountsWithPermissions;
   }
 
   /**

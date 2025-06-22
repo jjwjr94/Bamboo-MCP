@@ -5,6 +5,10 @@ import { adAccounts } from '../db/schema.js';
 import { env } from './env.js';
 import { NotFoundError } from './errors.js';
 import { logger } from './logger.js';
+import {
+  createBusinessContextDiscoveryRequest,
+  executeLargeBatchRequests,
+} from './metaBatchHelper.js';
 
 /**
  * Manages business context for Meta API calls, automatically handling
@@ -65,8 +69,8 @@ export async function getBusinessIdForAdAccount(
     return businessId;
   } catch (error) {
     // Re-throw NotFoundError to be handled by the coordinator.
-    // Use a property check on `error.code` which is more robust than `instanceof`.
-    if ((error as { code?: string }).code === 'NOT_FOUND') {
+    // Use instanceof for better type safety.
+    if (error instanceof NotFoundError) {
       throw error;
     }
 
@@ -139,101 +143,337 @@ export async function isBusinessManaged(userId: string, adAccountId: string): Pr
 }
 
 /**
- * Proactively discovers and caches business context for ad accounts.
+ * Parses a single batch discovery response into a normalized structure.
+ * Extracting this logic keeps the main coordinator function concise and below
+ * the cognitive-complexity threshold enforced by the linter.
+ */
+type BatchProcessingOutcome = {
+  accountToUpsert?: {
+    id: string;
+    userId: string;
+    name: string;
+    status: string;
+    businessId: string | null;
+  };
+  successId?: string;
+  failure?: { adAccountId: string; error: string };
+};
+
+function parseBusinessContextBatchResponse(
+  response: { id: string; code: number; body?: string },
+  userId: string
+): BatchProcessingOutcome {
+  const adAccountId = response.id.replace('business_context_', '');
+
+  try {
+    if (response.code === 200 && response.body) {
+      const data = JSON.parse(response.body) as {
+        business?: { id?: string };
+        name?: string;
+        status?: string;
+      };
+
+      const businessId = data.business?.id ?? null;
+      const name = data.name ?? 'Unknown Account';
+      const status = data.status ?? 'UNKNOWN';
+
+      logger.debug('Parsed business context from batch response', {
+        adAccountId,
+        userId,
+        businessId,
+        name,
+        status,
+        isBusinessManaged: businessId !== null,
+      });
+
+      return {
+        accountToUpsert: {
+          id: adAccountId,
+          userId,
+          name,
+          status,
+          businessId,
+        },
+        successId: adAccountId,
+      };
+    }
+
+    const errorMsg = `API returned ${response.code}: ${response.body ?? 'No body'}`;
+    logger.warn('Failed to discover business context for ad account', {
+      adAccountId,
+      userId,
+      status: response.code,
+      body: response.body,
+    });
+    return { failure: { adAccountId, error: errorMsg } };
+  } catch (parseError) {
+    const errorMsg = parseError instanceof Error ? parseError.message : 'Parse error';
+    logger.warn('Failed to parse business context response', {
+      adAccountId,
+      userId,
+      error: errorMsg,
+      responseBody: response.body,
+    });
+    return { failure: { adAccountId, error: errorMsg } };
+  }
+}
+
+/**
+ * Aggregates outcomes from all batch responses.
+ */
+function processBatchResponses(
+  responses: Array<{ id: string; code: number; body?: string }>,
+  userId: string
+) {
+  const outcome = {
+    accountsToUpsert: [] as Array<{
+      id: string;
+      userId: string;
+      name: string;
+      status: string;
+      businessId: string | null;
+    }>,
+    successful: [] as string[],
+    failed: [] as string[],
+    errors: [] as Array<{ adAccountId: string; error: string }>,
+  };
+
+  for (const res of responses) {
+    const parsed = parseBusinessContextBatchResponse(res, userId);
+    if (parsed.accountToUpsert) outcome.accountsToUpsert.push(parsed.accountToUpsert);
+    if (parsed.successId) outcome.successful.push(parsed.successId);
+    if (parsed.failure) {
+      outcome.failed.push(parsed.failure.adAccountId);
+      outcome.errors.push(parsed.failure);
+    }
+  }
+
+  return outcome;
+}
+
+/**
+ * Performs a bulk upsert of ad account business context.
+ */
+async function upsertAdAccounts(
+  userId: string,
+  accounts: Array<{
+    id: string;
+    userId: string;
+    name: string;
+    status: string;
+    businessId: string | null;
+  }>
+) {
+  if (accounts.length === 0) return;
+
+  await withUserContext(userId, async (tx) => {
+    await tx
+      .insert(adAccounts)
+      .values(accounts)
+      .onConflictDoUpdate({
+        target: [adAccounts.id, adAccounts.userId],
+        set: {
+          name: sql`excluded.name`,
+          status: sql`excluded.status`,
+          businessId: sql`excluded.business_id`,
+        },
+      });
+  });
+}
+
+/**
+ * Fetches business context directly from the Meta API.
+ */
+async function fetchBusinessContextFromApi(
+  userId: string,
+  accessToken: string,
+  adAccountId: string
+): Promise<{ businessId: string | null; name: string; status: string } | null> {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business,name,status`,
+      { signal: AbortSignal.timeout(env.META_API_TIMEOUT) }
+    );
+
+    if (!response.ok) {
+      logger.warn('API call failed while resolving business context', {
+        userId,
+        adAccountId,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      business?: { id?: string };
+      name?: string;
+      status?: string;
+    };
+
+    return {
+      businessId: data.business?.id ?? null,
+      name: data.name ?? 'Unknown Account',
+      status: data.status ?? 'UNKNOWN',
+    };
+  } catch (error) {
+    logger.warn('Meta API request threw while resolving business context', {
+      userId,
+      adAccountId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return null;
+  }
+}
+
+/**
+ * Caches the fetched business context for future lookups.
+ */
+async function cacheBusinessContext(
+  userId: string,
+  adAccountId: string,
+  context: { businessId: string | null; name: string; status: string }
+) {
+  try {
+    await withUserContext(userId, async (tx) => {
+      await tx
+        .insert(adAccounts)
+        .values({
+          id: adAccountId,
+          userId,
+          name: context.name,
+          status: context.status,
+          businessId: context.businessId,
+        })
+        .onConflictDoUpdate({
+          target: [adAccounts.id, adAccounts.userId],
+          set: {
+            name: sql`excluded.name`,
+            status: sql`excluded.status`,
+            businessId: sql`excluded.business_id`,
+          },
+        });
+    });
+
+    logger.debug('Cached business context from API fallback', {
+      userId,
+      adAccountId,
+      businessId: context.businessId,
+      name: context.name,
+      status: context.status,
+      source: 'api_discovery',
+    });
+  } catch (error) {
+    logger.warn('Failed to cache business context from API fallback', {
+      userId,
+      adAccountId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Proactively discovers and caches business context for ad accounts using efficient batch processing.
  * This is useful for handling cases where ad accounts exist but their business context
  * is not yet stored in the database.
  *
  * @param userId - The user ID for security context
  * @param accessToken - Meta access token for API calls
  * @param adAccountIds - Array of ad account IDs to discover business context for
- * @returns Promise that resolves when discovery is complete
+ * @param forceRefresh - If true, refresh cached data even for accounts already in database
+ * @returns Promise that resolves with discovery results
  */
 export async function discoverAndCacheBusinessContext(
   userId: string,
   accessToken: string,
-  adAccountIds: string[]
-): Promise<void> {
+  adAccountIds: string[],
+  forceRefresh = false
+): Promise<{ successful: string[]; failed: string[] }> {
   if (adAccountIds.length === 0) {
-    return;
+    return { successful: [], failed: [] };
   }
 
   logger.debug('Starting business context discovery', {
     userId,
     adAccountCount: adAccountIds.length,
     adAccountIds,
+    forceRefresh,
   });
 
-  const discoveryPromises = adAccountIds.map(async (adAccountId) => {
-    try {
-      const response = await fetch(
-        `https://graph.facebook.com/${env.META_API_VERSION}/${adAccountId}?access_token=${accessToken}&fields=business,name,status`,
-        {
-          signal: AbortSignal.timeout(env.META_API_TIMEOUT), // Use configured timeout
-        }
-      );
+  try {
+    const batchRequests = adAccountIds.map((id) => createBusinessContextDiscoveryRequest(id));
+    const batchResponses = await executeLargeBatchRequests(batchRequests, accessToken);
 
-      if (response.ok) {
-        const data = (await response.json()) as {
-          business?: { id?: string };
-          name?: string;
-          status?: string;
-        };
+    const processed = processBatchResponses(batchResponses, userId);
+    await upsertAdAccounts(userId, processed.accountsToUpsert);
 
-        const businessId = data.business?.id || null;
-        const name = data.name || 'Unknown Account';
-        const status = data.status || 'UNKNOWN';
+    logger.info('Bulk cached business context from batch discovery', {
+      userId,
+      accountsProcessed: processed.accountsToUpsert.length,
+      successfulDiscoveries: processed.successful.length,
+      failedDiscoveries: processed.failed.length,
+      totalRequested: adAccountIds.length,
+    });
 
-        // Cache the discovered information
-        await withUserContext(userId, async (tx) => {
-          await tx
-            .insert(adAccounts)
-            .values({
-              id: adAccountId,
-              userId: userId,
-              name: name,
-              status: status,
-              businessId: businessId,
-            })
-            .onConflictDoUpdate({
-              target: [adAccounts.id, adAccounts.userId],
-              set: {
-                name: sql`excluded.name`,
-                status: sql`excluded.status`,
-                businessId: sql`excluded.business_id`,
-              },
-            });
-        });
+    logger.debug('Business context discovery completed', {
+      userId,
+      adAccountCount: adAccountIds.length,
+      successful: processed.successful.length > 0 ? processed.successful : undefined,
+      failed: processed.failed.length > 0 ? processed.failed : undefined,
+      errors: processed.errors.length > 0 ? processed.errors.map((e) => e.error) : undefined,
+    });
 
-        logger.debug('Cached business context from discovery', {
-          adAccountId,
-          userId,
-          businessId,
-          name,
-          status,
-          isBusinessManaged: businessId !== null,
-        });
-      } else {
-        logger.warn('Failed to discover business context for ad account', {
-          adAccountId,
-          userId,
-          status: response.status,
-          statusText: response.statusText,
-        });
-      }
-    } catch (error) {
-      logger.warn('Business context discovery failed for ad account', {
-        adAccountId,
-        userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
+    return { successful: processed.successful, failed: processed.failed };
+  } catch (error) {
+    logger.error('Business context discovery failed', {
+      userId,
+      adAccountIds,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return { successful: [], failed: [] };
+  }
+}
 
-  // Run all discoveries in parallel with error isolation
-  await Promise.allSettled(discoveryPromises);
-
-  logger.debug('Business context discovery completed', {
+/**
+ * Centralized business context resolver with multi-strategy approach.
+ * This function provides a unified interface for resolving business context
+ * with automatic fallback from database cache to live API discovery.
+ *
+ * Strategy:
+ * 1. Database lookup first (fast, cached)
+ * 2. API fallback if not found (slower, but comprehensive)
+ * 3. Cache API results for future lookups
+ *
+ * @param userId - The user ID for security context
+ * @param accessToken - Meta access token for API calls (used for fallback)
+ * @param adAccountId - The Meta ad account ID to resolve context for
+ * @returns Business ID if business-managed, null if personal, null if resolution fails
+ */
+export async function resolveBusinessContext(
+  userId: string,
+  accessToken: string,
+  adAccountId: string
+): Promise<string | null> {
+  logger.debug('Starting business context resolution', {
     userId,
-    adAccountCount: adAccountIds.length,
+    adAccountId,
   });
+
+  try {
+    // Fast path – use cached value if available
+    const cachedBusinessId = await getBusinessIdForAdAccount(userId, adAccountId);
+    return cachedBusinessId;
+  } catch (lookupError) {
+    logger.debug('Database lookup failed, falling back to API discovery', {
+      userId,
+      adAccountId,
+      error: lookupError instanceof Error ? lookupError.message : 'Unknown error',
+    });
+  }
+
+  const apiContext = await fetchBusinessContextFromApi(userId, accessToken, adAccountId);
+  if (!apiContext) return null;
+
+  await cacheBusinessContext(userId, adAccountId, apiContext);
+  return apiContext.businessId;
 }

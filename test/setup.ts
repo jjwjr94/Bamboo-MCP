@@ -85,7 +85,7 @@ export async function setup() {
     `);
 
     // Grant test_user the ability to assume the app_user role for RLS enforcement
-    await permissionClient.unsafe(`GRANT app_user TO test_user`);
+    await permissionClient.unsafe('GRANT app_user TO test_user');
 
     await permissionClient.end();
 

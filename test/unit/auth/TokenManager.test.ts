@@ -1,10 +1,11 @@
 import '../../helpers/testEnv.js'; // Must be first to set environment variables
 import * as crypto from 'node:crypto';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Mocked, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenManager } from '../../../src/auth/TokenManager.js';
 import * as jwt from '../../../src/auth/jwt.js';
 import type { OAuthDatabaseService } from '../../../src/db/oauthDatabaseService.js';
+import type { OAuthRefreshToken, OAuthToken } from '../../../src/db/schema.js';
 import { TokenError } from '../../../src/utils/errors.js';
 
 // Mock all external dependencies
@@ -14,7 +15,7 @@ vi.mock('node:crypto');
 
 describe('TokenManager', () => {
   let tokenManager: TokenManager;
-  let mockDbService: vi.Mocked<OAuthDatabaseService>;
+  let mockDbService: Mocked<OAuthDatabaseService>;
 
   const mockClient: OAuthClientInformationFull = {
     client_id: 'test-client-id',
@@ -40,7 +41,7 @@ describe('TokenManager', () => {
       registerClient: vi.fn(),
       findOrCreateUserByFacebookId: vi.fn(),
       storeMetaToken: vi.fn(),
-    } as unknown as vi.Mocked<OAuthDatabaseService>;
+    } as unknown as Mocked<OAuthDatabaseService>;
 
     // Mock JWT functions
     vi.mocked(jwt.createJWT).mockResolvedValue('new-access-token-jwt');
@@ -62,56 +63,48 @@ describe('TokenManager', () => {
     const MOCK_OLD_REFRESH_TOKEN = 'test-refresh-token'; // Raw token from client
 
     // Mock crypto functions for predictable results
-    // Track if we're in a "create initial" vs "rotate" context
-    let createInitialCalls = 0;
-    let rotateCalls = 0;
-    vi.mocked(crypto.randomBytes).mockImplementation((size: number) => {
+    // Provide deterministic token values based on the call stack (create-initial vs rotate)
+    vi.mocked(crypto.randomBytes).mockImplementation((_size: number) => {
       // Check the call stack to determine context
       const stack = new Error().stack || '';
       if (stack.includes('createInitialRefreshToken')) {
-        createInitialCalls++;
         return initialTokenBuffer;
       }
       if (stack.includes('rotateRefreshToken')) {
-        rotateCalls++;
         return newTokenBuffer;
       }
-      // Default fallback - assume it's for new tokens
+      // Default fallback – treat as a new token generation
       return newTokenBuffer;
     });
 
-    // Mock hash creation - create fresh mock instance for each call to avoid state issues
+    // Mock hash creation - create fresh mock instance for each call
     vi.mocked(crypto.createHash).mockImplementation(() => {
       const mockUpdate = vi.fn().mockReturnThis();
+
+      // Mapping of known input → deterministic mock hash
+      const digestMap: Record<string, string> = {
+        [MOCK_INITIAL_REFRESH_TOKEN_HEX]: 'hashed-initial-refresh-token',
+        [MOCK_NEW_REFRESH_TOKEN_HEX]: 'hashed-new-refresh-token',
+        [MOCK_OLD_REFRESH_TOKEN]: 'hashed-test-refresh-token',
+      };
+
       const mockDigest = vi.fn().mockImplementation((encoding: string) => {
-        if (encoding === 'hex') {
-          const input = mockUpdate.mock.calls[0][0]; // Get the input that was hashed
-          if (input === MOCK_INITIAL_REFRESH_TOKEN_HEX) {
-            return 'hashed-initial-refresh-token';
-          }
-          if (input === MOCK_NEW_REFRESH_TOKEN_HEX) {
-            return 'hashed-new-refresh-token';
-          }
-          if (input === MOCK_OLD_REFRESH_TOKEN) {
-            return 'hashed-test-refresh-token';
-          }
-          return 'unmocked-hashed-token'; // Fail loudly if a case is missed
+        if (encoding !== 'hex') {
+          return Buffer.from('mocked-hash');
         }
-        return Buffer.from('mocked-hash');
+
+        const input = mockUpdate.mock.calls[0]?.[0] as string;
+        return digestMap[input] ?? 'unmocked-hashed-token';
       });
 
       return {
         update: mockUpdate,
         digest: mockDigest,
-      } as any;
+      } as unknown as crypto.Hash;
     });
 
     // Clear all mocks
     vi.clearAllMocks();
-
-    // Reset the randomBytes call counters for each test
-    createInitialCalls = 0;
-    rotateCalls = 0;
 
     // Create TokenManager instance with mocked database service
     tokenManager = new TokenManager(mockDbService);
@@ -183,8 +176,12 @@ describe('TokenManager', () => {
       };
 
       // Mock successful validation and retrieval
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
-      mockDbService.getLatestUserOAuthToken.mockResolvedValue(userOAuthToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
+      mockDbService.getLatestUserOAuthToken.mockResolvedValue(
+        userOAuthToken as unknown as OAuthToken
+      );
 
       const result = await tokenManager.rotateRefreshToken(mockClient, oldRefreshToken);
 
@@ -217,7 +214,9 @@ describe('TokenManager', () => {
 
     it('should throw error and revoke token if original OAuth token record is missing', async () => {
       // Mock successful refresh token validation
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
       // Mock missing user OAuth token (security issue)
       mockDbService.getLatestUserOAuthToken.mockResolvedValue(undefined);
 
@@ -245,8 +244,12 @@ describe('TokenManager', () => {
         updatedAt: new Date(),
       };
 
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
-      mockDbService.getLatestUserOAuthToken.mockResolvedValue(userOAuthTokenWithoutScopes as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
+      mockDbService.getLatestUserOAuthToken.mockResolvedValue(
+        userOAuthTokenWithoutScopes as unknown as OAuthToken
+      );
 
       await expect(tokenManager.rotateRefreshToken(mockClient, oldRefreshToken)).rejects.toThrow(
         TokenError
@@ -282,8 +285,12 @@ describe('TokenManager', () => {
         scopes: originalScopes,
       };
 
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
-      mockDbService.getLatestUserOAuthToken.mockResolvedValue(userOAuthToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
+      mockDbService.getLatestUserOAuthToken.mockResolvedValue(
+        userOAuthToken as unknown as OAuthToken
+      );
       vi.mocked(jwt.createJWT).mockRejectedValue(new Error('JWT signing failed'));
 
       await expect(tokenManager.rotateRefreshToken(mockClient, oldRefreshToken)).rejects.toThrow(
@@ -297,8 +304,12 @@ describe('TokenManager', () => {
       const originalScopes = ['read_profile'];
       const userOAuthToken = { scopes: originalScopes };
 
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
-      mockDbService.getLatestUserOAuthToken.mockResolvedValue(userOAuthToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
+      mockDbService.getLatestUserOAuthToken.mockResolvedValue(
+        userOAuthToken as unknown as OAuthToken
+      );
       mockDbService.rotateRefreshToken.mockRejectedValue(new Error('Database rotation failed'));
 
       await expect(tokenManager.rotateRefreshToken(mockClient, oldRefreshToken)).rejects.toThrow(
@@ -315,7 +326,9 @@ describe('TokenManager', () => {
 
     it('should revoke a specific refresh token when hint is "refresh_token"', async () => {
       const storedToken = { id: 'token-id-123', userId: 'user-id-123' };
-      mockDbService.findRefreshTokenByHash.mockResolvedValue(storedToken as any);
+      mockDbService.findRefreshTokenByHash.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
 
       await tokenManager.revokeToken(mockClient, testToken, 'refresh_token');
 
@@ -379,7 +392,11 @@ describe('TokenManager', () => {
     });
 
     it('should do nothing if token_type_hint is unsupported', async () => {
-      await tokenManager.revokeToken(mockClient, testToken, 'unsupported_hint' as any);
+      await tokenManager.revokeToken(
+        mockClient,
+        testToken,
+        'unsupported_hint' as unknown as 'refresh_token'
+      );
 
       expect(mockDbService.findRefreshTokenByHash).not.toHaveBeenCalled();
       expect(mockDbService.revokeTokenById).not.toHaveBeenCalled();
@@ -391,7 +408,9 @@ describe('TokenManager', () => {
   describe('Security and Edge Cases', () => {
     it('should maintain token family revocation security when database operations fail', async () => {
       const storedToken = { id: 'token-id-123', userId: 'user-id-123' };
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
       mockDbService.getLatestUserOAuthToken.mockResolvedValue(undefined);
       mockDbService.revokeTokenById.mockRejectedValue(new Error('Database error'));
 
@@ -421,8 +440,12 @@ describe('TokenManager', () => {
       const userOAuthToken = { scopes: originalScopes };
       const storedToken = { id: 'token-id-123', userId: 'user-id-123' };
 
-      mockDbService.findAndValidateRefreshToken.mockResolvedValue(storedToken as any);
-      mockDbService.getLatestUserOAuthToken.mockResolvedValue(userOAuthToken as any);
+      mockDbService.findAndValidateRefreshToken.mockResolvedValue(
+        storedToken as unknown as OAuthRefreshToken
+      );
+      mockDbService.getLatestUserOAuthToken.mockResolvedValue(
+        userOAuthToken as unknown as OAuthToken
+      );
       vi.mocked(jwt.verifyJWT).mockResolvedValue({
         userId: 'user-id-123',
         clientId: 'test-client-id',

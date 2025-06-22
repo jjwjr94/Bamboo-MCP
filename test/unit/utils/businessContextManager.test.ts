@@ -27,7 +27,7 @@ describe('businessContextManager', () => {
 
     it('should export discoverAndCacheBusinessContext function', () => {
       expect(typeof discoverAndCacheBusinessContext).toBe('function');
-      expect(discoverAndCacheBusinessContext.length).toBe(3); // Should take 3 parameters
+      expect(discoverAndCacheBusinessContext.length).toBe(3); // Should take 3 required parameters (forceRefresh has default value)
     });
   });
 
@@ -91,7 +91,7 @@ describe('businessContextManager', () => {
         const result = await discoverAndCacheBusinessContext('user-123', 'token', [
           'act_nonexistent',
         ]);
-        expect(result).toBeUndefined(); // Function returns void
+        expect(result).toEqual({ successful: [], failed: [] }); // Function now returns structured results
       });
     });
   });
@@ -179,7 +179,7 @@ describe('businessContextManager', () => {
       const result = await discoverAndCacheBusinessContext('user-123', 'token', [
         'act_nonexistent',
       ]);
-      expect(result).toBeUndefined(); // Function completes but finds no valid accounts
+      expect(result).toEqual({ successful: [], failed: [] }); // Function now returns structured results
     });
   });
 });

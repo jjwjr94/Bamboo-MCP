@@ -20,6 +20,7 @@ import type {
 } from '../../types/meta.js';
 import { MetaAdAccountHandler } from './adAccountHandler.js';
 import { MetaAdCreativeHandler } from './adCreativeHandler.js';
+import { AdCreativeUploadHandler } from './adCreativeUploadHandler.js';
 import { MetaAdHandler } from './adHandler.js';
 import { MetaAdSetHandler } from './adSetHandler.js';
 import { MetaAdsArchiveHandler } from './adsArchiveHandler.js';
@@ -35,6 +36,7 @@ export class MetaToolsHandler {
   private campaignHandler = new MetaCampaignHandler();
   private adSetHandler = new MetaAdSetHandler();
   private adCreativeHandler = new MetaAdCreativeHandler();
+  private adCreativeUploadHandler = new AdCreativeUploadHandler();
   private adHandler = new MetaAdHandler();
   private insightsHandler = new MetaInsightsHandler();
   private customAudienceHandler = new MetaCustomAudienceHandler();
@@ -131,18 +133,18 @@ export class MetaToolsHandler {
     authPayload: JWTPayload,
     params: { adAccountId?: string; filename: string }
   ) {
-    return this.adCreativeHandler.requestCreativeUpload(authPayload, params);
+    return this.adCreativeUploadHandler.requestCreativeUpload(authPayload, params);
   }
 
   async checkUploadStatus(authPayload: JWTPayload, params: { uploadId: string }) {
-    return this.adCreativeHandler.checkUploadStatus(authPayload, params);
+    return this.adCreativeUploadHandler.checkUploadStatus(authPayload, params);
   }
 
   async handleCreativeAssetUpload(
     uploadId: string,
     fileData: import('@fastify/multipart').MultipartFile
   ) {
-    return this.adCreativeHandler.handleCreativeAssetUpload(uploadId, fileData);
+    return this.adCreativeUploadHandler.handleCreativeAssetUpload(uploadId, fileData);
   }
 
   // Ad methods - delegated to MetaAdHandler

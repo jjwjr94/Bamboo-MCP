@@ -24,6 +24,12 @@ import { SessionManager } from './SessionManager.js';
 import { TokenManager } from './TokenManager.js';
 import { createJWT, verifyJWT } from './jwt.js';
 
+export interface MetaServerAuthProviderDependencies {
+  dbService: OAuthDatabaseService;
+  sessionManager: SessionManager;
+  tokenManager: TokenManager;
+}
+
 /**
  * Custom Meta OAuth Server Provider
  *
@@ -32,14 +38,13 @@ import { createJWT, verifyJWT } from './jwt.js';
  * existing database schema.
  *
  * Key features:
+ * - Constructor dependency injection for testability
  * - Database-backed client registration via oauth_clients table
  * - Secure session management following 2025 OAuth best practices
  * - Integration with existing Meta OAuth business logic
  * - JWT-based internal token system
  */
 export class MetaServerAuthProvider implements OAuthServerProvider {
-  private static instance: MetaServerAuthProvider;
-
   // OAuth authorization codes are now stored in database via SessionManager
   // to support horizontal scaling across multiple server instances
 
@@ -47,11 +52,12 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
   private dbService: OAuthDatabaseService;
   private sessionManager: SessionManager;
   private tokenManager: TokenManager;
+  private cleanupTimer?: NodeJS.Timeout;
 
-  private constructor() {
-    this.dbService = OAuthDatabaseService.getInstance();
-    this.sessionManager = new SessionManager();
-    this.tokenManager = new TokenManager(this.dbService);
+  public constructor(dependencies: MetaServerAuthProviderDependencies) {
+    this.dbService = dependencies.dbService;
+    this.sessionManager = dependencies.sessionManager;
+    this.tokenManager = dependencies.tokenManager;
     this._clientsStoreImpl = {
       getClient: (clientId: string) => {
         logger.debug('Getting client', { clientId });
@@ -63,7 +69,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       },
     };
 
-    setInterval(
+    this.cleanupTimer = setInterval(
       () => {
         // Call the async method and attach a .catch() handler to the returned promise
         // to prevent unhandled promise rejections.
@@ -77,15 +83,14 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       15 * 60 * 1000 // 15 minutes
     );
 
-    logger.info('MetaServerAuthProvider initialized');
+    logger.info('MetaServerAuthProvider initialized with dependency injection');
   }
 
-  public static getInstance(): MetaServerAuthProvider {
-    if (!MetaServerAuthProvider.instance) {
-      MetaServerAuthProvider.instance = new MetaServerAuthProvider();
-      logger.info('Created MetaServerAuthProvider singleton instance');
+  public destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
     }
-    return MetaServerAuthProvider.instance;
   }
 
   public get clientsStore(): OAuthRegisteredClientsStore {
@@ -399,12 +404,15 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     request: OAuthTokenRevocationRequest
   ): Promise<void> {
     const { token, token_type_hint } = request;
+
+    // Use a validation check instead of casting
+    let hint: 'refresh_token' | 'access_token' | undefined;
+    if (token_type_hint === 'refresh_token' || token_type_hint === 'access_token') {
+      hint = token_type_hint;
+    }
+
     // Delegate the entire revocation logic to TokenManager
-    await this.tokenManager.revokeToken(
-      client,
-      token,
-      token_type_hint as 'refresh_token' | 'access_token' | undefined
-    );
+    await this.tokenManager.revokeToken(client, token, hint);
   }
 
   private async cleanExpiredTokens(): Promise<void> {
@@ -416,4 +424,19 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       logger.error('Failed to clean up expired temp auth codes', { error });
     }
   }
+}
+
+// Production dependency composer
+export function composeMetaServerAuthProvider(): MetaServerAuthProvider {
+  logger.info('Composing new instance of MetaServerAuthProvider with its dependencies');
+
+  const dbService = new OAuthDatabaseService();
+  const sessionManager = new SessionManager();
+  const tokenManager = new TokenManager(dbService);
+
+  return new MetaServerAuthProvider({
+    dbService,
+    sessionManager,
+    tokenManager,
+  });
 }

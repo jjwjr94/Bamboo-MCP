@@ -96,3 +96,31 @@ export function redactSensitiveData<T>(data: T): T {
   const visited = new WeakSet<object>();
   return redactRecursively(data, visited, 0) as T;
 }
+
+const ESCAPE_MAP: { [key: string]: string } = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#x27;',
+  '/': '&#x2F;',
+} as const;
+
+const DANGEROUS_CHARS_REGEX = /[&<>"'/]/g;
+
+/**
+ * Escapes special characters in a string for use in an HTML context.
+ * This function prevents XSS by replacing characters that have special
+ * meaning in HTML with their corresponding entities.
+ *
+ * Following 2025 security best practices for output encoding.
+ *
+ * @param str The input string to escape. Can be null or undefined.
+ * @returns The escaped string, or an empty string if the input is falsy.
+ */
+export function escapeHtml(str: string | null | undefined): string {
+  if (!str) {
+    return '';
+  }
+  return str.replace(DANGEROUS_CHARS_REGEX, (char) => ESCAPE_MAP[char]);
+}

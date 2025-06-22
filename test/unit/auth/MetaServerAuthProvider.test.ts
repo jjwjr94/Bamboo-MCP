@@ -1,9 +1,7 @@
 import '../../helpers/testEnv.js'; // Must be first to set environment variables
 import * as crypto from 'node:crypto';
-import type {
-  AuthorizationParams,
-  OAuthClientInformationFull,
-} from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { AuthorizationParams } from '@modelcontextprotocol/sdk/server/auth/provider.js';
+import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { FastifyReply } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MetaServerAuthProvider } from '../../../src/auth/MetaServerAuthProvider.js';
@@ -45,48 +43,55 @@ describe('MetaServerAuthProvider', () => {
   } as unknown as FastifyReply;
 
   beforeEach(() => {
+    // Clear all mocks first
+    vi.clearAllMocks();
+
     // Reset environment variables
     env.FACEBOOK_OAUTH_SCOPES = 'public_profile,email,ads_read';
     env.FACEBOOK_APP_ID = 'test-facebook-app-id';
     env.FACEBOOK_CALLBACK_URL = 'https://server.example/oauth/callback';
     env.META_API_VERSION = 'v22.0';
 
-    // Mock SessionManager
-    vi.mocked(SessionManager).mockImplementation(() => {
-      mockSessionManager = {
-        storeSessionData: vi.fn().mockResolvedValue(undefined),
-        getSessionData: vi.fn(),
-        getAndClearSessionData: vi.fn(),
-        clearSessionData: vi.fn().mockResolvedValue(undefined),
-        storeTempAuthCode: vi.fn().mockResolvedValue(undefined),
-        getTempAuthCode: vi.fn(),
-        getAndClearTempAuthCode: vi.fn(),
-        clearTempAuthCode: vi.fn().mockResolvedValue(undefined),
-        cleanupExpiredSessions: vi.fn().mockResolvedValue(undefined),
-      } as unknown as vi.Mocked<SessionManager>;
-      return mockSessionManager;
-    });
-
-    // Mock TokenManager
-    vi.mocked(TokenManager).mockImplementation(() => {
-      mockTokenManager = {
-        createInitialRefreshToken: vi.fn().mockResolvedValue('mock-refresh-token'),
-        rotateRefreshToken: vi.fn(),
-        revokeToken: vi.fn(),
-      } as unknown as vi.Mocked<TokenManager>;
-      return mockTokenManager;
-    });
-
-    // Mock OAuthDatabaseService
-    vi.mocked(OAuthDatabaseService.getInstance).mockReturnValue({
+    // Initialize mock objects first
+    mockDbService = {
       findOrCreateUserByFacebookId: vi.fn().mockResolvedValue({
         id: 'user-uuid-123',
         facebookUserId: 'fb-user-id-456',
       }),
       storeMetaToken: vi.fn().mockResolvedValue(undefined),
       getClient: vi.fn().mockResolvedValue(mockClient),
-    } as unknown as vi.Mocked<OAuthDatabaseService>);
-    mockDbService = vi.mocked(OAuthDatabaseService.getInstance)();
+      registerClient: vi.fn().mockResolvedValue(mockClient),
+      getLatestUserOAuthToken: vi.fn(),
+      createRefreshToken: vi.fn(),
+      findAndValidateRefreshToken: vi.fn(),
+      findRefreshTokenByHash: vi.fn(),
+      rotateRefreshToken: vi.fn(),
+      revokeTokenById: vi.fn(),
+      revokeActiveTokensForUser: vi.fn(),
+    } as unknown as vi.Mocked<OAuthDatabaseService>;
+
+    mockSessionManager = {
+      storeSessionData: vi.fn().mockResolvedValue(undefined),
+      getSessionData: vi.fn(),
+      getAndClearSessionData: vi.fn(),
+      clearSessionData: vi.fn().mockResolvedValue(undefined),
+      storeTempAuthCode: vi.fn().mockResolvedValue(undefined),
+      getTempAuthCode: vi.fn(),
+      getAndClearTempAuthCode: vi.fn(),
+      clearTempAuthCode: vi.fn().mockResolvedValue(undefined),
+      cleanupExpiredSessions: vi.fn().mockResolvedValue(undefined),
+    } as unknown as vi.Mocked<SessionManager>;
+
+    mockTokenManager = {
+      createInitialRefreshToken: vi.fn().mockResolvedValue('mock-refresh-token'),
+      rotateRefreshToken: vi.fn(),
+      revokeToken: vi.fn(),
+    } as unknown as vi.Mocked<TokenManager>;
+
+    // Mock constructor implementations to return the pre-initialized mocks
+    vi.mocked(OAuthDatabaseService).mockImplementation(() => mockDbService);
+    vi.mocked(SessionManager).mockImplementation(() => mockSessionManager);
+    vi.mocked(TokenManager).mockImplementation(() => mockTokenManager);
 
     // Mock MetaApiService static methods
     vi.mocked(MetaApiService.exchangeMetaCodeForToken).mockResolvedValue({
@@ -110,32 +115,29 @@ describe('MetaServerAuthProvider', () => {
       aud: 'test-audience',
     });
 
-    // Get provider instance
-    provider = MetaServerAuthProvider.getInstance();
-  });
+    // Create provider instance with mocked dependencies
+    provider = new MetaServerAuthProvider({
+      dbService: mockDbService,
+      sessionManager: mockSessionManager,
+      tokenManager: mockTokenManager,
+    });
 
-  beforeEach(() => {
-    // Clear all mocks and reset crypto mock with proper call tracking
-    vi.clearAllMocks();
-
-    // Mock crypto for predictable values - using 32 bytes for both state and temp auth codes
-    // Strategy: Return the appropriate value based on the context
+    // Mock crypto for predictable values (32-byte for state/auth codes, 64-byte for refresh tokens)
     vi.mocked(crypto.randomBytes).mockImplementation((size: number) => {
       if (size === 32) {
-        // For 32-byte calls, check if this is being called from authorize (state) or handleCallback (temp code)
+        // Call originates from authorize() when generating state
         const stack = new Error().stack || '';
         if (stack.includes('authorize')) {
           return Buffer.from('mock-random-state-bytes-000000000000000000000000000000');
-        } else {
-          // handleCallback or other contexts - return temp auth code
-          return Buffer.from('mock-temp-auth-code-bytes000000000000000000000000000000');
         }
-      } else {
-        // For 64-byte calls (refresh tokens), return a different value
-        return Buffer.from(
-          'mock-refresh-token-bytes000000000000000000000000000000000000000000000000000000000000000000'
-        );
+        // Otherwise treat as a temp auth code for handleCallback()
+        return Buffer.from('mock-temp-auth-code-bytes000000000000000000000000000000');
       }
+
+      // For 64-byte calls (refresh tokens)
+      return Buffer.from(
+        'mock-refresh-token-bytes000000000000000000000000000000000000000000000000000000000000000000'
+      );
     });
   });
 
@@ -303,11 +305,13 @@ describe('MetaServerAuthProvider', () => {
 
       // Verify successful result
       expect(result.success).toBe(true);
-      const redirectUrl = new URL(result.redirectUrl);
-      expect(redirectUrl.origin).toBe('https://client.app');
-      expect(redirectUrl.pathname).toBe('/callback');
-      expect(redirectUrl.searchParams.get('code')).toBe(tempCode);
-      expect(redirectUrl.searchParams.get('state')).toBe('client-state-original');
+      const urlObj = new URL(result.redirectUrl);
+      const tempAuthCodeParam = urlObj.searchParams.get('code');
+      expect(tempAuthCodeParam).not.toBeNull();
+      expect(urlObj.origin).toBe('https://client.app');
+      expect(urlObj.pathname).toBe('/callback');
+      expect(urlObj.searchParams.get('code')).toBe(tempCode);
+      expect(urlObj.searchParams.get('state')).toBe('client-state-original');
     });
 
     it('should return failure for invalid state parameter', async () => {
@@ -559,11 +563,19 @@ describe('MetaServerAuthProvider', () => {
       const callbackResult = await provider.handleCallback('meta-integration-code', storedState);
       expect(callbackResult.success).toBe(true);
 
-      const tempAuthCode = new URL(callbackResult.redirectUrl).searchParams.get('code')!;
+      const urlObj = new URL(callbackResult.redirectUrl);
+      const tempAuthCodeParam = urlObj.searchParams.get('code');
+      expect(tempAuthCodeParam).not.toBeNull();
+      expect(urlObj.origin).toBe('https://client.app');
+      expect(urlObj.pathname).toBe('/callback');
+      expect(urlObj.searchParams.get('code')).toBe(tempAuthCodeParam);
+      expect(urlObj.searchParams.get('state')).toBe('client-state-integration');
+
+      // Step 3: Exchange Authorization Code using the authorization code from redirect
       const [, storedTempCodeData] = mockSessionManager.storeTempAuthCode.mock.calls[0];
 
-      // Step 3: Exchange Authorization Code
       mockSessionManager.getAndClearTempAuthCode.mockResolvedValue(storedTempCodeData);
+
       vi.mocked(jwt.verifyJWT).mockResolvedValue({
         userId: 'user-uuid-123',
         clientId: mockClient.client_id,
@@ -574,13 +586,18 @@ describe('MetaServerAuthProvider', () => {
         aud: 'test-audience',
       });
 
-      const finalTokens = await provider.exchangeAuthorizationCode(mockClient, tempAuthCode);
+      const finalTokens = await provider.exchangeAuthorizationCode(
+        mockClient,
+        tempAuthCodeParam as string
+      );
 
       // Final Assertions
       expect(finalTokens.scope).toBe('email');
       expect(finalTokens.access_token).toBe('mock-internal-jwt');
       expect(finalTokens.refresh_token).toBe('mock-refresh-token');
-      expect(mockSessionManager.getAndClearTempAuthCode).toHaveBeenCalledWith(tempAuthCode);
+      expect(mockSessionManager.getAndClearTempAuthCode).toHaveBeenCalledWith(
+        tempAuthCodeParam as string
+      );
 
       // Verify atomic session management occurred
       expect(mockSessionManager.getAndClearSessionData).toHaveBeenCalledWith(storedState);

@@ -23,18 +23,8 @@ type OAuthToken = typeof oauthTokens.$inferSelect;
  * the authentication provider.
  */
 export class OAuthDatabaseService {
-  private static instance: OAuthDatabaseService;
-
-  private constructor() {
+  public constructor() {
     logger.info('OAuthDatabaseService initialized');
-  }
-
-  public static getInstance(): OAuthDatabaseService {
-    if (!OAuthDatabaseService.instance) {
-      OAuthDatabaseService.instance = new OAuthDatabaseService();
-      logger.info('Created OAuthDatabaseService singleton instance');
-    }
-    return OAuthDatabaseService.instance;
   }
 
   // Client Management

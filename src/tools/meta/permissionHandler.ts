@@ -8,6 +8,12 @@ import { logger } from '../../utils/logger.js';
 import { handleMetaApiCall } from './api.js';
 
 /**
+ * Default permissions assigned to a personal ad account.
+ * The authorizing user is implicitly the owner with full administrative access.
+ */
+export const PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS = ['ADMIN'];
+
+/**
  * Service for handling ad account permission fetching and business context resolution.
  *
  * This service encapsulates all logic related to determining user permissions on Meta ad accounts,
@@ -35,6 +41,19 @@ export class MetaPermissionHandler {
     userId: string,
     businessId?: string | null
   ): Promise<string[]> {
+    // For personal accounts (businessId is null), skip the API call and grant default owner permissions.
+    // The assigned_users endpoint is not supported for personal accounts.
+    if (businessId === null) {
+      logger.info('Assigning default permissions for personal ad account', {
+        adAccountId,
+        userId,
+        currentUserId,
+        reason: 'Personal account detected (businessId is null)',
+        defaultPermissions: PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS,
+      });
+      return PERSONAL_ACCOUNT_DEFAULT_PERMISSIONS;
+    }
+
     const defaultPermissions = ['UNKNOWN'];
 
     try {
@@ -216,7 +235,7 @@ export class MetaPermissionHandler {
     if (!Number.isNaN(Number(currentUserId))) {
       userIdVariants.push(Number(currentUserId).toString());
     }
-    const uniqueUserIdVariants = [...new Set(userIdVariants)]; // More concise way to get unique values
+    const uniqueUserIdVariants = Array.from(new Set(userIdVariants)); // ES5-compatible way to get unique values
 
     for (const variant of uniqueUserIdVariants) {
       user = permissionsData.data.find((u) => u.id === variant || String(u.id) === variant);
