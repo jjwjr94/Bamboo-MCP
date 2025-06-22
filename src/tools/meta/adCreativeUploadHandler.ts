@@ -154,8 +154,9 @@ export class AdCreativeUploadHandler {
 
           const form = new FormData();
 
-          // Use ONLY the validated filename from the database, not client-provided filename
-          form.append('source', fileData.file, { filename: uploadRequest.filename });
+          // Use correct form field name based on asset type
+          const fileParamName = assetType === 'image' ? 'filename' : 'source';
+          form.append(fileParamName, fileData.file, { filename: uploadRequest.filename });
           form.append('access_token', accessToken);
 
           // CRITICAL: Add business parameter for business-managed accounts
@@ -175,7 +176,10 @@ export class AdCreativeUploadHandler {
 
           // Select endpoint based on determined asset type
           const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
-          const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${uploadRequest.adAccountId}/${endpoint}`;
+          const accountSegment = uploadRequest.adAccountId.startsWith('act_')
+            ? uploadRequest.adAccountId
+            : `act_${uploadRequest.adAccountId}`;
+          const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
 
           const response = await fetch(uploadUrl, {
             method: 'POST',
