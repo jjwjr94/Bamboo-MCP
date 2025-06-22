@@ -1,6 +1,7 @@
 import type { MultipartFile } from '@fastify/multipart';
 import { eq, sql } from 'drizzle-orm';
 import FormData from 'form-data';
+import { request as httpRequest } from 'undici';
 import { db, withUserContext } from '../../db/client.js';
 import { creativeAssetUploads } from '../../db/schema.js';
 import type { JWTPayload } from '../../types/auth.js';
@@ -154,36 +155,9 @@ export class AdCreativeUploadHandler {
 
           const form = new FormData();
 
-          logger.info('Checking stream status before appending to FormData', {
-            isReadable: fileData.file.readable,
-            isPaused: fileData.file.isPaused?.(), // optional, some streams expose this
-            type: typeof fileData.file,
-          });
-
+          // Basic stream sanity check (no verbose chunk logging in production)
           fileData.file.on('error', (err) => {
-            logger.error('Stream error before upload', { err });
-          });
-
-          let totalBytes = 0;
-          fileData.file.on('data', (chunk) => {
-            totalBytes += chunk.length;
-            logger.info('Stream chunk read', { chunkBytes: chunk.length, totalBytesSoFar: totalBytes });
-          });
-
-          fileData.file.on('end', () => {
-            logger.info('Readable stream end event fired', { totalBytes });
-          });
-
-          fileData.file.on('close', () => {
-            logger.info('Readable stream close event fired', { totalBytes });
-          });
-
-          fileData.file.on('pause', () => {
-            logger.info('Readable stream paused');
-          });
-
-          fileData.file.on('resume', () => {
-            logger.info('Readable stream resumed');
+            logger.error('Upload stream error', { err });
           });
 
           // Use correct form field name based on asset type
@@ -194,13 +168,13 @@ export class AdCreativeUploadHandler {
           // CRITICAL: Add business parameter for business-managed accounts
           if (businessId) {
             form.append('business', businessId);
-            logger.info('Added business parameter to media upload FormData', {
+            logger.debug('Added business parameter to media upload FormData', {
               adAccountId: uploadRequest.adAccountId,
               businessId,
               reasoning: 'Business-managed account requires business parameter',
             });
           } else {
-            logger.info('No business parameter added to media upload', {
+            logger.debug('No business parameter added to media upload', {
               adAccountId: uploadRequest.adAccountId,
               reason: 'Non-business account (business parameter forbidden)',
             });
@@ -215,7 +189,32 @@ export class AdCreativeUploadHandler {
 
           // Enhanced logging to validate request parameters before streaming
           const formHeaders = form.getHeaders();
-          
+
+          /*
+           * CRITICAL: Compute exact multipart body length and set Content-Length header
+           * 
+           * Why this is necessary:
+           * - Global fetch() uses chunked transfer encoding by default (no Content-Length)
+           * - Meta's Graph API rejects chunked uploads for adimages/advideos with error 100/33
+           * - curl succeeds because it automatically calculates and sends Content-Length
+           * 
+           * Solution:
+           * - Use form-data package's getLength() to calculate exact multipart size
+           * - Use undici.request() instead of fetch() to send with explicit Content-Length
+           * - This disables chunked encoding and matches curl's behavior
+           * 
+           * Memory efficiency:
+           * - The file stream is never buffered in memory
+           * - getLength() calculates size by examining multipart structure, not reading file
+           * - Supports 4GB uploads on 512MB server instances
+           */
+          const contentLength = await new Promise<number>((resolve, reject) => {
+            (form as unknown as { getLength: (cb: (err: Error | null, len: number) => void) => void }).getLength(
+              (err, len) => (err ? reject(err) : resolve(len))
+            );
+          });
+          formHeaders['Content-Length'] = String(contentLength);
+
           // Log the complete request details we're about to send
           logger.info('Complete request details being sent to Meta API', {
             userId,
@@ -262,44 +261,41 @@ export class AdCreativeUploadHandler {
             throw new Error('File stream is not readable — was it already consumed?');
           }
 
-          const response = await fetch(uploadUrl, {
+          /*
+           * Use Undici's low-level request API instead of fetch()
+           * 
+           * Reasons:
+           * 1. fetch() forces chunked encoding when Content-Length is manually set
+           * 2. undici.request() respects explicit Content-Length and disables chunking
+           * 3. Preserves zero-copy streaming from Fastify → form-data → Meta API
+           * 4. Matches the exact HTTP semantics that Meta's servers expect
+           */
+          const { statusCode, body: responseBody } = await httpRequest(uploadUrl, {
             method: 'POST',
-            body: form,
             headers: formHeaders,
-            signal: AbortSignal.timeout(env.META_UPLOAD_TIMEOUT),
+            body: form,
+            maxRedirections: 0,
+            headersTimeout: env.META_UPLOAD_TIMEOUT,
           });
 
-          if (!response.ok) {
-            // Improved error parsing to handle non-JSON responses
-            const responseText = await response.text();
+          const responseText = await responseBody.text();
+
+          if (statusCode < 200 || statusCode >= 300) {
             let errorData: { error?: { message?: string } } | null = null;
             try {
               errorData = JSON.parse(responseText);
-            } catch (_e) {
-              logger.warn('Meta API error response was not valid JSON', {
-                userId,
-                uploadId,
-                status: response.status,
-                responseText: responseText.substring(0, 500), // Limit length for logs
-              });
+            } catch {
+              /* ignore json parse failure */
             }
-
-            // Log the full structured error if available
             if (errorData?.error) {
-              logger.error('Full Meta API error response from upload', {
-                userId,
-                uploadId,
-                errorDetails: errorData.error,
-              });
+              logger.error('Meta API upload error', { userId, uploadId, errorDetails: errorData.error });
             }
-
-            const errorMessage =
-              errorData?.error?.message ||
-              `Meta API upload failed with status ${response.status}: ${responseText.substring(0, 250)}`;
-            throw new Error(errorMessage);
+            throw new Error(
+              errorData?.error?.message || `Meta API upload failed with status ${statusCode}: ${responseText}`
+            );
           }
 
-          const metaResponse = (await response.json()) as {
+          const metaResponse = JSON.parse(responseText) as {
             hash?: string;
             id?: string;
             images?: { [key: string]: { hash: string } };

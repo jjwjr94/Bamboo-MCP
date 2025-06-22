@@ -248,7 +248,9 @@ export class AdCreativeToolRegistry implements IToolRegistry {
               /^[^\/\\<>:"|?*]+$/,
               'Filename cannot contain path separators or special system characters (/ \\ < > : " | ? *)'
             )
-            .describe('The name of the file to be uploaded. Should be unique and related to the campaign or ads to run.'),
+            .describe(
+              'The name of the file to be uploaded. Should be unique and related to the campaign or ads to run.'
+            ),
         },
         successDataSchema,
       },
