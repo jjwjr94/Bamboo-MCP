@@ -16,6 +16,7 @@ import {
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
+import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
@@ -363,11 +364,37 @@ export class MetaAdCreativeHandler {
       const result = await handleMetaApiCall(
         async () => {
           const accessToken = await fetchUserTokenString(userId);
+
+          // Resolve business context for the ad account
+          const businessId = await getBusinessIdForAdAccount(userId, uploadRequest.adAccountId);
+          logger.debug('Resolved business context for media upload', {
+            userId,
+            uploadId,
+            adAccountId: uploadRequest.adAccountId,
+            businessId: businessId ?? 'non-business',
+            hasBusinessContext: businessId !== null,
+          });
+
           const form = new FormData();
 
           // Use ONLY the validated filename from the database, not client-provided filename
           form.append('source', fileData.file, { filename: uploadRequest.filename });
           form.append('access_token', accessToken);
+
+          // CRITICAL: Add business parameter for business-managed accounts
+          if (businessId) {
+            form.append('business', businessId);
+            logger.debug('Added business parameter to media upload FormData', {
+              adAccountId: uploadRequest.adAccountId,
+              businessId,
+              reasoning: 'Business-managed account requires business parameter',
+            });
+          } else {
+            logger.debug('No business parameter added to media upload', {
+              adAccountId: uploadRequest.adAccountId,
+              reason: 'Non-business account (business parameter forbidden)',
+            });
+          }
 
           // Select endpoint based on determined asset type
           const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
