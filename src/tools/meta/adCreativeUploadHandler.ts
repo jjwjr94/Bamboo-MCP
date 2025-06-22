@@ -207,15 +207,41 @@ export class AdCreativeUploadHandler {
           }
 
           // Select endpoint based on determined asset type
-          // const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
-          // const accountSegment = uploadRequest.adAccountId.startsWith('act_')
-          //   ? uploadRequest.adAccountId
-          //   : `act_${uploadRequest.adAccountId}`;
-          const uploadUrl = 'https://httpbin.org/post';
-          logger.warn('DEBUG MODE: Uploads are being sent to httpbin.org/post instead of Meta API');
+          const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
+          const accountSegment = uploadRequest.adAccountId.startsWith('act_')
+            ? uploadRequest.adAccountId
+            : `act_${uploadRequest.adAccountId}`;
+          const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
 
           // Enhanced logging to validate request parameters before streaming
           const formHeaders = form.getHeaders();
+          
+          // Log the complete request details we're about to send
+          logger.info('Complete request details being sent to Meta API', {
+            userId,
+            uploadId,
+            method: 'POST',
+            url: uploadUrl,
+            headers: {
+              ...formHeaders,
+              // Redact sensitive headers but show structure
+              'content-type': formHeaders['content-type'],
+              'content-length': formHeaders['content-length'] || 'not-set',
+            },
+            formDataFields: {
+              [fileParamName]: `<file-stream: ${uploadRequest.filename}>`,
+              access_token: '<REDACTED>',
+              ...(businessId ? { business: businessId } : {}),
+            },
+            streamInfo: {
+              assetType,
+              mimeType: fileData.mimetype,
+              filename: uploadRequest.filename,
+              isReadable: fileData.file.readable,
+              isPaused: fileData.file.isPaused?.() || 'unknown',
+            },
+          });
+
           logger.info('Attempting to stream file to Meta API', {
             userId,
             uploadId,
@@ -224,7 +250,7 @@ export class AdCreativeUploadHandler {
             formFields: {
               [fileParamName]: uploadRequest.filename,
               access_token: 'REDACTED', // For security
-              ...(businessId ? { business: businessId } : {}),
+              business: businessId ?? 'not_applicable',
             },
             // Log the Content-Type to verify the multipart boundary is set
             contentTypeHeader: formHeaders['content-type'],
