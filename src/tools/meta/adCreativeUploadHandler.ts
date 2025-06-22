@@ -192,26 +192,28 @@ export class AdCreativeUploadHandler {
 
           /*
            * CRITICAL: Compute exact multipart body length and set Content-Length header
-           * 
+           *
            * Why this is necessary:
            * - Global fetch() uses chunked transfer encoding by default (no Content-Length)
            * - Meta's Graph API rejects chunked uploads for adimages/advideos with error 100/33
            * - curl succeeds because it automatically calculates and sends Content-Length
-           * 
+           *
            * Solution:
            * - Use form-data package's getLength() to calculate exact multipart size
            * - Use undici.request() instead of fetch() to send with explicit Content-Length
            * - This disables chunked encoding and matches curl's behavior
-           * 
+           *
            * Memory efficiency:
            * - The file stream is never buffered in memory
            * - getLength() calculates size by examining multipart structure, not reading file
            * - Supports 4GB uploads on 512MB server instances
            */
           const contentLength = await new Promise<number>((resolve, reject) => {
-            (form as unknown as { getLength: (cb: (err: Error | null, len: number) => void) => void }).getLength(
-              (err, len) => (err ? reject(err) : resolve(len))
-            );
+            (
+              form as unknown as {
+                getLength: (cb: (err: Error | null, len: number) => void) => void;
+              }
+            ).getLength((err, len) => (err ? reject(err) : resolve(len)));
           });
           formHeaders['Content-Length'] = String(contentLength);
 
@@ -263,7 +265,7 @@ export class AdCreativeUploadHandler {
 
           /*
            * Use Undici's low-level request API instead of fetch()
-           * 
+           *
            * Reasons:
            * 1. fetch() forces chunked encoding when Content-Length is manually set
            * 2. undici.request() respects explicit Content-Length and disables chunking
@@ -285,13 +287,24 @@ export class AdCreativeUploadHandler {
             try {
               errorData = JSON.parse(responseText);
             } catch {
-              /* ignore json parse failure */
+              logger.error('Meta API non-JSON error response', {
+                userId,
+                uploadId,
+                statusCode,
+                responseSnippet: responseText.substring(0, 500),
+              });
             }
             if (errorData?.error) {
-              logger.error('Meta API upload error', { userId, uploadId, errorDetails: errorData.error });
+              logger.error('Meta API upload error', {
+                userId,
+                uploadId,
+                statusCode,
+                errorDetails: errorData.error,
+              });
             }
             throw new Error(
-              errorData?.error?.message || `Meta API upload failed with status ${statusCode}: ${responseText}`
+              errorData?.error?.message ||
+                `Meta API upload failed with status ${statusCode}: ${responseText}`
             );
           }
 
