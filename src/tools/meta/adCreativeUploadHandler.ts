@@ -144,7 +144,7 @@ export class AdCreativeUploadHandler {
 
           // Resolve business context for the ad account
           const businessId = await getBusinessIdForAdAccount(userId, uploadRequest.adAccountId);
-          logger.debug('Resolved business context for media upload', {
+          logger.info('Resolved business context for media upload', {
             userId,
             uploadId,
             adAccountId: uploadRequest.adAccountId,
@@ -154,7 +154,7 @@ export class AdCreativeUploadHandler {
 
           const form = new FormData();
 
-          logger.debug('Checking stream status before appending to FormData', {
+          logger.info('Checking stream status before appending to FormData', {
             isReadable: fileData.file.readable,
             isPaused: fileData.file.isPaused?.(), // optional, some streams expose this
             type: typeof fileData.file,
@@ -175,13 +175,13 @@ export class AdCreativeUploadHandler {
           // CRITICAL: Add business parameter for business-managed accounts
           if (businessId) {
             form.append('business', businessId);
-            logger.debug('Added business parameter to media upload FormData', {
+            logger.info('Added business parameter to media upload FormData', {
               adAccountId: uploadRequest.adAccountId,
               businessId,
               reasoning: 'Business-managed account requires business parameter',
             });
           } else {
-            logger.debug('No business parameter added to media upload', {
+            logger.info('No business parameter added to media upload', {
               adAccountId: uploadRequest.adAccountId,
               reason: 'Non-business account (business parameter forbidden)',
             });
