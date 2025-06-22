@@ -159,9 +159,6 @@ export async function build(opts = {}) {
     return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
   });
 
-  const mcpAuthRouter = createMCPAuthRouter();
-  app.use('/', mcpAuthRouter);
-
   // Initialize CoreServices once at startup
   const coreServices = await CoreServices.initialize();
   logger.info('CoreServices initialized for HTTP transport');
@@ -171,6 +168,10 @@ export async function build(opts = {}) {
 
   // Pass the CoreServices instance to the transport setup
   setupMCPHttpTransport(app, coreServices);
+
+  // Auth routes
+  const mcpAuthRouter = createMCPAuthRouter();
+  app.use('/', mcpAuthRouter);
 
   // Creative asset upload endpoints
 
