@@ -28,7 +28,8 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
+      .default(['US'])
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
     limit: z
       .number()
       .int()
@@ -54,7 +55,8 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
+      .default(['US'])
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
     limit: z
       .number()
       .int()
@@ -83,7 +85,8 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
+      .default(['US'])
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
     limit: z
       .number()
       .int()
@@ -113,7 +116,8 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .array(z.string().regex(/^[A-Z]{2}$/, 'Must be a two-letter ISO country code'))
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]).'),
+      .default(['US'])
+      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
     includeRegionalData: z
       .boolean()
       .optional()
