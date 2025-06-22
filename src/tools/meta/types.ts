@@ -138,8 +138,8 @@ export interface RequestCreativeUploadResult {
 
 export interface CheckUploadStatusResult {
   status: string;
-  metaAssetId: string | null;
-  errorMessage: string | null;
+  metaAssetId?: string;
+  errorMessage?: string;
 }
 
 // Insights Handler Results

@@ -292,9 +292,16 @@ export class MetaAdCreativeHandler {
 
         const result: CheckUploadStatusResult = {
           status: uploadRecord.status,
-          metaAssetId: uploadRecord.metaAssetId,
-          errorMessage: uploadRecord.errorMessage,
         };
+
+        if (uploadRecord.metaAssetId) {
+          result.metaAssetId = uploadRecord.metaAssetId;
+        }
+
+        if (uploadRecord.errorMessage) {
+          result.errorMessage = uploadRecord.errorMessage;
+        }
+
         return result;
       },
       { toolName: 'check_upload_status', userId: authPayload.userId }
