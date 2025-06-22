@@ -272,15 +272,23 @@ export class AdCreativeUploadHandler {
            * 3. Preserves zero-copy streaming from Fastify → form-data → Meta API
            * 4. Matches the exact HTTP semantics that Meta's servers expect
            */
-          const { statusCode, body: responseBody } = await httpRequest(uploadUrl, {
-            method: 'POST',
-            headers: formHeaders,
-            body: form,
-            maxRedirections: 0,
-            headersTimeout: env.META_UPLOAD_TIMEOUT,
-          });
-
-          const responseText = await responseBody.text();
+          let statusCode: number;
+          let responseText: string;
+          try {
+            const { statusCode: sc, body: responseBody } = await httpRequest(uploadUrl, {
+              method: 'POST',
+              headers: formHeaders,
+              body: form,
+              maxRedirections: 0,
+              headersTimeout: env.META_UPLOAD_TIMEOUT,
+            });
+            statusCode = sc;
+            responseText = await responseBody.text();
+          } catch (netErr: unknown) {
+            const errMsg = netErr instanceof Error ? netErr.message : String(netErr);
+            logger.error('Network error during Meta upload', { userId, uploadId, error: errMsg });
+            throw new Error(`Network error uploading asset: ${errMsg}`);
+          }
 
           if (statusCode < 200 || statusCode >= 300) {
             let errorData: { error?: { message?: string } } | null = null;
