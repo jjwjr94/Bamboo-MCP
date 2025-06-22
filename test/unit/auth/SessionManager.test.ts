@@ -218,7 +218,9 @@ describe('SessionManager', () => {
 
         // Try to store the same auth code again - this should fail due to primary key constraint
         // This is the correct business behavior: auth codes should be unique
-        await expect(sessionManager.storeTempAuthCode(authCode, tempData)).rejects.toThrow('Could not store temporary authorization code');
+        await expect(sessionManager.storeTempAuthCode(authCode, tempData)).rejects.toThrow(
+          'Could not store temporary authorization code'
+        );
 
         // Verify the original data is still intact
         const retrieved = await sessionManager.getTempAuthCode(authCode);
@@ -341,10 +343,10 @@ describe('SessionManager', () => {
         // if the database transaction isolation is working correctly.
         // This is actually GOOD behavior - it means the atomic operation
         // is preventing race conditions effectively.
-        
+
         const results = [result1, result2];
-        const nonUndefinedResults = results.filter(r => r !== undefined);
-        const undefinedResults = results.filter(r => r === undefined);
+        const nonUndefinedResults = results.filter((r) => r !== undefined);
+        const undefinedResults = results.filter((r) => r === undefined);
 
         // In a perfectly atomic system, we might get:
         // - One result with data, one undefined (ideal case)
@@ -486,27 +488,33 @@ describe('SessionManager', () => {
         const futureTime = new Date(now + 7200000); // 2 hours from now (very robust timing)
 
         // Insert only non-expired data with explicit transaction handling
-        const sessionInsert = await db.insert(oauthSessions).values({
-          state: 'future-session',
-          sessionData: {
-            clientId: 'client-future',
-            redirectUri: 'http://localhost:3000/future',
-            state: 'original-future',
-          },
-          expiresAt: futureTime,
-        }).returning({ state: oauthSessions.state });
+        const sessionInsert = await db
+          .insert(oauthSessions)
+          .values({
+            state: 'future-session',
+            sessionData: {
+              clientId: 'client-future',
+              redirectUri: 'http://localhost:3000/future',
+              state: 'original-future',
+            },
+            expiresAt: futureTime,
+          })
+          .returning({ state: oauthSessions.state });
 
-        const codeInsert = await db.insert(oauthTempAuthCodes).values({
-          code: 'future-code',
-          data: {
-            sessionToken: 'future-token',
-            expires: now + 7200000, // 2 hours from now (consistent with expiresAt)
-            clientId: 'client-future',
-            codeChallenge: 'future-challenge',
-            codeChallengeMethod: 'S256',
-          },
-          expiresAt: futureTime,
-        }).returning({ code: oauthTempAuthCodes.code });
+        const codeInsert = await db
+          .insert(oauthTempAuthCodes)
+          .values({
+            code: 'future-code',
+            data: {
+              sessionToken: 'future-token',
+              expires: now + 7200000, // 2 hours from now (consistent with expiresAt)
+              clientId: 'client-future',
+              codeChallenge: 'future-challenge',
+              codeChallengeMethod: 'S256',
+            },
+            expiresAt: futureTime,
+          })
+          .returning({ code: oauthTempAuthCodes.code });
 
         // Verify inserts were successful
         expect(sessionInsert).toHaveLength(1);
@@ -519,7 +527,7 @@ describe('SessionManager', () => {
         expect(initialCodes).toHaveLength(1);
 
         // Add a small delay to ensure timing consistency
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
         // Run cleanup - should not remove any records since they're not expired
         await sessionManager.cleanupExpiredSessions();

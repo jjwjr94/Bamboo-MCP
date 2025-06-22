@@ -27,9 +27,6 @@ describe('resiliencePolicy', () => {
         // Temporarily modify environment for this test
         const policy = createMetaResiliencePolicy();
 
-        // Create a mock function that will fail
-        const _failingFunction = vi.fn().mockRejectedValue(new Error('Test failure'));
-
         // The circuit breaker should allow calls up to the failure threshold
         // Default threshold from env is 5, so first 5 failures should be attempted
         expect(policy).toBeDefined();

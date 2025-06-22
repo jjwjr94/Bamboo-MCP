@@ -157,21 +157,26 @@ export class SessionManager {
           return null;
         }
 
-        await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
+        // Check expiration INSIDE the transaction to ensure atomicity
+        if (record.expiresAt <= new Date()) {
+          // Delete expired code and return null to indicate expiration
+          await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
+          logger.debug('Temp auth code was expired during atomic retrieval', { authCode });
+          return null;
+        }
 
-        return record;
+        // Delete the valid code and return the data
+        await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
+        logger.debug('Atomically retrieved and deleted temp auth code', { authCode });
+        return record.data;
       });
 
-      if (result) {
-        logger.debug('Atomically retrieved and deleted temp auth code', { authCode });
+      if (result === null) {
+        logger.debug('Temp auth code was expired or invalid after atomic retrieval', { authCode });
+        return undefined;
       }
 
-      if (result && result.expiresAt > new Date()) {
-        return result.data;
-      }
-
-      logger.debug('Temp auth code was expired or invalid after atomic retrieval', { authCode });
-      return undefined;
+      return result;
     } catch (error) {
       logger.error('Failed to atomically get and clear temp auth code', { authCode, error });
       throw new DatabaseError('Could not process temporary authorization code.');

@@ -167,20 +167,6 @@ describe('MCP Server Integration', () => {
       const result = await client.request(toolsRequest, ListToolsResultSchema);
       const toolNames = result.tools.map((tool: { name: string }) => tool.name);
 
-      // Verify each tool registry has contributed tools based on actual naming patterns
-      const _expectedCategories = [
-        'ad_account',
-        'campaign',
-        'ad_set',
-        'ad_creative',
-        'insight',
-        'audience',
-        'page',
-        'business',
-        'targeting',
-        'archive',
-      ];
-
       // More flexible matching - just verify we have a reasonable number of tools
       expect(result.tools.length).toBeGreaterThan(30); // Should have 38+ tools
 

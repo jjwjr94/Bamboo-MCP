@@ -77,8 +77,8 @@ export async function setup() {
     const testClient = postgres(dbUrl, { max: 1 });
     const testDb = drizzle(testClient);
 
-    // Simple verification query
-    const _result = await testDb.execute(sql`SELECT 1 as test`);
+    // Simple verification query to ensure database connection works
+    await testDb.execute(sql`SELECT 1 as test`);
     console.info('✅ Database connection verified');
 
     await testClient.end();

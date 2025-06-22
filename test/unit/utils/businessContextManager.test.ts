@@ -114,18 +114,18 @@ describe('businessContextManager', () => {
     it('should have consistent async function signatures', async () => {
       // All main functions should be async and return promises
       // Test with valid calls that won't cause unhandled rejections
-      
+
       // Test that functions return promises
       const promise1 = getBusinessIdForAdAccount('test', 'test').catch(() => 'handled');
       const promise2 = buildMetaApiUrl('test', 'test', 'test').catch(() => 'handled');
       const promise3 = isBusinessManaged('test', 'test').catch(() => 'handled');
       const promise4 = discoverAndCacheBusinessContext('test', 'test', []).catch(() => 'handled');
-      
+
       expect(promise1).toBeInstanceOf(Promise);
       expect(promise2).toBeInstanceOf(Promise);
       expect(promise3).toBeInstanceOf(Promise);
       expect(promise4).toBeInstanceOf(Promise);
-      
+
       // Await all promises to prevent unhandled rejections
       await Promise.all([promise1, promise2, promise3, promise4]);
     });
@@ -150,7 +150,7 @@ describe('businessContextManager', () => {
     it('should have appropriate error handling structure', async () => {
       // Functions should handle database errors gracefully with proper error types
       // Test each function individually with proper error handling
-      
+
       try {
         await getBusinessIdForAdAccount('user-123', 'act_nonexistent');
         // If it doesn't throw, that's also valid behavior
@@ -158,15 +158,15 @@ describe('businessContextManager', () => {
         expect(error).toBeDefined();
         expect(String(error)).toContain('not found');
       }
-      
+
       try {
         await buildMetaApiUrl('valid-url', 'user-123', 'act_nonexistent');
-        // If it doesn't throw, that's also valid behavior  
+        // If it doesn't throw, that's also valid behavior
       } catch (error) {
         expect(error).toBeDefined();
         expect(String(error)).toContain('not found');
       }
-      
+
       try {
         await isBusinessManaged('user-123', 'act_nonexistent');
         // If it doesn't throw, that's also valid behavior
@@ -176,7 +176,9 @@ describe('businessContextManager', () => {
       }
 
       // Test discoverAndCacheBusinessContext separately as it handles errors differently
-      const result = await discoverAndCacheBusinessContext('user-123', 'token', ['act_nonexistent']);
+      const result = await discoverAndCacheBusinessContext('user-123', 'token', [
+        'act_nonexistent',
+      ]);
       expect(result).toBeUndefined(); // Function completes but finds no valid accounts
     });
   });
