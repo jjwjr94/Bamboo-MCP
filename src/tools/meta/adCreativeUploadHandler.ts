@@ -167,9 +167,23 @@ export class AdCreativeUploadHandler {
           let totalBytes = 0;
           fileData.file.on('data', (chunk) => {
             totalBytes += chunk.length;
+            logger.info('Stream chunk read', { chunkBytes: chunk.length, totalBytesSoFar: totalBytes });
           });
+
           fileData.file.on('end', () => {
-            logger.info('Stream ended with byte count', { totalBytes });
+            logger.info('Readable stream end event fired', { totalBytes });
+          });
+
+          fileData.file.on('close', () => {
+            logger.info('Readable stream close event fired', { totalBytes });
+          });
+
+          fileData.file.on('pause', () => {
+            logger.info('Readable stream paused');
+          });
+
+          fileData.file.on('resume', () => {
+            logger.info('Readable stream resumed');
           });
 
           // Use correct form field name based on asset type
