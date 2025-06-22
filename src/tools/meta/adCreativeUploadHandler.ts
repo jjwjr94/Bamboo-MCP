@@ -163,8 +163,13 @@ export class AdCreativeUploadHandler {
           fileData.file.on('error', (err) => {
             logger.error('Stream error before upload', { err });
           });
+
+          let totalBytes = 0;
+          fileData.file.on('data', (chunk) => {
+            totalBytes += chunk.length;
+          });
           fileData.file.on('end', () => {
-            logger.debug('File stream ended');
+            logger.info('Stream ended with byte count', { totalBytes });
           });
 
           // Use correct form field name based on asset type
