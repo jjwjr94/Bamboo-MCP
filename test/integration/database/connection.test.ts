@@ -19,11 +19,15 @@ const tableNames = [
 ];
 
 beforeEach(async () => {
-  // Truncate all tables to ensure clean state for each test
-  // Order matters due to foreign key constraints
-  for (const tableName of tableNames) {
-    await db.execute(sql.raw(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`));
-  }
+  // Use a transaction and reset role to the owner for cleanup.
+  // This ensures sufficient permissions, bypasses RLS policies,
+  // and makes the cleanup operation atomic, preventing deadlocks.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`RESET ROLE`);
+    for (const tableName of tableNames) {
+      await tx.execute(sql.raw(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`));
+    }
+  });
 });
 
 describe('Database Connection', () => {
@@ -53,40 +57,46 @@ describe('Database Connection', () => {
   });
 
   it('should be able to perform basic database operations', async () => {
-    // Test basic CRUD operations
-    const testUser = {
-      facebookUserId: 'test_fb_user_123',
-      sessionState: { test: true },
-      accountContext: { selectedAccountId: 'test_account' },
-    };
+    // Wrap operations in a transaction and reset role to bypass RLS for this
+    // basic connectivity test. RLS itself is tested in rls.test.ts.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`RESET ROLE`);
 
-    // Insert a test user
-    const [insertedUser] = await db.insert(users).values(testUser).returning();
-    expect(insertedUser).toBeDefined();
-    expect(insertedUser.facebookUserId).toBe('test_fb_user_123');
+      // Test basic CRUD operations
+      const testUser = {
+        facebookUserId: 'test_fb_user_123',
+        sessionState: { test: true },
+        accountContext: { selectedAccountId: 'test_account' },
+      };
 
-    // Read the user back
-    const [foundUser] = await db
-      .select()
-      .from(users)
-      .where(sql`facebook_user_id = 'test_fb_user_123'`);
-    expect(foundUser).toBeDefined();
-    expect(foundUser.facebookUserId).toBe('test_fb_user_123');
+      // Insert a test user
+      const [insertedUser] = await tx.insert(users).values(testUser).returning();
+      expect(insertedUser).toBeDefined();
+      expect(insertedUser.facebookUserId).toBe('test_fb_user_123');
 
-    // Verify we can update
-    const updatedUser = await db
-      .update(users)
-      .set({ sessionState: { updated: true } })
-      .where(sql`facebook_user_id = 'test_fb_user_123'`)
-      .returning();
+      // Read the user back
+      const [foundUser] = await tx
+        .select()
+        .from(users)
+        .where(sql`facebook_user_id = 'test_fb_user_123'`);
+      expect(foundUser).toBeDefined();
+      expect(foundUser.facebookUserId).toBe('test_fb_user_123');
 
-    expect(updatedUser[0].sessionState).toEqual({ updated: true });
+      // Verify we can update
+      const updatedUser = await tx
+        .update(users)
+        .set({ sessionState: { updated: true } })
+        .where(sql`facebook_user_id = 'test_fb_user_123'`)
+        .returning();
 
-    // Delete is handled by beforeEach cleanup, but let's verify we can delete
-    await db.delete(users).where(sql`facebook_user_id = 'test_fb_user_123'`);
+      expect(updatedUser[0].sessionState).toEqual({ updated: true });
 
-    // Verify deletion
-    const allUsers = await db.select().from(users);
-    expect(allUsers).toHaveLength(0);
+      // Delete is handled by beforeEach cleanup, but let's verify we can delete
+      await tx.delete(users).where(sql`facebook_user_id = 'test_fb_user_123'`);
+
+      // Verify deletion
+      const allUsers = await tx.select().from(users);
+      expect(allUsers).toHaveLength(0);
+    });
   });
 });

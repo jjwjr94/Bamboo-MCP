@@ -64,9 +64,15 @@ export async function getBusinessIdForAdAccount(
 
     return businessId;
   } catch (error) {
-    // Re-throw NotFoundError to be handled by the coordinator
-    if (error instanceof NotFoundError) {
+    // Re-throw NotFoundError to be handled by the coordinator.
+    // Use a property check on `error.code` which is more robust than `instanceof`.
+    if ((error as { code?: string }).code === 'NOT_FOUND') {
       throw error;
+    }
+
+    // For database query errors where we can't find the record, this should also be treated as NotFoundError
+    if (error instanceof Error && error.message.includes('Failed query')) {
+      throw new NotFoundError(`Ad account ${adAccountId} not found`);
     }
 
     // Log and return null for other unexpected database errors

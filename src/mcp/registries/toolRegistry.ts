@@ -26,7 +26,6 @@ export class ToolRegistry {
     this.server = server;
     this.toolsHandler = toolsHandler;
 
-    // Initialize all registries in a consistent order
     this.registries = [
       new CampaignToolRegistry(server, toolsHandler),
       new AdSetToolRegistry(server, toolsHandler),
@@ -43,7 +42,7 @@ export class ToolRegistry {
 
   public register() {
     const getAdAccountsSuccessDataSchema = z.object({
-      accounts: z
+      adAccounts: z
         .array(
           z.object({
             id: z.string(),
@@ -51,7 +50,7 @@ export class ToolRegistry {
             status: z.string(),
             currency: z.string(),
             timezone: z.string(),
-            businessId: z.string().optional(),
+            businessId: z.string().nullable(),
             permissions: z.array(z.string()),
           })
         )
@@ -62,14 +61,20 @@ export class ToolRegistry {
       this.server,
       'get_ad_accounts',
       {
-        title: 'Get Ad Accounts',
+        title: 'Get Meta Ad Accounts',
         description:
-          'Retrieves all ad accounts accessible by the user. This tool should be called first to initialize your session context and load expert guidance for Meta advertising operations.',
-        inputSchema: {},
+          'Retrieve all accessible ad accounts with details including permissions. This is usually the first call to make.',
+        inputSchema: {
+          adAccountId: z
+            .string()
+            .optional()
+            .describe('Optional specific ad account ID to retrieve'),
+        },
         successDataSchema: getAdAccountsSuccessDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getAdAccounts(authPayload, params),
-      'Successfully retrieved ad accounts.'
+      'Successfully retrieved ad accounts with permissions and context.',
+      { attachPrompts: true }
     );
 
     // Register all tool registries using loop-based approach
@@ -90,7 +95,6 @@ export class ToolRegistry {
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
-        // Continue with next registry
       }
     }
 
@@ -123,16 +127,8 @@ export class ToolRegistry {
 
         await accountManager.selectAccount(authPayload.userId, adAccountId);
 
-        const result = {
-          selectedAccount: adAccountId,
-        };
-
         return {
-          content: [{ type: 'text', text: `Successfully selected ad account ${adAccountId}` }],
-          structuredContent: {
-            data: result,
-          },
-          isError: false,
+          selectedAccount: adAccountId,
         };
       },
       'Successfully selected ad account.'

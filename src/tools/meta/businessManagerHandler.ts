@@ -4,15 +4,15 @@ import {
   MetaBusinessResponseSchema,
   MetaBusinessUserResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type { GetBusinessAccountsResult, GetBusinessUsersResult } from './types.js';
 
 export class MetaBusinessManagerHandler {
-  async getBusinessAccounts(authPayload: JWTPayload) {
+  async getBusinessAccounts(authPayload: JWTPayload): Promise<GetBusinessAccountsResult> {
     logger.info('Executing get_business_accounts', { userId: authPayload.userId });
 
     return handleMetaApiCall(
@@ -21,17 +21,18 @@ export class MetaBusinessManagerHandler {
 
         const fields = ['id', 'name', 'verification_status', 'vertical', 'link'];
 
-        const businessesCursor = await new MetaUserSDK('me', {}, null, api).getBusinesses(fields);
+        const businessAccountsCursor = await new MetaUserSDK('me', {}, null, api).getBusinesses(
+          fields
+        );
 
-        // Use the common pagination utility to handle all edge cases
         const allRawBusinesses = await fetchAllPaginatedData<unknown>({
-          cursor: businessesCursor,
+          cursor: businessAccountsCursor,
           limit: env.META_MAX_BUSINESS_ACCOUNTS_TO_FETCH,
           entityName: 'business accounts',
           userId: authPayload.userId,
+          apiContext: {},
         });
 
-        // Validate each business using the auto-generated schema
         const validatedBusinesses: z.infer<typeof MetaBusinessResponseSchema>[] = [];
         for (const business of allRawBusinesses) {
           const result = MetaBusinessResponseSchema.safeParse(business);
@@ -52,7 +53,7 @@ export class MetaBusinessManagerHandler {
           count: validatedBusinesses.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_business_accounts',
@@ -61,29 +62,30 @@ export class MetaBusinessManagerHandler {
     );
   }
 
-  async getBusinessUsers(authPayload: JWTPayload, params: { businessId: string }) {
+  async getBusinessUsers(
+    authPayload: JWTPayload,
+    params: { businessId: string }
+  ): Promise<GetBusinessUsersResult> {
     logger.info('Executing get_business_users', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
+        // Instantiate Business object once and reuse it to fetch users
         const business = new MetaBusinessSDK(params.businessId, {}, null, api);
         const fields = ['id', 'name', 'email', 'role', 'pending'];
 
-        const usersCursor = await business.getBusinessUsers(fields);
+        const businessUsersCursor = await business.getBusinessUsers(fields);
 
-        // Use the common pagination utility to handle all edge cases
         const allRawUsers = await fetchAllPaginatedData<unknown>({
-          cursor: usersCursor,
+          cursor: businessUsersCursor,
           limit: env.META_MAX_BUSINESS_USERS_TO_FETCH,
           entityName: 'business users',
           userId: authPayload.userId,
           apiContext: { businessId: params.businessId },
-          dataExtractor: (item: unknown) => (item as { _data?: unknown })._data || item,
         });
 
-        // Validate each user using the auto-generated schema
         const validatedUsers: z.infer<typeof MetaBusinessUserResponseSchema>[] = [];
         for (const user of allRawUsers) {
           const result = MetaBusinessUserResponseSchema.safeParse(user);
@@ -106,7 +108,7 @@ export class MetaBusinessManagerHandler {
           count: validatedUsers.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_business_users',

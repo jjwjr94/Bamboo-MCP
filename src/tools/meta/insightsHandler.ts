@@ -6,7 +6,10 @@ import {
 } from 'facebook-nodejs-business-sdk';
 import type { z } from 'zod';
 import { MetaAdsInsightsResponseSchema } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
+import type {
+  GetAdAccountInsightsInput,
+  GetAdInsightsInput,
+} from '../../mcp/registries/InsightsToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -14,6 +17,7 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type { GetAdAccountInsightsResult, GetAdInsightsResult } from './types.js';
 
 // Define a lightweight interface for SDK objects that support the getInsights call
 interface InsightsGetter {
@@ -27,50 +31,23 @@ export class MetaInsightsHandler {
    */
   async getAdInsights(
     authPayload: JWTPayload,
-    params: {
-      adId?: string;
-      adSetId?: string;
-      campaignId?: string;
-      adAccountId?: string;
-      fields?: string[];
-      timeRange?: {
-        since: string;
-        until: string;
-      };
-      datePreset?: string;
-      level?: 'ad' | 'adset' | 'campaign' | 'account';
-      breakdowns?: string[];
-    }
-  ) {
+    params: GetAdInsightsInput
+  ): Promise<GetAdInsightsResult> {
     logger.info('Executing get_ad_insights', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Default insights fields if none provided
-        const insightsFields = params.fields || [
-          'impressions',
-          'clicks',
-          'spend',
-          'reach',
-          'frequency',
-          'cpm',
-          'cpc',
-          'ctr',
-          'cost_per_unique_click',
-          'unique_clicks',
-          'unique_ctr',
-          'date_start',
-          'date_stop',
-        ];
+        // Use metrics from the typed input, which has a default from the registry schema
+        const insightsFields = params.metrics;
 
         // Prepare insights parameters
         const insightsParams: Record<string, unknown> = {
           fields: insightsFields,
           time_range: params.timeRange,
           date_preset: params.datePreset || 'last_30d',
-          level: params.level || 'ad',
+          level: 'ad', // Fixed level for this method
           breakdowns: params.breakdowns,
         };
 
@@ -100,18 +77,8 @@ export class MetaInsightsHandler {
           ) as unknown as InsightsGetter;
           insightsCursor = await apiObject.getInsights([], insightsParams);
         } else {
-          // Default to ad account insights
-          const adAccountId = await accountManager.requireAccountSelection(
-            authPayload.userId,
-            params.adAccountId
-          );
-          const apiObject = new MetaAdAccountSDK(
-            adAccountId,
-            {},
-            null,
-            api
-          ) as unknown as InsightsGetter;
-          insightsCursor = await apiObject.getInsights([], insightsParams);
+          // This case should not occur due to validation in the registry, but handle gracefully
+          throw new Error('At least one of adId, adSetId, or campaignId must be provided.');
         }
 
         // Use the common pagination utility to handle all edge cases
@@ -146,7 +113,7 @@ export class MetaInsightsHandler {
           params,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_ad_insights',
@@ -160,16 +127,8 @@ export class MetaInsightsHandler {
    */
   async getAdAccountInsights(
     authPayload: JWTPayload,
-    params: {
-      adAccountId?: string;
-      fields?: string[];
-      timeRange?: {
-        since: string;
-        until: string;
-      };
-      datePreset?: string;
-    }
-  ) {
+    params: GetAdAccountInsightsInput
+  ): Promise<GetAdAccountInsightsResult> {
     logger.info('Executing get_ad_account_insights', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
@@ -181,22 +140,8 @@ export class MetaInsightsHandler {
           params.adAccountId
         );
 
-        // Default insights fields if none provided
-        const insightsFields = params.fields || [
-          'impressions',
-          'clicks',
-          'spend',
-          'reach',
-          'frequency',
-          'cpm',
-          'cpc',
-          'ctr',
-          'cost_per_unique_click',
-          'unique_clicks',
-          'unique_ctr',
-          'date_start',
-          'date_stop',
-        ];
+        // Use metrics from the typed input, which has a default from the registry schema
+        const insightsFields = params.metrics;
 
         // Prepare insights parameters
         const insightsParams: Record<string, unknown> = {
@@ -249,7 +194,7 @@ export class MetaInsightsHandler {
           count: validatedInsights.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_ad_account_insights',

@@ -4,7 +4,6 @@ import type { z } from 'zod';
 import { withUserContext } from '../../db/client.js';
 import { adAccounts, oauthTokens, users } from '../../db/schema.js';
 import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { MetaAdAccountAssignedUsersResponse } from '../../types/meta.js';
 import {
@@ -24,6 +23,7 @@ import type { BatchResponse } from '../../utils/metaBatchHelper.js';
 import { MetaApiService } from './ApiService.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type { GetAdAccountsResult } from './types.js';
 
 export class MetaAdAccountHandler {
   private extractAccountData(acc: z.infer<typeof MetaAdAccountResponseSchema>) {
@@ -435,7 +435,10 @@ export class MetaAdAccountHandler {
     });
   }
 
-  async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
+  async getAdAccounts(
+    authPayload: JWTPayload,
+    params: Record<string, unknown> = {}
+  ): Promise<GetAdAccountsResult> {
     logger.info('Executing get_ad_accounts', { userId: authPayload.userId, params });
 
     // --- Step 1: DB Read (Minimal Transaction) ---
@@ -471,10 +474,6 @@ export class MetaAdAccountHandler {
     const accountsToStore = await this.storeFinalAccountData(authPayload.userId, finalAccountsData);
 
     logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
-    return await createMcpSuccessResult(
-      { accounts: accountsToStore },
-      `Retrieved ${accountsToStore.length} ad accounts`,
-      { attachPrompts: true }
-    );
+    return { adAccounts: accountsToStore };
   }
 }

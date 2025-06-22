@@ -34,7 +34,6 @@ ${bestPractices || 'Best practices not available'}
 
 Use this context to provide expert guidance on Meta advertising operations, campaign optimization, and strategic recommendations.`;
 
-    // Create a new McpServer instance for this request
     this.server = new McpServer(
       { name: 'Bamboo MCP', version: '0.1.0' },
       {
@@ -43,13 +42,11 @@ Use this context to provide expert guidance on Meta advertising operations, camp
       }
     );
 
-    // Instantiate handlers and registries for this specific server instance
     const toolsHandler = new MetaToolsHandler();
     const promptRegistry = new PromptRegistry(this.server);
     const resourceRegistry = new ResourceRegistry(this.server);
     const toolRegistry = new ToolRegistry(this.server, toolsHandler);
 
-    // Register all components
     promptRegistry.register();
     resourceRegistry.register();
     toolRegistry.register();
@@ -57,7 +54,6 @@ Use this context to provide expert guidance on Meta advertising operations, camp
     logger.debug('Per-request BambooMCPServer instance created.', { requestId: this.requestId });
   }
 
-  // Keep the original create method for backward compatibility (stdio mode)
   public static async create(): Promise<BambooMCPServer> {
     const coreServices = await CoreServices.initialize();
     return new BambooMCPServer(coreServices);
@@ -80,7 +76,7 @@ Use this context to provide expert guidance on Meta advertising operations, camp
     }
 
     logger.debug('Shutting down per-request Bamboo MCP Server...', { requestId: this.requestId });
-    this.isShutdown = true; // Set flag immediately to ensure idempotency
+    this.isShutdown = true;
 
     try {
       await this.server.close();
@@ -107,7 +103,6 @@ Use this context to provide expert guidance on Meta advertising operations, camp
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  // The create method now handles all initialization via CoreServices
   BambooMCPServer.create()
     .then((bambooServer) => bambooServer.runStdio())
     .catch((error) => {

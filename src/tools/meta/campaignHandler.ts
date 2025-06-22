@@ -2,14 +2,12 @@ import {
   AdAccount as MetaAdAccountSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { z } from 'zod';
 import {
   MetaCampaignResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -19,9 +17,19 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type {
+  CreateCampaignResult,
+  DeleteCampaignResult,
+  GetCampaignsResult,
+  MetaCampaign,
+  UpdateCampaignResult,
+} from './types.js';
 
 export class MetaCampaignHandler {
-  async getCampaigns(authPayload: JWTPayload, params: { adAccountId?: string }) {
+  async getCampaigns(
+    authPayload: JWTPayload,
+    params: { adAccountId?: string }
+  ): Promise<GetCampaignsResult> {
     logger.info('Executing get_campaigns', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -53,7 +61,6 @@ export class MetaCampaignHandler {
           fields
         );
 
-        // Use the common pagination utility to handle all edge cases
         const allRawCampaigns = await fetchAllPaginatedData<unknown>({
           cursor: campaignsCursor,
           limit: env.META_MAX_CAMPAIGNS_TO_FETCH,
@@ -62,8 +69,7 @@ export class MetaCampaignHandler {
           apiContext: { adAccountId },
         });
 
-        // Validate and transform the response using auto-generated schema
-        const validatedCampaigns: z.infer<typeof MetaCampaignResponseSchema>[] = [];
+        const validatedCampaigns: MetaCampaign[] = [];
         for (const campaign of allRawCampaigns) {
           const result = MetaCampaignResponseSchema.safeParse(campaign);
           if (result.success) {
@@ -78,14 +84,14 @@ export class MetaCampaignHandler {
           }
         }
 
-        const response = { campaigns: validatedCampaigns };
+        const response: GetCampaignsResult = { campaigns: validatedCampaigns };
         logger.info('Successfully retrieved campaigns', {
           userId: authPayload.userId,
           adAccountId,
           count: validatedCampaigns.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_campaigns',
@@ -94,7 +100,10 @@ export class MetaCampaignHandler {
     );
   }
 
-  async createCampaign(authPayload: JWTPayload, params: CreateCampaignRequest) {
+  async createCampaign(
+    authPayload: JWTPayload,
+    params: CreateCampaignRequest
+  ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -114,7 +123,6 @@ export class MetaCampaignHandler {
           [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
           [MetaCampaignSDK.Fields.special_ad_categories]: params.specialAdCategories,
           [MetaCampaignSDK.Fields.special_ad_category_country]: params.specialAdCategoryCountry,
-          // buyingType and bidStrategy are not part of CreateCampaignRequest interface
         };
 
         removeUndefinedProperties(campaignData);
@@ -135,7 +143,12 @@ export class MetaCampaignHandler {
 
         const campaignId = validation.data.id;
 
-        const result = { campaignId };
+        const result: CreateCampaignResult = {
+          campaignId,
+          name: params.name,
+          objective: params.objective,
+          status: params.status || 'PAUSED',
+        };
         logger.info('Successfully created campaign', {
           userId: authPayload.userId,
           adAccountId,
@@ -143,10 +156,7 @@ export class MetaCampaignHandler {
           name: params.name,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully created campaign '${params.name}' (ID: ${campaignId}).`
-        );
+        return result;
       },
       {
         toolName: 'create_campaign',
@@ -164,7 +174,7 @@ export class MetaCampaignHandler {
       dailyBudget?: number;
       lifetimeBudget?: number;
     }
-  ) {
+  ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -193,7 +203,7 @@ export class MetaCampaignHandler {
           throw new ValidationError('Failed to update campaign: Invalid API response.');
         }
 
-        const result = {
+        const result: UpdateCampaignResult = {
           campaignId: params.campaignId,
           updatedFields: Object.keys(updateData),
         };
@@ -203,10 +213,7 @@ export class MetaCampaignHandler {
           updatedFields: Object.keys(updateData),
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully updated campaign ${params.campaignId}.`
-        );
+        return result;
       },
       {
         toolName: 'update_campaign',
@@ -215,8 +222,17 @@ export class MetaCampaignHandler {
     );
   }
 
-  async deleteCampaign(authPayload: JWTPayload, params: { campaignId: string }) {
+  async deleteCampaign(
+    authPayload: JWTPayload,
+    params: { campaignId: string; confirmPermanentDelete?: boolean }
+  ): Promise<DeleteCampaignResult> {
     logger.info('Executing delete_campaign', { userId: authPayload.userId, params });
+
+    if (params.confirmPermanentDelete !== true) {
+      throw new ValidationError(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
+      );
+    }
 
     return await handleMetaApiCall(
       async () => {
@@ -235,16 +251,13 @@ export class MetaCampaignHandler {
           throw new ValidationError('Failed to delete campaign: Invalid API response.');
         }
 
-        const result = { campaignId: params.campaignId };
+        const result: DeleteCampaignResult = { campaignId: params.campaignId };
         logger.info('Successfully deleted campaign', {
           userId: authPayload.userId,
           campaignId: params.campaignId,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully deleted campaign ${params.campaignId}.`
-        );
+        return result;
       },
       {
         toolName: 'delete_campaign',

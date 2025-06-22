@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { type DbTransaction, withUserContext } from '../db/client.js';
+import { type DatabaseTransaction as DbTransaction, withUserContext } from '../db/client.js';
 import { type UserAccountContext, adAccounts, users } from '../db/schema.js';
 import { DatabaseError, NotFoundError, ValidationError } from './errors.js';
 import { logger } from './logger.js';

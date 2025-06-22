@@ -1,11 +1,16 @@
 import type { z } from 'zod';
 import { MetaAdsArchiveResponseSchema } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
 import { MetaApiError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { fetchUserTokenString, handleMetaApiCall } from './api.js';
+import type {
+  GetAdsArchiveInsightsResult,
+  GetPageArchiveAdsResult,
+  GetPoliticalAdsResult,
+  SearchAdsArchiveResult,
+} from './types.js';
 
 /**
  * Handler for Meta Ads Archive (Ad Library) API operations.
@@ -29,7 +34,6 @@ export class MetaAdsArchiveHandler {
     const baseUrl = `https://graph.facebook.com/${env.META_API_VERSION}/ads_archive`;
     const urlParams = new URLSearchParams();
 
-    // Add search criteria
     if (params.searchTerms) {
       urlParams.set('search_terms', params.searchTerms);
     }
@@ -43,7 +47,6 @@ export class MetaAdsArchiveHandler {
       urlParams.set('publisher_platforms', params.publisherPlatforms.join(','));
     }
 
-    // Add response configuration
     urlParams.set('fields', params.fields.join(','));
     urlParams.set('limit', String(params.limit || 50));
 
@@ -112,12 +115,11 @@ export class MetaAdsArchiveHandler {
       // Check pagination
       const nextCursor = data.paging?.cursors?.after;
       if (!nextCursor || pageResults.length === 0) {
-        break; // No more pages
+        break;
       }
 
       after = nextCursor;
 
-      // Safety check to prevent infinite loops
       if (allResults.length >= maxResults) {
         logger.warn('Reached maximum ads archive results limit', {
           maxResults,
@@ -128,7 +130,7 @@ export class MetaAdsArchiveHandler {
       }
     }
 
-    return allResults.slice(0, maxResults); // Ensure we don't exceed limit
+    return allResults.slice(0, maxResults);
   }
 
   /**
@@ -167,14 +169,13 @@ export class MetaAdsArchiveHandler {
       publisherPlatforms?: string[];
       limit?: number;
     }
-  ) {
+  ): Promise<SearchAdsArchiveResult> {
     logger.info('Executing search_ads_archive', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
       async () => {
         const accessToken = await fetchUserTokenString(authPayload.userId);
 
-        // Define standard fields for general ads archive search
         const fields = [
           'id',
           'ad_creation_time',
@@ -213,11 +214,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return await createMcpSuccessResult(
-          { ads: validatedResults },
-          `Retrieved ${validatedResults.length} archived ads`,
-          { attachPrompts: true }
-        );
+        return { ads: validatedResults };
       },
       {
         toolName: 'search_ads_archive',
@@ -237,7 +234,7 @@ export class MetaAdsArchiveHandler {
       publisherPlatforms?: string[];
       limit?: number;
     }
-  ) {
+  ): Promise<GetPoliticalAdsResult> {
     logger.info('Executing get_political_ads', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -288,11 +285,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return await createMcpSuccessResult(
-          { political_ads: validatedResults },
-          `Retrieved ${validatedResults.length} political/issue ads`,
-          { attachPrompts: true }
-        );
+        return { political_ads: validatedResults };
       },
       {
         toolName: 'get_political_ads',
@@ -312,7 +305,7 @@ export class MetaAdsArchiveHandler {
       publisherPlatforms?: string[];
       limit?: number;
     }
-  ) {
+  ): Promise<GetPageArchiveAdsResult> {
     logger.info('Executing get_page_archive_ads', { userId: authPayload.userId, params });
 
     // Validate page IDs limit (API supports max 10)
@@ -367,11 +360,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return await createMcpSuccessResult(
-          { page_ads: validatedResults },
-          `Retrieved ${validatedResults.length} archived ads from ${params.pageIds.length} pages`,
-          { attachPrompts: true }
-        );
+        return { page_ads: validatedResults };
       },
       {
         toolName: 'get_page_archive_ads',
@@ -394,7 +383,7 @@ export class MetaAdsArchiveHandler {
       includeDemographicData?: boolean;
       limit?: number;
     }
-  ) {
+  ): Promise<GetAdsArchiveInsightsResult> {
     logger.info('Executing get_ads_archive_insights', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -458,11 +447,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return await createMcpSuccessResult(
-          { ads_insights: validatedResults },
-          `Retrieved ${validatedResults.length} archived ads with enhanced insights`,
-          { attachPrompts: true }
-        );
+        return { ads_insights: validatedResults };
       },
       {
         toolName: 'get_ads_archive_insights',

@@ -37,13 +37,13 @@ export async function setup() {
     console.info('✅ PostgreSQL container started successfully');
     console.info(`📍 Container URL: ${dbUrl}`);
 
-    // Setup database roles and run migrations
-    console.info('🔄 Setting up database roles...');
+    console.info('🔄 Setting up database roles for RLS...');
 
-    // Create setup client to initialize required roles
+    // Create setup client to initialize required roles BEFORE migrations
     const setupClient = postgres(dbUrl, { max: 1 });
 
     // Create the app_user role that exists in Supabase production
+    // This MUST be done before migrations because RLS policies reference this role
     await setupClient.unsafe(`
       DO $$ 
       BEGIN
@@ -55,11 +55,10 @@ export async function setup() {
     `);
 
     await setupClient.end();
-    console.info('✅ Database roles created successfully');
 
     console.info('🔄 Running database migrations...');
 
-    // Create migration client with single connection
+    // Create migration client with single connection AFTER creating app_user role
     const migrationClient = postgres(dbUrl, { max: 1 });
     const migrationDb = drizzle(migrationClient);
 
@@ -70,6 +69,25 @@ export async function setup() {
 
     // Close migration client
     await migrationClient.end();
+
+    console.info('🔄 Configuring database roles for RLS enforcement...');
+
+    // Reconnect to grant permissions to tables created by migrations
+    const permissionClient = postgres(dbUrl, { max: 1 });
+
+    // Grant app_user permissions to all tables created by migrations
+    // Include TRUNCATE permission for test cleanup operations
+    await permissionClient.unsafe(`
+      GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public TO app_user;
+      GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app_user;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO app_user;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO app_user;
+    `);
+
+    // Grant test_user the ability to assume the app_user role for RLS enforcement
+    await permissionClient.unsafe(`GRANT app_user TO test_user`);
+
+    await permissionClient.end();
 
     console.info('✅ Database migrations completed successfully');
 

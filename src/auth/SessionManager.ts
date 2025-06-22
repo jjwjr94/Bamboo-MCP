@@ -1,5 +1,7 @@
 import { eq, lt } from 'drizzle-orm';
+import type { DatabaseTransaction } from '../db/client.js';
 import { db } from '../db/client.js';
+import { withUserContext } from '../db/client.js';
 import { oauthSessions, oauthTempAuthCodes } from '../db/schema.js';
 import type { SessionData, TempAuthCodeData } from '../types/auth.js';
 import { DatabaseError, ValidationError } from '../utils/errors.js';
@@ -146,41 +148,61 @@ export class SessionManager {
    * @returns The stored temp auth code data, or undefined if not found, expired, or invalid.
    */
   public async getAndClearTempAuthCode(authCode: string): Promise<TempAuthCodeData | undefined> {
-    try {
-      const result = await db.transaction(async (tx) => {
-        const record = await tx.query.oauthTempAuthCodes.findFirst({
-          where: eq(oauthTempAuthCodes.code, authCode),
-        });
+    return await withUserContext('system', async (tx: DatabaseTransaction) => {
+      const deletedRecords = await tx
+        .delete(oauthTempAuthCodes)
+        .where(eq(oauthTempAuthCodes.code, authCode))
+        .returning();
 
-        if (!record) {
-          logger.debug('Temp auth code not found in database transaction', { authCode });
-          return null;
-        }
-
-        // Check expiration INSIDE the transaction to ensure atomicity
-        if (record.expiresAt <= new Date()) {
-          // Delete expired code and return null to indicate expiration
-          await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
-          logger.debug('Temp auth code was expired during atomic retrieval', { authCode });
-          return null;
-        }
-
-        // Delete the valid code and return the data
-        await tx.delete(oauthTempAuthCodes).where(eq(oauthTempAuthCodes.code, authCode));
-        logger.debug('Atomically retrieved and deleted temp auth code', { authCode });
-        return record.data;
-      });
-
-      if (result === null) {
-        logger.debug('Temp auth code was expired or invalid after atomic retrieval', { authCode });
+      if (deletedRecords.length === 0) {
+        logger.debug('No temp auth code found for deletion.', { authCode });
         return undefined;
       }
 
-      return result;
-    } catch (error) {
-      logger.error('Failed to atomically get and clear temp auth code', { authCode, error });
-      throw new DatabaseError('Could not process temporary authorization code.');
-    }
+      const record = deletedRecords[0];
+
+      if (record.expiresAt <= new Date()) {
+        logger.debug('Temp auth code has expired, but was cleaned up during atomic retrieval.', {
+          authCode,
+          expired: record.expiresAt,
+        });
+        return undefined;
+      }
+
+      return record.data;
+    });
+  }
+
+  /**
+   * Atomically retrieves and deletes OAuth session data from the database.
+   * This prevents race conditions where a state parameter could be used multiple times.
+   * @param state The unique state identifier.
+   * @returns The stored session data, or undefined if not found or already used.
+   */
+  public async getAndClearSessionData(state: string): Promise<SessionData | undefined> {
+    return await withUserContext('system', async (tx: DatabaseTransaction) => {
+      const deletedRecords = await tx
+        .delete(oauthSessions)
+        .where(eq(oauthSessions.state, state))
+        .returning();
+
+      if (deletedRecords.length === 0) {
+        logger.debug('No OAuth session found for deletion.', { state });
+        return undefined;
+      }
+
+      const record = deletedRecords[0];
+
+      if (record.expiresAt.getTime() < Date.now()) {
+        logger.debug('OAuth session has expired.', {
+          state,
+          expired: record.expiresAt,
+        });
+        return undefined;
+      }
+
+      return record.sessionData as SessionData;
+    });
   }
 
   /**
@@ -188,16 +210,14 @@ export class SessionManager {
    * This is intended to be run by a scheduled job (e.g., cron).
    */
   public async cleanupExpiredSessions(): Promise<void> {
-    logger.info('Running cleanup for expired OAuth sessions and temp codes...');
-    try {
-      // It's good practice to run these in a transaction, though not strictly required.
-      await db.transaction(async (tx) => {
-        await tx.delete(oauthSessions).where(lt(oauthSessions.expiresAt, new Date()));
-        await tx.delete(oauthTempAuthCodes).where(lt(oauthTempAuthCodes.expiresAt, new Date()));
-      });
-      logger.info('Successfully cleaned up expired OAuth data.');
-    } catch (error) {
-      logger.error('Failed to clean up expired OAuth data', { error });
-    }
+    await withUserContext('system', async (tx: DatabaseTransaction) => {
+      const now = new Date();
+
+      await tx.delete(oauthSessions).where(lt(oauthSessions.expiresAt, now));
+
+      await tx.delete(oauthTempAuthCodes).where(lt(oauthTempAuthCodes.expiresAt, now));
+
+      logger.info('Cleaned up expired OAuth sessions and temp auth codes.');
+    });
   }
 }

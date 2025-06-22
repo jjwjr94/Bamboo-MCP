@@ -3,14 +3,12 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { z } from 'zod';
 import {
   MetaAdSetResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -20,9 +18,19 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type {
+  CreateAdSetResult,
+  DeleteAdSetResult,
+  GetAdSetsResult,
+  MetaAdSet,
+  UpdateAdSetResult,
+} from './types.js';
 
 export class MetaAdSetHandler {
-  async getAdSets(authPayload: JWTPayload, params: { campaignId?: string; adAccountId?: string }) {
+  async getAdSets(
+    authPayload: JWTPayload,
+    params: { campaignId?: string; adAccountId?: string }
+  ): Promise<GetAdSetsResult> {
     logger.info('Executing get_ad_sets', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
@@ -44,33 +52,30 @@ export class MetaAdSetHandler {
           MetaAdSetSDK.Fields.updated_time,
         ];
 
+        const adAccountId = await accountManager.requireAccountSelection(
+          authPayload.userId,
+          params.adAccountId
+        );
+
         let adSetsCursor: unknown;
 
         if (params.campaignId) {
-          // Get ad sets from a specific campaign
           adSetsCursor = await new MetaCampaignSDK(params.campaignId, {}, null, api).getAdSets(
             fields
           );
         } else {
-          // Get ad sets from an ad account
-          const adAccountId = await accountManager.requireAccountSelection(
-            authPayload.userId,
-            params.adAccountId
-          );
           adSetsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAdSets(fields);
         }
 
-        // Use the common pagination utility to handle all edge cases
         const allRawAdSets = await fetchAllPaginatedData<unknown>({
           cursor: adSetsCursor,
           limit: env.META_MAX_ADSETS_TO_FETCH,
           entityName: 'ad sets',
           userId: authPayload.userId,
-          apiContext: params,
+          apiContext: { adAccountId },
         });
 
-        // Validate and transform the response using auto-generated schema
-        const validatedAdSets: z.infer<typeof MetaAdSetResponseSchema>[] = [];
+        const validatedAdSets: MetaAdSet[] = [];
         for (const adSet of allRawAdSets) {
           const result = MetaAdSetResponseSchema.safeParse(adSet);
           if (result.success) {
@@ -80,7 +85,7 @@ export class MetaAdSetHandler {
               error: result.error.format(),
               adSet,
               userId: authPayload.userId,
-              params,
+              adAccountId,
             });
           }
         }
@@ -92,7 +97,7 @@ export class MetaAdSetHandler {
           params,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_adsets',
@@ -101,7 +106,10 @@ export class MetaAdSetHandler {
     );
   }
 
-  async createAdSet(authPayload: JWTPayload, params: CreateAdSetRequest) {
+  async createAdSet(
+    authPayload: JWTPayload,
+    params: CreateAdSetRequest
+  ): Promise<CreateAdSetResult> {
     logger.info('Executing create_adset', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -147,7 +155,12 @@ export class MetaAdSetHandler {
 
         const adSetId = validation.data.id;
 
-        const result = { adSetId };
+        const result: CreateAdSetResult = {
+          adSetId,
+          name: params.name,
+          campaignId: params.campaignId,
+          status: params.status || 'PAUSED',
+        };
         logger.info('Successfully created ad set', {
           userId: authPayload.userId,
           adAccountId,
@@ -155,10 +168,7 @@ export class MetaAdSetHandler {
           name: params.name,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully created ad set '${params.name}' (ID: ${adSetId}).`
-        );
+        return result;
       },
       {
         toolName: 'create_adset',
@@ -180,7 +190,7 @@ export class MetaAdSetHandler {
       startTime?: string;
       endTime?: string;
     }
-  ) {
+  ): Promise<UpdateAdSetResult> {
     logger.info('Executing update_adset', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -202,12 +212,11 @@ export class MetaAdSetHandler {
         const adSet = new MetaAdSetSDK(params.adSetId, {}, null, api);
         const updateResponse = await adSet.update([], updateData);
 
-        // Treat response as unknown and validate
-        const validationResult = MetaUpdateSuccessResponseSchema.safeParse(updateResponse);
-        if (!validationResult.success) {
+        const validation = MetaUpdateSuccessResponseSchema.safeParse(updateResponse);
+        if (!validation.success) {
           logger.warn('Invalid updateAdSet response from Meta API', {
             response: updateResponse,
-            errors: validationResult.error.errors,
+            errors: validation.error.errors,
           });
           throw new ValidationError(
             'Meta API returned an invalid response after updating the ad set. The operation status is uncertain.'
@@ -216,15 +225,12 @@ export class MetaAdSetHandler {
 
         logger.info('Ad set updated successfully', { adSetId: params.adSetId });
 
-        const result = {
+        const result: UpdateAdSetResult = {
           adSetId: params.adSetId,
           updatedFields: Object.keys(updateData),
         };
 
-        return await createMcpSuccessResult(
-          result,
-          `Ad set ${params.adSetId} updated successfully`
-        );
+        return result;
       },
       {
         toolName: 'update_adset',
@@ -233,8 +239,17 @@ export class MetaAdSetHandler {
     );
   }
 
-  async deleteAdSet(authPayload: JWTPayload, params: { adSetId: string }) {
-    logger.info('Executing delete_adset', { userId: authPayload.userId, params });
+  async deleteAdSet(
+    authPayload: JWTPayload,
+    params: { adSetId: string; confirmPermanentDelete?: boolean }
+  ): Promise<DeleteAdSetResult> {
+    logger.info('Executing delete_ad_set', { userId: authPayload.userId, params });
+
+    if (params.confirmPermanentDelete !== true) {
+      throw new ValidationError(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
+      );
+    }
 
     return await handleMetaApiCall(
       async () => {
@@ -243,12 +258,11 @@ export class MetaAdSetHandler {
         const adSet = new MetaAdSetSDK(params.adSetId, {}, null, api);
         const deleteResponse = await adSet.delete([]);
 
-        // Treat response as unknown and validate
-        const validationResult = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
-        if (!validationResult.success) {
+        const validation = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
+        if (!validation.success) {
           logger.warn('Invalid deleteAdSet response from Meta API', {
             response: deleteResponse,
-            errors: validationResult.error.errors,
+            errors: validation.error.errors,
           });
           throw new ValidationError(
             'Meta API returned an invalid response after deleting the ad set. The operation status is uncertain.'
@@ -257,14 +271,11 @@ export class MetaAdSetHandler {
 
         logger.info('Ad set deleted successfully', { adSetId: params.adSetId });
 
-        const result = {
+        const result: DeleteAdSetResult = {
           adSetId: params.adSetId,
         };
 
-        return await createMcpSuccessResult(
-          result,
-          `Ad set ${params.adSetId} deleted successfully`
-        );
+        return result;
       },
       {
         toolName: 'delete_adset',

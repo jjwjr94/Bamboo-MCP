@@ -6,8 +6,8 @@ import type { z } from 'zod';
 import {
   MetaCreateSuccessResponseSchema,
   MetaCustomAudienceResponseSchema,
+  MetaDeleteSuccessResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -16,6 +16,11 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type {
+  CreateCustomAudienceResult,
+  DeleteCustomAudienceResult,
+  GetCustomAudiencesResult,
+} from './types.js';
 
 // Module-level constants for better performance and readability
 const CUSTOM_AUDIENCE_FIELDS = [
@@ -34,7 +39,10 @@ export class MetaCustomAudienceHandler {
   /**
    * Retrieves custom audiences for a given ad account.
    */
-  async getCustomAudiences(authPayload: JWTPayload, params: { adAccountId?: string }) {
+  async getCustomAudiences(
+    authPayload: JWTPayload,
+    params: { adAccountId?: string }
+  ): Promise<GetCustomAudiencesResult> {
     logger.info('Executing get_custom_audiences', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
@@ -46,23 +54,21 @@ export class MetaCustomAudienceHandler {
           params.adAccountId
         );
 
-        const audiencesCursor = await new MetaAdAccountSDK(
+        const customAudiencesCursor = await new MetaAdAccountSDK(
           adAccountId,
           {},
           null,
           api
         ).getCustomAudiences(CUSTOM_AUDIENCE_FIELDS);
 
-        // Use the common pagination utility to handle all edge cases
         const allRawAudiences = await fetchAllPaginatedData<unknown>({
-          cursor: audiencesCursor,
+          cursor: customAudiencesCursor,
           limit: env.META_MAX_AUDIENCES_TO_FETCH,
           entityName: 'custom audiences',
           userId: authPayload.userId,
           apiContext: { adAccountId },
         });
 
-        // Validate and transform the response using auto-generated schema
         const validatedAudiences: z.infer<typeof MetaCustomAudienceResponseSchema>[] = [];
         for (const audience of allRawAudiences) {
           const result = MetaCustomAudienceResponseSchema.safeParse(audience);
@@ -85,7 +91,7 @@ export class MetaCustomAudienceHandler {
           count: validatedAudiences.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_custom_audiences',
@@ -105,7 +111,7 @@ export class MetaCustomAudienceHandler {
       description?: string;
       subtype: 'CUSTOM';
     }
-  ) {
+  ): Promise<CreateCustomAudienceResult> {
     logger.info('Executing create_custom_audience', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
@@ -151,10 +157,7 @@ export class MetaCustomAudienceHandler {
           name: params.name,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully created custom audience '${params.name}' (ID: ${audienceId}).`
-        );
+        return result;
       },
       {
         toolName: 'create_custom_audience',
@@ -169,30 +172,29 @@ export class MetaCustomAudienceHandler {
   async deleteCustomAudience(
     authPayload: JWTPayload,
     params: { customAudienceId: string; confirmPermanentDelete?: boolean }
-  ) {
+  ): Promise<DeleteCustomAudienceResult> {
     logger.info('Executing delete_custom_audience', { userId: authPayload.userId, params });
 
-    return handleMetaApiCall(
+    if (params.confirmPermanentDelete !== true) {
+      throw new ValidationError(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
+      );
+    }
+
+    return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Safety check: require explicit confirmation for permanent deletion
-        if (!params.confirmPermanentDelete) {
-          throw new ValidationError(
-            'Permanent deletion requires explicit confirmation. Set confirmPermanentDelete to true.'
-          );
-        }
+        const customAudience = new MetaCustomAudienceSDK(params.customAudienceId, {}, null, api);
+        const deleteResponse = await customAudience.delete([]);
 
-        const audience = new MetaCustomAudienceSDK(params.customAudienceId, {}, null, api);
-        const deleteResponse = await audience.delete([]);
-
-        // Meta API returns { "success": true } for successful deletions
-        if (!deleteResponse || (deleteResponse as { success?: boolean }).success !== true) {
-          logger.error('Unexpected response from Meta API for delete custom audience', {
-            customAudienceId: params.customAudienceId,
+        const validation = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
+        if (!validation.success || !validation.data.success) {
+          logger.error('Invalid response from Meta API for delete custom audience', {
+            error: validation.success ? 'success field was false' : validation.error.format(),
             response: deleteResponse,
           });
-          throw new ValidationError('Failed to delete custom audience: Unexpected API response.');
+          throw new ValidationError('Failed to delete custom audience: Invalid API response.');
         }
 
         const result = { customAudienceId: params.customAudienceId };
@@ -201,10 +203,7 @@ export class MetaCustomAudienceHandler {
           customAudienceId: params.customAudienceId,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully deleted custom audience ${params.customAudienceId}.`
-        );
+        return result;
       },
       {
         toolName: 'delete_custom_audience',

@@ -1,18 +1,25 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ZodObject, ZodTypeAny, z } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { createMcpErrorResult } from '../errorHandler.js';
-import { createMcpSuccessResult } from '../responseHelper.js';
+import { type CreateMcpSuccessResultOptions, createMcpSuccessResult } from '../responseHelper.js';
 import { createMcpOutputSchema } from '../types.js';
 
 /**
  * Creates and registers an MCP tool with discriminated union outputs.
- * This wraps existing handler calls that return CallToolResult and transforms them
- * to the new discriminated union format automatically.
+ * This helper wraps a handler call that returns a clean domain object, and
+ * automatically formats the result into the standard MCP success structure.
  *
- * Preserves dynamic success messages from handlers and provides type safety.
+ * It simplifies handler implementation by abstracting away the MCP-specific
+ * response format. Handlers can focus on returning pure data objects.
+ *
+ * @param server The MCP server instance.
+ * @param toolName The name of the tool.
+ * @param definition The tool's definition including title, description, and schemas.
+ * @param handlerCall The handler function that takes an auth payload and params, and returns a promise of the clean domain result.
+ * @param successMessage A static message to be used as the human-readable description for successful calls.
+ * @param options Optional configuration for the success result, including attachPrompts for context initialization.
  */
 export function createMcpTool<
   TInputSchema extends Record<string, ZodTypeAny>,
@@ -29,42 +36,31 @@ export function createMcpTool<
   handlerCall: (
     authPayload: JWTPayload,
     params: z.infer<ZodObject<TInputSchema>>
-  ) => Promise<CallToolResult>,
-  successMessage: string
+  ) => Promise<unknown>,
+  successMessage: string,
+  options?: CreateMcpSuccessResultOptions
 ) {
   server.registerTool(
     toolName,
     {
       title: definition.title,
       description: definition.description,
-      inputSchema: definition.inputSchema as any, // MCP SDK requires specific type format
+      inputSchema: definition.inputSchema as Record<string, ZodTypeAny>,
       outputSchema: createMcpOutputSchema(definition.successDataSchema),
     },
     async (params, extra) => {
       try {
         const authPayload = extractAuthPayload(extra);
 
-        // Call the existing handler which returns CallToolResult
-        const handlerResult = await handlerCall(authPayload, params as any);
+        // Call the handler which now returns a clean domain object
+        const typedParams = params as unknown as z.infer<ZodObject<TInputSchema>>;
+        const domainResult = await handlerCall(authPayload, typedParams);
 
-        // Extract data from the success result and re-wrap for discriminated union
-        if (
-          handlerResult.structuredContent &&
-          typeof handlerResult.structuredContent === 'object' &&
-          'data' in handlerResult.structuredContent &&
-          !handlerResult.isError
-        ) {
-          const data = (handlerResult.structuredContent as { data: unknown }).data;
-          // Prefer the dynamic message from the handler's result, fall back to the static message
-          const message = (handlerResult._meta?.description as string) || successMessage;
-          return await createMcpSuccessResult(data, message, {
-            useResultWrapper: true,
-          });
-        }
-
-        throw new Error(`Handler for tool '${toolName}' returned unexpected result structure.`);
+        // Automatically wrap the clean result into the MCP success format
+        return await createMcpSuccessResult(domainResult, successMessage, options);
       } catch (error) {
-        return createMcpErrorResult(error, { useResultWrapper: true });
+        // Error handling remains the same, wrapping errors in the MCP format
+        return createMcpErrorResult(error);
       }
     }
   );

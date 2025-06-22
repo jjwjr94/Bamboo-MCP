@@ -16,6 +16,10 @@ import type { SessionData, TempAuthCodeData } from '../types/auth.js';
 // Define application role for authenticated users
 export const appUser = pgRole('app_user').existing();
 
+// FIX: Define a reusable SQL fragment for robustly getting the current user ID
+// This handles cases where the setting is missing or empty (preventing UUID cast errors)
+const currentUserId = sql`NULLIF(current_setting('app.current_user_id', true), '')::uuid`;
+
 export const users = pgTable(
   'users',
   {
@@ -42,13 +46,15 @@ export const users = pgTable(
     pgPolicy('users_select_own', {
       for: 'select',
       to: appUser,
-      using: sql`${table.id} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.id} = ${currentUserId}`,
     }),
     pgPolicy('users_update_own', {
       for: 'update',
       to: appUser,
-      using: sql`${table.id} = current_setting('app.current_user_id')::uuid`,
-      withCheck: sql`${table.id} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.id} = ${currentUserId}`,
+      withCheck: sql`${table.id} = ${currentUserId}`,
     }),
   ]
 );
@@ -99,23 +105,27 @@ export const oauthTokens = pgTable(
     pgPolicy('tokens_select_own', {
       for: 'select',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('tokens_insert_own', {
       for: 'insert',
       to: appUser,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('tokens_update_own', {
       for: 'update',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('tokens_delete_own', {
       for: 'delete',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
     }),
   ]
 );
@@ -146,23 +156,27 @@ export const adAccounts = pgTable(
     pgPolicy('ad_accounts_select_own', {
       for: 'select',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('ad_accounts_insert_own', {
       for: 'insert',
       to: appUser,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('ad_accounts_update_own', {
       for: 'update',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('ad_accounts_delete_own', {
       for: 'delete',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
     }),
   ]
 );
@@ -240,18 +254,21 @@ export const creativeAssetUploads = pgTable(
     pgPolicy('uploads_select_own', {
       for: 'select',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('uploads_insert_own', {
       for: 'insert',
       to: appUser,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
     pgPolicy('uploads_update_own', {
       for: 'update',
       to: appUser,
-      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
-      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      // FIX: Use the robust SQL fragment
+      using: sql`${table.userId} = ${currentUserId}`,
+      withCheck: sql`${table.userId} = ${currentUserId}`,
     }),
   ]
 );

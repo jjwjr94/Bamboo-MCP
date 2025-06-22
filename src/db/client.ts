@@ -1,48 +1,42 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import * as schema from './schema.js';
 
-// prepare: false is required for Supabase connection pooling
-const client = postgres(env.DATABASE_URL, {
-  prepare: false,
+// FIX: Remove prepare property as it's not supported in the current version
+const pool = new Pool({
+  connectionString: env.DATABASE_URL,
   max: env.DB_POOL_MAX,
-  onnotice: () => {},
-
-  idle_timeout: env.DB_POOL_IDLE_TIMEOUT,
-  max_lifetime: env.DB_POOL_MAX_LIFETIME,
-  connect_timeout: env.DB_POOL_CONNECT_TIMEOUT,
-
-  connection: {
-    statement_timeout: env.DB_STATEMENT_TIMEOUT,
-  },
+  idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT * 1000,
+  connectionTimeoutMillis: env.DB_POOL_CONNECT_TIMEOUT * 1000,
+  maxLifetimeSeconds: env.DB_POOL_MAX_LIFETIME,
+  statement_timeout: env.DB_STATEMENT_TIMEOUT,
 });
 
-export const db = drizzle(client, { schema });
+export const db = drizzle(pool, { schema, logger: false });
 
-// Derive the correct transaction type from the db.transaction callback to avoid using `any`
-export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Uses transactions to safely set the user context for RLS (Row Level Security)
-export const withUserContext = async <T>(
+export async function withUserContext<T>(
   userId: string,
-  operation: (tx: DbTransaction) => Promise<T>
-): Promise<T> => {
-  return db.transaction(async (tx) => {
-    // Use set_config() instead of SET LOCAL for compatibility with Supabase
+  callback: (tx: DatabaseTransaction) => Promise<T>
+): Promise<T> {
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE app_user`);
     await tx.execute(sql`SELECT set_config('app.current_user_id', ${userId}, true)`);
+
     logger.dbOperation('SET_USER_CONTEXT', 'session', true, 0);
 
-    return await operation(tx);
+    return await callback(tx);
   });
-};
+}
 
 export const testConnection = async (): Promise<boolean> => {
   try {
-    await client`SELECT 1`;
+    await pool.query('SELECT 1');
     logger.info('Database connection successful');
     return true;
   } catch (error) {
@@ -52,11 +46,6 @@ export const testConnection = async (): Promise<boolean> => {
 };
 
 // Graceful shutdown
-export const closeDatabase = async (): Promise<void> => {
-  try {
-    await client.end();
-    logger.info('Database connection closed');
-  } catch (error) {
-    logger.error('Error closing database connection', { error });
-  }
-};
+export async function closeDatabase(): Promise<void> {
+  await pool.end();
+}

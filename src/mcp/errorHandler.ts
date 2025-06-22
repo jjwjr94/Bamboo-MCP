@@ -209,12 +209,8 @@ export function deriveErrorDetails(error: unknown): {
   return deriveUnknownErrorDetails(error);
 }
 
-export function createMcpErrorResult(
-  error: unknown,
-  options: { useResultWrapper?: boolean } = {}
-): CallToolResult {
+export function createMcpErrorResult(error: unknown): CallToolResult {
   const { message, metadata } = deriveErrorDetails(error);
-  const { useResultWrapper = false } = options;
 
   const errorContent: TextContent = {
     type: 'text',
@@ -233,40 +229,14 @@ export function createMcpErrorResult(
     },
   };
 
-  // If using the new wrapper, populate structuredContent and simplify the content array.
-  if (useResultWrapper) {
-    return {
-      content: [errorContent],
-      // For tools using createMcpOutputSchema, the error must be wrapped in a 'result' object
-      // to match the discriminated union's structure.
-      structuredContent: {
-        result: structuredError,
-      },
-      isError: true,
-      _meta: {
-        // NOTE: errorMetadata is included for clients that may still rely on it.
-        // New clients should prefer using the `structuredContent` field.
-        errorMetadata: metadata,
-      },
-    } as CallToolResult;
-  }
-
-  // --- Backward Compatible Legacy Error Format ---
-
-  // Add structured error as JSON text content for visibility in older clients.
-  const structuredErrorContent: TextContent = {
-    type: 'text',
-    text: `\n\nStructured Error Details:\n${JSON.stringify(structuredError, null, 2)}`,
-  };
-
+  // Always wrap errors in { result: ... } format for discriminated union compatibility
   return {
-    content: [errorContent, structuredErrorContent],
-    // NOTE: The `structuredContent` field is omitted for legacy tool schemas that do not
-    // expect a discriminated union output. When `useResultWrapper` is false, this maintains
-    // backward compatibility.
+    content: [errorContent],
+    structuredContent: {
+      result: structuredError,
+    },
     isError: true,
     _meta: {
-      // NOTE: errorMetadata is included in _meta for backward compatibility.
       errorMetadata: metadata,
     },
   } as CallToolResult;

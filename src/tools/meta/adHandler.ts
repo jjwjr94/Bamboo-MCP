@@ -4,14 +4,13 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { z } from 'zod';
 import {
   MetaAdResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
+
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -21,12 +20,19 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type {
+  CreateAdResult,
+  DeleteAdResult,
+  GetAdsResult,
+  MetaAd,
+  UpdateAdResult,
+} from './types.js';
 
 export class MetaAdHandler {
   async getAds(
     authPayload: JWTPayload,
     params: { adSetId?: string; campaignId?: string; adAccountId?: string }
-  ) {
+  ): Promise<GetAdsResult> {
     logger.info('Executing get_ads', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -46,34 +52,30 @@ export class MetaAdHandler {
           MetaAdSDK.Fields.updated_time,
         ];
 
+        const adAccountId = await accountManager.requireAccountSelection(
+          authPayload.userId,
+          params.adAccountId
+        );
+
         let adsCursor: unknown;
 
         if (params.adSetId) {
-          // Get ads from a specific ad set
           adsCursor = await new MetaAdSetSDK(params.adSetId, {}, null, api).getAds(fields);
         } else if (params.campaignId) {
-          // Get ads from a specific campaign
           adsCursor = await new MetaCampaignSDK(params.campaignId, {}, null, api).getAds(fields);
         } else {
-          // Get ads from an ad account
-          const adAccountId = await accountManager.requireAccountSelection(
-            authPayload.userId,
-            params.adAccountId
-          );
           adsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAds(fields);
         }
 
-        // Use the common pagination utility to handle all edge cases
         const allRawAds = await fetchAllPaginatedData<unknown>({
           cursor: adsCursor,
           limit: env.META_MAX_ADS_TO_FETCH,
           entityName: 'ads',
           userId: authPayload.userId,
-          apiContext: params,
+          apiContext: { adAccountId },
         });
 
-        // Validate and transform the response using auto-generated schema
-        const validatedAds: z.infer<typeof MetaAdResponseSchema>[] = [];
+        const validatedAds: MetaAd[] = [];
         for (const ad of allRawAds) {
           const result = MetaAdResponseSchema.safeParse(ad);
           if (result.success) {
@@ -83,7 +85,7 @@ export class MetaAdHandler {
               error: result.error.format(),
               ad,
               userId: authPayload.userId,
-              params,
+              adAccountId,
             });
           }
         }
@@ -95,7 +97,7 @@ export class MetaAdHandler {
           params,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_ads',
@@ -104,7 +106,10 @@ export class MetaAdHandler {
     );
   }
 
-  async createAd(authPayload: JWTPayload, params: CreateAdRequest & { adAccountId?: string }) {
+  async createAd(
+    authPayload: JWTPayload,
+    params: CreateAdRequest & { adAccountId?: string }
+  ): Promise<CreateAdResult> {
     logger.info('Executing create_ad', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -122,31 +127,26 @@ export class MetaAdHandler {
           [MetaAdSDK.Fields.status]: params.status,
         };
 
-        // Meta API handles business context automatically via ad account
         removeUndefinedProperties(adData);
 
         const ad = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAd([], adData);
+        const validation = MetaCreateSuccessResponseSchema.safeParse(ad);
 
-        // Treat response as unknown and validate
-        const validationResult = MetaCreateSuccessResponseSchema.safeParse(ad);
-        if (!validationResult.success) {
+        if (!validation.success) {
           const errorMessage = 'Failed to create ad: Invalid response from Meta API.';
-          logger.error(errorMessage, { validationErrors: validationResult.error.format() });
+          logger.error(errorMessage, { validationErrors: validation.error.format() });
           throw new ValidationError(errorMessage);
         }
 
-        const adId = validationResult.data.id;
+        const adId = validation.data.id;
         const result = {
           adId: adId,
           name: params.name,
           adsetId: params.adsetId,
           creativeId: params.creativeId,
-          status: params.status,
+          status: params.status || 'ACTIVE',
         };
-        return await createMcpSuccessResult(
-          result,
-          `Ad "${params.name}" created successfully with ID: ${adId}`
-        );
+        return result;
       },
       {
         toolName: 'create_ad',
@@ -158,7 +158,7 @@ export class MetaAdHandler {
   async updateAd(
     authPayload: JWTPayload,
     params: { adId: string; name?: string; status?: string; creativeId?: string }
-  ) {
+  ): Promise<UpdateAdResult> {
     logger.info('Executing update_ad', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -199,7 +199,7 @@ export class MetaAdHandler {
           updatedFields: Object.keys(updateData),
         });
 
-        return await createMcpSuccessResult(result, `Successfully updated ad ${params.adId}.`);
+        return result;
       },
       {
         toolName: 'update_ad',
@@ -211,19 +211,18 @@ export class MetaAdHandler {
   async deleteAd(
     authPayload: JWTPayload,
     params: { adId: string; confirmPermanentDelete?: boolean }
-  ) {
+  ): Promise<DeleteAdResult> {
     logger.info('Executing delete_ad', { userId: authPayload.userId, params });
+
+    if (params.confirmPermanentDelete !== true) {
+      throw new ValidationError(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
+      );
+    }
 
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
-
-        // Safety check: require explicit confirmation for permanent deletion
-        if (!params.confirmPermanentDelete) {
-          throw new ValidationError(
-            'Permanent deletion requires explicit confirmation. Set confirmPermanentDelete to true.'
-          );
-        }
 
         const ad = new MetaAdSDK(params.adId, {}, null, api);
         const deleteResponse = await ad.delete([]);
@@ -244,7 +243,7 @@ export class MetaAdHandler {
           adId: params.adId,
         });
 
-        return await createMcpSuccessResult(result, `Successfully deleted ad ${params.adId}.`);
+        return result;
       },
       {
         toolName: 'delete_ad',

@@ -1,15 +1,29 @@
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
+import { z } from 'zod';
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
 import { MetaApiError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import type {
+  SearchBehaviorsResult,
+  SearchInterestsResult,
+  SearchLocationsResult,
+  ValidateTargetingOptionsResult,
+} from './types.js';
 
 // Constants for API configuration
 const META_API_VERSION = 'v20.0';
 const META_GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 const DEFAULT_SEARCH_LIMIT = 25;
 const PAGINATED_SEARCH_PAGE_SIZE = 100;
+
+// Zod schemas for validating API responses
+const InterestResultSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  audience_size: z.number().optional().nullable(),
+  path: z.array(z.string()).optional().default([]),
+});
 
 // Type definitions for API responses
 interface MetaPaging {
@@ -115,7 +129,7 @@ export class MetaTargetingSearchHandler {
       query: string;
       limit?: number;
     }
-  ) {
+  ): Promise<SearchInterestsResult> {
     logger.info('Executing search_interests', {
       userId: authPayload.userId,
       params,
@@ -143,18 +157,35 @@ export class MetaTargetingSearchHandler {
         const initialUrl = `${searchUrl}?${searchParams}`;
 
         // Use pagination helper to fetch all results
-        const allInterests = await this.fetchAllWithPagination<MetaTargetingOption>(
+        const allInterests = await this.fetchAllWithPagination<unknown>(
           initialUrl,
           searchLimit,
           authPayload.userId
         );
 
-        const validatedInterests = allInterests.map((interest) => ({
-          id: interest.id,
-          name: interest.name,
-          audienceSize: interest.audience_size,
-          path: interest.path || [],
-        }));
+        const validatedInterests: Array<{
+          id: string;
+          name: string;
+          audienceSize: number;
+          path: string[];
+        }> = [];
+        for (const item of allInterests) {
+          const parsed = InterestResultSchema.safeParse(item);
+          if (parsed.success) {
+            validatedInterests.push({
+              id: parsed.data.id,
+              name: parsed.data.name,
+              audienceSize: parsed.data.audience_size ?? 0,
+              path: parsed.data.path,
+            });
+          } else {
+            logger.warn('Skipping invalid interest data from Meta API', {
+              error: parsed.error.format(),
+              data: item,
+              userId: authPayload.userId,
+            });
+          }
+        }
 
         const result = {
           interests: validatedInterests,
@@ -168,7 +199,7 @@ export class MetaTargetingSearchHandler {
           resultCount: validatedInterests.length,
         });
 
-        return createMcpSuccessResult(result);
+        return result;
       },
       {
         toolName: 'search_interests',
@@ -183,7 +214,7 @@ export class MetaTargetingSearchHandler {
       query: string;
       limit?: number;
     }
-  ) {
+  ): Promise<SearchBehaviorsResult> {
     logger.info('Executing search_behaviors', {
       userId: authPayload.userId,
       params,
@@ -236,7 +267,7 @@ export class MetaTargetingSearchHandler {
           resultCount: validatedBehaviors.length,
         });
 
-        return createMcpSuccessResult(result);
+        return result;
       },
       {
         toolName: 'search_behaviors',
@@ -252,7 +283,7 @@ export class MetaTargetingSearchHandler {
       type?: 'country' | 'region' | 'city';
       limit?: number;
     }
-  ) {
+  ): Promise<SearchLocationsResult> {
     logger.info('Executing search_locations', {
       userId: authPayload.userId,
       params,
@@ -309,7 +340,7 @@ export class MetaTargetingSearchHandler {
           resultCount: validatedLocations.length,
         });
 
-        return createMcpSuccessResult(result);
+        return result;
       },
       {
         toolName: 'search_locations',
@@ -323,7 +354,7 @@ export class MetaTargetingSearchHandler {
     params: {
       targetingOptionIds: string[];
     }
-  ) {
+  ): Promise<ValidateTargetingOptionsResult> {
     logger.info('Executing validate_targeting_options', {
       userId: authPayload.userId,
       params,
@@ -392,7 +423,7 @@ export class MetaTargetingSearchHandler {
           validCount: result.validCount,
         });
 
-        return createMcpSuccessResult(result);
+        return result;
       },
       {
         toolName: 'validate_targeting_options',

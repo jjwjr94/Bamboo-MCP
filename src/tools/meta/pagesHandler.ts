@@ -11,7 +11,6 @@ import {
   MetaPagePostResponseSchema,
   MetaPageResponseSchema,
 } from '../../generated/schemas.js';
-import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -20,13 +19,14 @@ import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createApiInstanceFromToken, createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import type { CreatePagePostAdResult, GetPagePostsResult, GetPagesResult } from './types.js';
 
 export class MetaPagesHandler {
   /**
    * Retrieves Facebook Pages the user has access to.
    * Requires 'pages_show_list' scope.
    */
-  async getPages(authPayload: JWTPayload) {
+  async getPages(authPayload: JWTPayload): Promise<GetPagesResult> {
     logger.info('Executing get_pages', { userId: authPayload.userId });
 
     return handleMetaApiCall(
@@ -71,7 +71,7 @@ export class MetaPagesHandler {
           count: validatedPages.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_pages',
@@ -84,12 +84,14 @@ export class MetaPagesHandler {
    * Retrieves recent posts for a specific Facebook Page.
    * Requires 'pages_manage_posts' scope.
    */
-  async getPagePosts(authPayload: JWTPayload, params: { pageId: string }) {
+  async getPagePosts(
+    authPayload: JWTPayload,
+    params: { pageId: string }
+  ): Promise<GetPagePostsResult> {
     logger.info('Executing get_page_posts', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
       async () => {
-        // 1. Create a user-scoped API instance to fetch the page's access token
         const userApi = await createMetaApiInstance(authPayload.userId);
 
         logger.info('Fetching page access token', {
@@ -102,14 +104,12 @@ export class MetaPagesHandler {
         ]);
         const pageAccessToken = page.access_token;
 
-        // Validate that a page access token was retrieved
         if (!pageAccessToken) {
           throw new AuthorizationError(
             `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
           );
         }
 
-        // 2. Create a new, isolated page-scoped API instance
         const pageApi = createApiInstanceFromToken(pageAccessToken as string);
         logger.info('API instance created with page-specific access token', {
           pageId: params.pageId,
@@ -125,12 +125,10 @@ export class MetaPagesHandler {
           MetaPagePostSDK.Fields.status_type,
         ];
 
-        // 3. Use the page-scoped API instance to get posts
         const postsCursor = await new MetaPageSDK(params.pageId, {}, null, pageApi).getPosts(
           fields
         );
 
-        // Use the common pagination utility to handle all edge cases
         const allRawPosts = await fetchAllPaginatedData<unknown>({
           cursor: postsCursor,
           limit: env.META_MAX_POSTS_TO_FETCH,
@@ -139,7 +137,6 @@ export class MetaPagesHandler {
           apiContext: { pageId: params.pageId },
         });
 
-        // Validate and transform the response using auto-generated schema
         const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
         for (const post of allRawPosts) {
           const result = MetaPagePostResponseSchema.safeParse(post);
@@ -162,7 +159,7 @@ export class MetaPagesHandler {
           count: validatedPosts.length,
         });
 
-        return await createMcpSuccessResult(response);
+        return response;
       },
       {
         toolName: 'get_page_posts',
@@ -184,7 +181,7 @@ export class MetaPagesHandler {
       postId: string;
       status?: 'ACTIVE' | 'PAUSED';
     }
-  ) {
+  ): Promise<CreatePagePostAdResult> {
     logger.info('Executing create_page_post_ad', { userId: authPayload.userId, params });
 
     return handleMetaApiCall(
@@ -196,7 +193,6 @@ export class MetaPagesHandler {
           params.adAccountId
         );
 
-        // 1. Create an AdCreative from the existing page post
         const creativeData: Record<string, unknown> = {
           [MetaAdCreativeSDK.Fields.name]:
             `Creative for Ad: ${params.name} (Post: ${params.postId})`,
@@ -223,7 +219,6 @@ export class MetaPagesHandler {
 
         const adCreativeId = creativeValidation.data.id;
 
-        // 2. Create the Ad using the new AdCreative
         const adData: Record<string, unknown> = {
           name: params.name,
           adset_id: params.adSetId,
@@ -246,7 +241,7 @@ export class MetaPagesHandler {
 
         const adId = adValidation.data.id;
 
-        const result = {
+        const result: CreatePagePostAdResult = {
           adId,
           adCreativeId,
         };
@@ -259,10 +254,7 @@ export class MetaPagesHandler {
           postId: params.postId,
         });
 
-        return await createMcpSuccessResult(
-          result,
-          `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`
-        );
+        return result;
       },
       {
         toolName: 'create_page_post_ad',

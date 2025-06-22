@@ -175,10 +175,25 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     error?: string;
   }> {
     try {
-      const sessionData = await this.sessionManager.getSessionData(state);
-
+      // ATOMIC FIX: Use the new atomic method to prevent race conditions.
+      const sessionData = await this.sessionManager.getAndClearSessionData(state);
       if (!sessionData) {
-        return { redirectUrl: '', success: false, error: 'Invalid state parameter' };
+        // This now correctly handles both invalid and already-used states.
+        return { redirectUrl: '', success: false, error: 'Invalid or expired state parameter' };
+      }
+
+      // VALIDATION FIX 1: Validate required session data fields.
+      if (!sessionData.clientId || !sessionData.redirectUri) {
+        logger.error('Session data is missing required fields', {
+          state,
+          clientId: sessionData.clientId,
+          redirectUri: sessionData.redirectUri,
+        });
+        return {
+          redirectUrl: '',
+          success: false,
+          error: 'Invalid session state: missing critical data.',
+        };
       }
 
       // 1. Exchange Meta code for an access token
@@ -186,6 +201,17 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
       // 2. Get user info and persist user
       const fbUser = await MetaApiService.getMetaUserInfo(accessToken);
+
+      // VALIDATION FIX 2: Validate the response from Meta's API.
+      if (!fbUser?.id) {
+        logger.error('Failed to retrieve a valid user ID from Meta', { accessToken: '***' });
+        return {
+          redirectUrl: '',
+          success: false,
+          error: 'Authentication callback failed: Could not retrieve user profile from Meta.',
+        };
+      }
+
       const user = await this.dbService.findOrCreateUserByFacebookId(fbUser.id);
 
       // 3. Store Meta token and sync ad accounts (can run in parallel)
@@ -219,12 +245,26 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
       await this.sessionManager.storeTempAuthCode(tempAuthCode, authCodeData);
 
-      const clientRedirectUrl = new URL(sessionData.redirectUri);
+      // VALIDATION FIX 3: Add specific error handling for URL parsing.
+      let clientRedirectUrl: URL;
+      try {
+        clientRedirectUrl = new URL(sessionData.redirectUri);
+      } catch (urlError) {
+        logger.error('Invalid redirectUri in session data', {
+          redirectUri: sessionData.redirectUri,
+          error: urlError,
+        });
+        return {
+          redirectUrl: '',
+          success: false,
+          error: 'Authentication callback failed: Invalid client redirect URI.',
+        };
+      }
+
       clientRedirectUrl.searchParams.append('code', tempAuthCode);
       clientRedirectUrl.searchParams.append('state', sessionData.originalState || '');
 
-      // 5. Clean up
-      await this.sessionManager.clearSessionData(state);
+      // Note: Session data is already cleared by the atomic getAndClearSessionData operation
 
       return {
         redirectUrl: clientRedirectUrl.toString(),

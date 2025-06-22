@@ -38,13 +38,6 @@ export interface CreateMcpSuccessResultOptions {
    * Defaults to false to conserve context window space on subsequent calls.
    */
   attachPrompts?: boolean;
-
-  /**
-   * If true, wraps the success payload in a `{ result: ... }` object.
-   * This is required for compatibility with tools using the `createMcpOutputSchema` helper.
-   * Defaults to false to maintain backward compatibility with legacy success-only schemas.
-   */
-  useResultWrapper?: boolean;
 }
 
 /**
@@ -184,10 +177,10 @@ export async function createMcpSuccessResult<T>(
     data: sanitizedData,
   };
 
-  const { attachPrompts = false, useResultWrapper = false } = options;
+  const { attachPrompts = false } = options;
 
-  // Conditionally wrap the success content for compatibility with createMcpOutputSchema
-  const finalStructuredContent = useResultWrapper ? { result: successContent } : successContent;
+  // Always wrap the success content for discriminated union compatibility
+  const finalStructuredContent = { result: successContent };
 
   const textHumanReadableContent: TextContent | undefined = description
     ? {

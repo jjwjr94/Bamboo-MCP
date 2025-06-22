@@ -29,16 +29,10 @@ export class ImageFetchService {
     try {
       logger.debug('Fetching image for base64 conversion', { imageUrl, options: opts });
 
-      // 1. Validate the requested URL host
       ImageFetchService.assertAllowedDomain(new URL(imageUrl).hostname);
-
-      // 2. Perform the request with timeout handling
       const response = await ImageFetchService.fetchWithTimeout(imageUrl, opts.timeoutMs);
-
-      // 3. Validate the final response URL host (handles redirects)
       ImageFetchService.assertAllowedDomain(new URL(response.url).hostname);
 
-      // 4. Validate response status, headers and body, returning useful metadata
       const { base64Data, mimeType, size } = await ImageFetchService.validateAndExtractImage(
         response,
         opts as Required<ImageFetchOptions>
@@ -63,7 +57,6 @@ export class ImageFetchService {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      // Re-throw known error types untouched
       if (
         error instanceof AuthorizationError ||
         error instanceof ValidationError ||
@@ -72,7 +65,6 @@ export class ImageFetchService {
         throw error;
       }
 
-      // Wrap unknown errors for consistent handling
       throw new ValidationError(
         `Failed to fetch image from ${imageUrl}: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -113,27 +105,22 @@ export class ImageFetchService {
     response: Response,
     opts: Required<ImageFetchOptions>
   ): Promise<{ base64Data: string; mimeType: string; size: number }> {
-    // Ensure HTTP status is OK
     if (!response.ok) {
       throw new ValidationError(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    // Validate MIME type
     const mimeType = response.headers.get('content-type') || '';
     if (!opts.allowedMimeTypes.includes(mimeType)) {
       throw new ValidationError(`MIME type not allowed: ${mimeType}`);
     }
 
-    // Check content length header if present
     const contentLengthHeader = response.headers.get('content-length');
     if (contentLengthHeader && Number.parseInt(contentLengthHeader, 10) > opts.maxSizeBytes) {
       throw new ValidationError(`Image too large: ${contentLengthHeader} bytes`);
     }
 
-    // Read body
     const arrayBuffer = await response.arrayBuffer();
 
-    // Final size check after download
     if (arrayBuffer.byteLength > opts.maxSizeBytes) {
       throw new ValidationError(`Image too large: ${arrayBuffer.byteLength} bytes`);
     }
@@ -181,7 +168,6 @@ export class ImageFetchService {
       urls: imageUrls,
     });
 
-    // Process images with concurrency limit to prevent overwhelming resources
     const queue = [...imageUrls];
     const workerPromises: Promise<void>[] = [];
 

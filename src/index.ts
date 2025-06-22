@@ -308,7 +308,88 @@ export async function build(opts = {}) {
 
         const statusCode = error instanceof ValidationError ? 400 : 500;
 
-        // Return error page
+        // Determine error type and provide specific guidance
+        const isMetaApiError = errorMessage.includes(
+          'does not exist, cannot be loaded due to missing permissions'
+        );
+        const isPermissionError =
+          errorMessage.includes('permissions') || errorMessage.includes('access');
+        const isFileFormatError =
+          errorMessage.includes('Unsupported file type') || errorMessage.includes('MIME type');
+        const isNetworkError =
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('network') ||
+          errorMessage.includes('fetch');
+
+        let troubleshootingSteps = '';
+        let errorCategory = 'Upload Error';
+
+        if (isMetaApiError) {
+          errorCategory = 'Meta API Permission Error';
+          troubleshootingSteps = `
+            <div class="troubleshooting">
+              <h3>Possible Solutions:</h3>
+              <ul>
+                <li><strong>Check Ad Account Access:</strong> Verify the ad account still exists and you have access to it in Meta Business Manager</li>
+                <li><strong>Verify Permissions:</strong> Ensure your account has Admin or Advertiser role on the ad account</li>
+                <li><strong>Check Account Status:</strong> The ad account may be disabled, under review, or restricted by Meta</li>
+                <li><strong>Token Issues:</strong> Your access token may have expired or been revoked</li>
+              </ul>
+              <p><strong>Next Steps:</strong> Please check your Meta Business Manager and try again, or contact your account administrator.</p>
+            </div>
+          `;
+        } else if (isPermissionError) {
+          errorCategory = 'Permission Error';
+          troubleshootingSteps = `
+            <div class="troubleshooting">
+              <h3>Permission Issue Detected:</h3>
+              <ul>
+                <li>Verify you have the required permissions for this ad account</li>
+                <li>Check if your access token is still valid</li>
+                <li>Ensure you have the 'ads_management' permission scope</li>
+              </ul>
+            </div>
+          `;
+        } else if (isFileFormatError) {
+          errorCategory = 'File Format Error';
+          troubleshootingSteps = `
+            <div class="troubleshooting">
+              <h3>File Format Issue:</h3>
+              <ul>
+                <li><strong>Supported Image Formats:</strong> JPEG, PNG, GIF, WebP</li>
+                <li><strong>Supported Video Formats:</strong> MP4, MOV</li>
+                <li>Check that your file is not corrupted</li>
+                <li>Ensure the file extension matches the actual file type</li>
+              </ul>
+            </div>
+          `;
+        } else if (isNetworkError) {
+          errorCategory = 'Network Error';
+          troubleshootingSteps = `
+            <div class="troubleshooting">
+              <h3>Network Issue:</h3>
+              <ul>
+                <li>Check your internet connection</li>
+                <li>The file may be too large - try a smaller file</li>
+                <li>Try uploading again in a few minutes</li>
+              </ul>
+            </div>
+          `;
+        } else {
+          troubleshootingSteps = `
+            <div class="troubleshooting">
+              <h3>General Troubleshooting:</h3>
+              <ul>
+                <li>Try refreshing the page and uploading again</li>
+                <li>Check that your file is not corrupted</li>
+                <li>Ensure you have a stable internet connection</li>
+                <li>If the problem persists, please contact support with the error details</li>
+              </ul>
+            </div>
+          `;
+        }
+
+        // Return enhanced error page
         return reply
           .status(statusCode)
           .type('text/html')
@@ -320,13 +401,65 @@ export async function build(opts = {}) {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Upload Failed</title>
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+            <style>
+              .troubleshooting {
+                background-color: var(--pico-card-background-color);
+                border: 1px solid var(--pico-border-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1rem;
+                margin-top: 1rem;
+              }
+              .troubleshooting h3 {
+                margin-top: 0;
+                color: var(--pico-color);
+              }
+              .troubleshooting ul {
+                margin-bottom: 0;
+              }
+              .troubleshooting li {
+                margin-bottom: 0.5rem;
+              }
+              .error-details {
+                background-color: var(--pico-del-background-color);
+                border-left: 4px solid var(--pico-del-color);
+                padding: 1rem;
+                margin: 1rem 0;
+                border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0;
+              }
+              .error-details code {
+                background-color: rgba(0,0,0,0.1);
+                padding: 0.2rem 0.4rem;
+                border-radius: 0.2rem;
+                font-size: 0.9rem;
+              }
+            </style>
           </head>
           <body>
             <main class="container">
               <article>
                 <h1>❌ Upload Failed</h1>
-                <p><strong>Error:</strong> ${errorMessage}</p>
-                <p>Please try again or contact support if the problem persists.</p>
+                <h2>${errorCategory}</h2>
+                
+                <div class="error-details">
+                  <p><strong>Error Details:</strong></p>
+                  <code>${errorMessage}</code>
+                </div>
+
+                ${troubleshootingSteps}
+
+                <div style="margin-top: 2rem;">
+                  <p><strong>Need Help?</strong> If you continue to experience issues, please:</p>
+                  <ul>
+                    <li>Copy the error details above</li>
+                    <li>Note the time when the error occurred</li>
+                    <li>Contact your system administrator or support team</li>
+                  </ul>
+                </div>
+
+                <div style="margin-top: 2rem; text-align: center;">
+                  <button onclick="window.location.reload()" style="margin-right: 1rem;">Try Again</button>
+                  <button onclick="window.close()" class="secondary">Close Window</button>
+                </div>
               </article>
             </main>
           </body>
