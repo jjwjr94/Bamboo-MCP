@@ -20,9 +20,9 @@ import {
   validateBusinessContextForBatch,
 } from '../../utils/metaBatchHelper.js';
 import type { BatchResponse } from '../../utils/metaBatchHelper.js';
-import { MetaApiService } from './ApiService.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+import { MetaPermissionHandler } from './permissionHandler.js';
 import type { GetAdAccountsResult } from './types.js';
 
 export class MetaAdAccountHandler {
@@ -168,7 +168,7 @@ export class MetaAdAccountHandler {
       await discoverAndCacheBusinessContext(userId, accessToken, [adAccountId]);
 
       // Retry with fresh context using the more robust individual API service
-      return await MetaApiService.fetchAdAccountPermissions(
+      return await MetaPermissionHandler.fetchAdAccountPermissions(
         adAccountId,
         accessToken,
         metaUserId,

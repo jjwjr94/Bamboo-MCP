@@ -228,13 +228,6 @@ export interface ProductRequest {
   customData?: Record<string, unknown>;
 }
 
-export interface UploadAssetRequest {
-  filename: string;
-  data: string; // base64 encoded
-  type: AssetType;
-  adAccountId: string;
-}
-
 export interface MetaApiRequest {
   endpoint: string;
   method: HttpMethod;
@@ -359,10 +352,6 @@ export interface MetaAsset {
   url: string;
   thumbnailUrl?: string;
   createdTime: string;
-  displayData?: {
-    dataUri: string;
-    alt: string;
-  };
 }
 
 // Business Manager types

@@ -230,7 +230,7 @@ Retrieves ad creatives with comprehensive metadata.
 - Pagination safety (max 1000 creatives)
 - Business context support
 - Rich creative metadata
-- Thumbnail and preview URLs
+- Provides URLs for creative thumbnails and previews (note: image data is not embedded)
 
 ### create_ad_creative
 

@@ -2,12 +2,9 @@ import type {
   CallToolResult,
   ContentBlock,
   EmbeddedResource,
-  ImageContent,
   TextContent,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ImageFetchService } from '../services/imageFetchService.js';
 import type { Sanitized } from '../types/utils.js';
-import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import { removeUnderscoreProperties } from '../utils/objectUtils.js';
 import { redactSensitiveData } from '../utils/securityUtils.js';
@@ -48,56 +45,6 @@ export interface McpStructuredSuccess<T> {
   type: 'success';
   data: T;
   [key: string]: unknown;
-}
-
-/**
- * Recursively extracts all `thumbnail_url` fields from a nested object structure.
- * Returns a deduplicated array of URL strings found in the data.
- *
- * @param data - The object to search for thumbnail URLs
- * @param visited - WeakSet to track visited objects and prevent circular references
- * @returns Array of unique thumbnail URLs found in the data
- */
-function extractThumbnailUrls(data: unknown, visited: WeakSet<object> = new WeakSet()): string[] {
-  const urls = new Set<string>();
-
-  // Predicate helper to keep the thumbnail check logic in one place.
-  function isThumbnailField(key: string, value: unknown): value is string {
-    return key === 'thumbnail_url' && typeof value === 'string' && value.trim() !== '';
-  }
-
-  function handleArray(arr: unknown[]): void {
-    for (const item of arr) {
-      traverse(item);
-    }
-  }
-
-  function handleObject(obj: Record<string, unknown>): void {
-    for (const [key, value] of Object.entries(obj)) {
-      if (isThumbnailField(key, value)) {
-        urls.add(value);
-      } else {
-        traverse(value);
-      }
-    }
-  }
-
-  function traverse(node: unknown): void {
-    if (node == null || typeof node !== 'object') return;
-
-    // Prevent circular references
-    if (visited.has(node as object)) return;
-    visited.add(node as object);
-
-    if (Array.isArray(node)) {
-      handleArray(node);
-    } else {
-      handleObject(node as Record<string, unknown>);
-    }
-  }
-
-  traverse(data);
-  return Array.from(urls);
 }
 
 /**
@@ -162,15 +109,6 @@ export async function createMcpSuccessResult<T>(
   // Layer 2: Sanitize the redacted data to remove internal properties (e.g., _api).
   const sanitizedData = removeUnderscoreProperties(redactedData);
 
-  // Layer 3: Extract and fetch thumbnail images in parallel
-  const thumbnailUrls = extractThumbnailUrls(sanitizedData);
-  const imageResults = env.IMAGE_FETCH_ENABLED
-    ? await ImageFetchService.fetchMultipleImagesAsBase64(thumbnailUrls, {
-        maxSizeBytes: env.IMAGE_MAX_SIZE_BYTES,
-        timeoutMs: env.IMAGE_FETCH_TIMEOUT_MS,
-      })
-    : new Map<string, import('../services/imageFetchService.js').ImageData | Error>();
-
   // Wrap the data in the standardized success structure
   const successContent: McpStructuredSuccess<Sanitized<T>> = {
     type: 'success',
@@ -213,28 +151,6 @@ export async function createMcpSuccessResult<T>(
   // Add structured JSON content for backwards compatibility
   content.push(textStructuredContent);
 
-  // Track failed image fetches for error reporting
-  const failedFetches: { url: string; error: string }[] = [];
-
-  // Add successfully fetched images as ImageContent blocks
-  for (const [url, result] of Array.from(imageResults.entries())) {
-    if (result instanceof Error) {
-      failedFetches.push({ url, error: result.message });
-      logger.warn('Failed to fetch image for MCP response', { url, error: result.message });
-    } else {
-      const imageContent: ImageContent = {
-        type: 'image',
-        data: result.base64Data,
-        mimeType: result.mimeType,
-        _meta: {
-          originalUrl: url,
-          size: result.size,
-        },
-      };
-      content.push(imageContent);
-    }
-  }
-
   // Add embedded resources
   content.push(...embeddedResources);
 
@@ -244,11 +160,10 @@ export async function createMcpSuccessResult<T>(
     isError: false,
   };
 
-  // Add metadata including description and error information
-  if (description || failedFetches.length > 0) {
+  // Add metadata if description is provided
+  if (description) {
     result._meta = {
-      ...(description && { description }),
-      ...(failedFetches.length > 0 && { errors: { imageFetches: failedFetches } }),
+      description,
     };
   }
 

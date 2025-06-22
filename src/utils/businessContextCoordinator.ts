@@ -1,4 +1,4 @@
-import { MetaApiService } from '../tools/meta/ApiService.js';
+import { MetaPermissionHandler } from '../tools/meta/permissionHandler.js';
 import {
   discoverAndCacheBusinessContext,
   getBusinessIdForAdAccount,
@@ -98,11 +98,11 @@ export class BusinessContextCoordinator {
     });
 
     try {
-      // Strategy 1: Force rediscovery of business context
+      // Strategy 1: Force business context rediscovery across all accounts
       await discoverAndCacheBusinessContext(userId, accessToken, [adAccountId]);
 
       // Strategy 2: Retry permission fetch with fresh business context
-      const recoveredPermissions = await MetaApiService.fetchAdAccountPermissions(
+      const recoveredPermissions = await MetaPermissionHandler.fetchAdAccountPermissions(
         adAccountId,
         accessToken,
         currentUserId,
