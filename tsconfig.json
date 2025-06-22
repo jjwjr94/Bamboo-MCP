@@ -9,7 +9,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": "src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -25,8 +24,8 @@
     "lib": ["ES2022"],
     "types": ["node", "vitest"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"],
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
   "ts-node": {
     "esm": true
   }

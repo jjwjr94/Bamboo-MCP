@@ -1,12 +1,11 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 export class PagesToolRegistry implements IToolRegistry {
   private server: McpServer;
@@ -42,42 +41,55 @@ export class PagesToolRegistry implements IToolRegistry {
   }
 
   private registerGetPages() {
-    this.server.registerTool(
+    // Define the schema for the success data payload
+    const successDataSchema = z.object({
+      pages: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            category: z.string().optional().nullable(),
+            link: z.string().optional().nullable(),
+            about: z.string().optional().nullable(),
+          })
+        )
+        .describe('A list of Facebook pages.'),
+    });
+
+    createMcpTool(
+      this.server,
       'get_pages',
       {
         title: 'Get Facebook Pages',
         description: 'Retrieves a list of Facebook Pages the user has access to.',
         inputSchema: {},
-        outputSchema: {
-          type: z.literal('success'),
-          data: z.object({
-            pages: z
-              .array(
-                z.object({
-                  id: z.string(),
-                  name: z.string(),
-                  category: z.string().optional().nullable(),
-                  link: z.string().optional().nullable(),
-                  about: z.string().optional().nullable(),
-                })
-              )
-              .describe('A list of Facebook pages.'),
-          }),
-        },
+        successDataSchema,
       },
-      async (_params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getPages(authPayload);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload) => this.toolsHandler.getPages(authPayload),
+      'Successfully retrieved Facebook Pages.'
     );
   }
 
   private registerGetPagePosts() {
-    this.server.registerTool(
+    // Define the schema for the success data payload
+    const successDataSchema = z.object({
+      posts: z
+        .array(
+          z.object({
+            id: z.string(),
+            message: z.string().optional().nullable(),
+            created_time: z.string().optional().nullable(),
+            permalink_url: z.string().optional().nullable(),
+            full_picture: z.string().optional().nullable(),
+            story: z.string().optional().nullable(),
+            status_type: z.string().optional().nullable(),
+          })
+        )
+        .describe('A list of posts from the page.'),
+    });
+
+    createMcpTool(
+      this.server,
       'get_page_posts',
       {
         title: 'Get Page Posts',
@@ -85,38 +97,22 @@ export class PagesToolRegistry implements IToolRegistry {
         inputSchema: {
           pageId: z.string().describe('The ID of the Facebook Page.'),
         },
-        outputSchema: {
-          type: z.literal('success'),
-          data: z.object({
-            posts: z
-              .array(
-                z.object({
-                  id: z.string(),
-                  message: z.string().optional().nullable(),
-                  created_time: z.string().optional().nullable(),
-                  permalink_url: z.string().optional().nullable(),
-                  full_picture: z.string().optional().nullable(),
-                  story: z.string().optional().nullable(),
-                  status_type: z.string().optional().nullable(),
-                })
-              )
-              .describe('A list of posts from the page.'),
-          }),
-        },
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getPagePosts(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getPagePosts(authPayload, params),
+      'Successfully retrieved page posts.'
     );
   }
 
   private registerCreatePagePostAd() {
-    this.server.registerTool(
+    // Define the schema for the success data payload
+    const successDataSchema = z.object({
+      adId: z.string(),
+      adCreativeId: z.string(),
+    });
+
+    createMcpTool(
+      this.server,
       'create_page_post_ad',
       {
         title: 'Create Ad From Page Post',
@@ -140,22 +136,10 @@ export class PagesToolRegistry implements IToolRegistry {
             .optional()
             .describe('Status for the ad (ACTIVE or PAUSED).'),
         },
-        outputSchema: {
-          type: z.literal('success'),
-          data: z.object({
-            adId: z.string(),
-            adCreativeId: z.string(),
-          }),
-        },
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.createPagePostAd(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createPagePostAd(authPayload, params),
+      'Successfully created page post ad.'
     );
   }
 }

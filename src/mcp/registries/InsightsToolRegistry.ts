@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   AdsInsightsBreakdownsSchema,
   MetaAdsInsightsResponseSchema,
@@ -10,8 +9,8 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { InsightMetric } from '../../types/meta.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 const VALID_METRICS: [InsightMetric, ...InsightMetric[]] = [
   'spend',
@@ -173,81 +172,63 @@ export class InsightsToolRegistry implements IToolRegistry {
   }
 
   private registerGetAdInsights(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        insights: z
-          .array(MetaAdsInsightsResponseSchema)
-          .describe('A list of insight data records.'),
-      }),
+    const successDataSchema = z.object({
+      insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_ad_insights',
       {
         title: 'Get Ad Insights',
         description:
           'Retrieves performance metrics (insights) for a specific campaign, ad set, or ad. Provides detailed analytics data including spend, impressions, clicks, conversions, and more.',
         inputSchema: InsightsToolRegistry.GetAdInsightsInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-
-          // Validate that at least one of campaignId, adSetId, or adId is provided
-          if (!params.campaignId && !params.adSetId && !params.adId) {
-            throw new ValidationError(
-              'You must provide at least one of campaignId, adSetId, or adId.'
-            );
-          }
-
-          // Validate that both datePreset and timeRange are not provided
-          if (params.datePreset && params.timeRange) {
-            throw new ValidationError("You can only use 'datePreset' or 'timeRange', not both.");
-          }
-
-          return await this.toolsHandler.getAdInsights(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
+      async (authPayload, params) => {
+        // Validate that at least one of campaignId, adSetId, or adId is provided
+        if (!params.campaignId && !params.adSetId && !params.adId) {
+          throw new ValidationError(
+            'You must provide at least one of campaignId, adSetId, or adId.'
+          );
         }
-      }
+
+        // Validate that both datePreset and timeRange are not provided
+        if (params.datePreset && params.timeRange) {
+          throw new ValidationError("You can only use 'datePreset' or 'timeRange', not both.");
+        }
+
+        return await this.toolsHandler.getAdInsights(authPayload, params);
+      },
+      'Successfully retrieved ad insights.'
     );
   }
 
   private registerGetAdAccountInsights(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        insights: z
-          .array(MetaAdsInsightsResponseSchema)
-          .describe('A list of insight data records.'),
-      }),
+    const successDataSchema = z.object({
+      insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_ad_account_insights',
       {
         title: 'Get Ad Account Insights',
         description:
           'Retrieves performance metrics (insights) for an entire ad account. Provides aggregated analytics data across all campaigns, ad sets, and ads in the account.',
         inputSchema: InsightsToolRegistry.GetAdAccountInsightsInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-
-          // Validate that both datePreset and timeRange are not provided
-          if (params.datePreset && params.timeRange) {
-            throw new ValidationError("You can only use 'datePreset' or 'timeRange', not both.");
-          }
-
-          return await this.toolsHandler.getAdAccountInsights(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
+      async (authPayload, params) => {
+        // Validate that both datePreset and timeRange are not provided
+        if (params.datePreset && params.timeRange) {
+          throw new ValidationError("You can only use 'datePreset' or 'timeRange', not both.");
         }
-      }
+
+        return await this.toolsHandler.getAdAccountInsights(authPayload, params);
+      },
+      'Successfully retrieved ad account insights.'
     );
   }
 }

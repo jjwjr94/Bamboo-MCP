@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   AdSetBillingEventSchema,
   AdSetOptimizationGoalSchema,
@@ -10,8 +9,8 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Set Tool Registry
@@ -63,14 +62,12 @@ export class AdSetToolRegistry implements IToolRegistry {
    * Register the get_adsets tool
    */
   private registerGetAdSets(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
-      }),
+    const successDataSchema = z.object({
+      adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_adsets',
       {
         title: 'Get Ad Sets',
@@ -84,17 +81,10 @@ export class AdSetToolRegistry implements IToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.getAdSets(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getAdSets(authPayload, params),
+      'Successfully retrieved ad sets.'
     );
   }
 
@@ -102,16 +92,14 @@ export class AdSetToolRegistry implements IToolRegistry {
    * Register the create_adset tool
    */
   private registerCreateAdSet(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adSetId: z.string(),
-        name: z.string(),
-        campaignId: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adSetId: z.string(),
+      name: z.string(),
+      campaignId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'create_adset',
       {
         title: 'Create Ad Set',
@@ -184,17 +172,10 @@ export class AdSetToolRegistry implements IToolRegistry {
               'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives.'
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.createAdSet(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createAdSet(authPayload, params),
+      'Successfully created ad set.'
     );
   }
 
@@ -202,15 +183,13 @@ export class AdSetToolRegistry implements IToolRegistry {
    * Register the update_adset tool
    */
   private registerUpdateAdSet(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adSetId: z.string(),
-        updatedFields: z.array(z.string()),
-      }),
+    const successDataSchema = z.object({
+      adSetId: z.string(),
+      updatedFields: z.array(z.string()),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'update_adset',
       {
         title: 'Update Ad Set',
@@ -232,20 +211,11 @@ export class AdSetToolRegistry implements IToolRegistry {
             .optional()
             .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
           bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
-          startTime: z.string().optional().describe('New start time in ISO format.'),
-          endTime: z.string().optional().describe('New end time in ISO format.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.updateAdSet(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.updateAdSet(authPayload, params),
+      'Successfully updated ad set.'
     );
   }
 
@@ -253,33 +223,26 @@ export class AdSetToolRegistry implements IToolRegistry {
    * Register the delete_adset tool
    */
   private registerDeleteAdSet(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adSetId: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adSetId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'delete_adset',
       {
         title: 'Delete Ad Set',
-        description:
-          'Archives an ad set by setting its status to DELETED. The ad set data is preserved but the ad set becomes inactive.',
+        description: 'Permanently deletes an ad set. This action cannot be undone.',
         inputSchema: {
           adSetId: z.string().describe('The ID of the ad set to delete.'),
+          confirmPermanentDelete: z
+            .boolean()
+            .describe('Confirmation that you want to permanently delete this ad set.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.deleteAdSet(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.deleteAdSet(authPayload, params),
+      'Successfully deleted ad set.'
     );
   }
 }

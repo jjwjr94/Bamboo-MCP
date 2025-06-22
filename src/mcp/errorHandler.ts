@@ -209,8 +209,12 @@ export function deriveErrorDetails(error: unknown): {
   return deriveUnknownErrorDetails(error);
 }
 
-export function createMcpErrorResult(error: unknown): CallToolResult {
+export function createMcpErrorResult(
+  error: unknown,
+  options: { useResultWrapper?: boolean } = {}
+): CallToolResult {
   const { message, metadata } = deriveErrorDetails(error);
+  const { useResultWrapper = false } = options;
 
   const errorContent: TextContent = {
     type: 'text',
@@ -229,7 +233,27 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
     },
   };
 
-  // Add structured error as JSON text content for visibility
+  // If using the new wrapper, populate structuredContent and simplify the content array.
+  if (useResultWrapper) {
+    return {
+      content: [errorContent],
+      // For tools using createMcpOutputSchema, the error must be wrapped in a 'result' object
+      // to match the discriminated union's structure.
+      structuredContent: {
+        result: structuredError,
+      },
+      isError: true,
+      _meta: {
+        // NOTE: errorMetadata is included for clients that may still rely on it.
+        // New clients should prefer using the `structuredContent` field.
+        errorMetadata: metadata,
+      },
+    } as CallToolResult;
+  }
+
+  // --- Backward Compatible Legacy Error Format ---
+
+  // Add structured error as JSON text content for visibility in older clients.
   const structuredErrorContent: TextContent = {
     type: 'text',
     text: `\n\nStructured Error Details:\n${JSON.stringify(structuredError, null, 2)}`,
@@ -237,22 +261,12 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
 
   return {
     content: [errorContent, structuredErrorContent],
-    // NOTE: The `structuredContent` field is intentionally commented out due to MCP SDK limitations.
-    // The current MCP SDK version does not support discriminated unions in output schemas, causing
-    // validation to fail for error responses ({ type: 'error' }) against success-only schemas.
-    //
-    // **Workaround:** Structured error details are provided as:
-    // 1. JSON string in the `content` array (for immediate visibility)
-    // 2. Metadata in the `_meta.errorMetadata` field (for programmatic access)
-    //
-    // **Action Required:** This should be revisited when the MCP SDK supports discriminated
-    // union output schemas. At that time, uncomment the line below and update tool registrations
-    // to use `createMcpOutputSchema` from types.ts.
-    // structuredContent: structuredError,
+    // NOTE: The `structuredContent` field is omitted for legacy tool schemas that do not
+    // expect a discriminated union output. When `useResultWrapper` is false, this maintains
+    // backward compatibility.
     isError: true,
     _meta: {
       // NOTE: errorMetadata is included in _meta for backward compatibility.
-      // New clients should prefer using the `structuredContent` field.
       errorMetadata: metadata,
     },
   } as CallToolResult;

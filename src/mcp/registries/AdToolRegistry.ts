@@ -1,12 +1,11 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import { AdStatusSchema, MetaAdResponseSchema } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Tool Registry
@@ -55,16 +54,14 @@ export class AdToolRegistry implements IToolRegistry {
   }
 
   private registerGetAds(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        ads: z
-          .array(MetaAdResponseSchema)
-          .describe('A list of ads with all available Meta API fields.'),
-      }),
+    const successDataSchema = z.object({
+      ads: z
+        .array(MetaAdResponseSchema)
+        .describe('A list of ads with all available Meta API fields.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_ads',
       {
         title: 'Get Ads',
@@ -90,33 +87,24 @@ export class AdToolRegistry implements IToolRegistry {
               'The ID of the campaign to filter ads by. If provided, only ads from this campaign are returned.'
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.getAds(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getAds(authPayload, params),
+      'Successfully retrieved ads.'
     );
   }
 
   private registerCreateAd(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adId: z.string(),
-        name: z.string(),
-        adsetId: z.string(),
-        creativeId: z.string(),
-        status: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adId: z.string(),
+      name: z.string(),
+      adsetId: z.string(),
+      creativeId: z.string(),
+      status: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'create_ad',
       {
         title: 'Create Ad',
@@ -133,30 +121,21 @@ export class AdToolRegistry implements IToolRegistry {
           creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
           status: AdStatusSchema.default('PAUSED').describe('The status of the ad.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.createAd(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createAd(authPayload, params),
+      'Successfully created ad.'
     );
   }
 
   private registerUpdateAd(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adId: z.string(),
-        updatedFields: z.array(z.string()),
-      }),
+    const successDataSchema = z.object({
+      adId: z.string(),
+      updatedFields: z.array(z.string()),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'update_ad',
       {
         title: 'Update Ad',
@@ -167,29 +146,20 @@ export class AdToolRegistry implements IToolRegistry {
           status: AdStatusSchema.optional().describe('New status for the ad.'),
           creativeId: z.string().optional().describe('New creative ID for the ad.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.updateAd(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.updateAd(authPayload, params),
+      'Successfully updated ad.'
     );
   }
 
   private registerDeleteAd(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adId: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'delete_ad',
       {
         title: 'Delete Ad',
@@ -198,19 +168,12 @@ export class AdToolRegistry implements IToolRegistry {
           adId: z.string().describe('The ID of the ad to delete.'),
           confirmPermanentDelete: z
             .boolean()
-            .describe('Must be set to true to confirm permanent deletion of the ad.'),
+            .describe('Confirmation that you want to permanently delete this ad.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.deleteAd(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.deleteAd(authPayload, params),
+      'Successfully deleted ad.'
     );
   }
 }

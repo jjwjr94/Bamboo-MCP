@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   CampaignObjectiveSchema,
   CampaignSpecialAdCategoriesSchema,
@@ -10,8 +9,8 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Campaign Tool Registry
@@ -60,16 +59,14 @@ export class CampaignToolRegistry implements IToolRegistry {
   }
 
   private registerGetCampaigns(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        campaigns: z
-          .array(MetaCampaignResponseSchema)
-          .describe('A list of campaigns with all available Meta API fields.'),
-      }),
+    const successDataSchema = z.object({
+      campaigns: z
+        .array(MetaCampaignResponseSchema)
+        .describe('A list of campaigns with all available Meta API fields.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_campaigns',
       {
         title: 'Get Campaigns',
@@ -83,32 +80,23 @@ export class CampaignToolRegistry implements IToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.getCampaigns(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getCampaigns(authPayload, params),
+      'Successfully retrieved campaigns.'
     );
   }
 
   private registerCreateCampaign(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        campaignId: z.string(),
-        name: z.string(),
-        objective: z.string(),
-        status: z.string(),
-      }),
+    const successDataSchema = z.object({
+      campaignId: z.string(),
+      name: z.string(),
+      objective: z.string(),
+      status: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'create_campaign',
       {
         title: 'Create Campaign',
@@ -148,30 +136,21 @@ export class CampaignToolRegistry implements IToolRegistry {
               "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when specialAdCategories is not ['NONE']."
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.createCampaign(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createCampaign(authPayload, params),
+      'Successfully created campaign.'
     );
   }
 
   private registerUpdateCampaign(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        campaignId: z.string(),
-        updatedFields: z.array(z.string()),
-      }),
+    const successDataSchema = z.object({
+      campaignId: z.string(),
+      updatedFields: z.array(z.string()),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'update_campaign',
       {
         title: 'Update Campaign',
@@ -193,48 +172,35 @@ export class CampaignToolRegistry implements IToolRegistry {
             .optional()
             .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.updateCampaign(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.updateCampaign(authPayload, params),
+      'Successfully updated campaign.'
     );
   }
 
   private registerDeleteCampaign(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        success: z.boolean(),
-      }),
+    const successDataSchema = z.object({
+      campaignId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'delete_campaign',
       {
         title: 'Delete Campaign',
         description:
-          'Archives a campaign by setting its status to DELETED. The campaign data is preserved but the campaign becomes inactive.',
+          'Permanently deletes a campaign by setting its status to DELETED. This action cannot be undone.',
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to delete.'),
+          confirmPermanentDelete: z
+            .boolean()
+            .describe('Confirmation that you want to permanently delete this campaign.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.deleteCampaign(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.deleteCampaign(authPayload, params),
+      'Successfully deleted campaign.'
     );
   }
 }

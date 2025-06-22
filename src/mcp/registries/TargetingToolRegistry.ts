@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Targeting Tool Registry
@@ -55,23 +54,21 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register the search_interests tool
    */
   private registerSearchInterests(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        interests: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            audienceSize: z.number(),
-            path: z.array(z.string()),
-          })
-        ),
-        query: z.string(),
-        total: z.number(),
-      }),
+    const successDataSchema = z.object({
+      interests: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          audienceSize: z.number(),
+          path: z.array(z.string()),
+        })
+      ),
+      query: z.string(),
+      total: z.number(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'search_interests',
       {
         title: 'Search for Targeting Interests',
@@ -87,16 +84,10 @@ export class TargetingToolRegistry implements IToolRegistry {
             .default(100)
             .describe('Maximum number of results to return. Defaults to 100.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.searchInterests(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.searchInterests(authPayload, params),
+      'Successfully retrieved targeting interests.'
     );
   }
 
@@ -104,23 +95,21 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register the search_behaviors tool
    */
   private registerSearchBehaviors(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        behaviors: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            audienceSize: z.number(),
-            path: z.array(z.string()),
-          })
-        ),
-        query: z.string(),
-        total: z.number(),
-      }),
+    const successDataSchema = z.object({
+      behaviors: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          audienceSize: z.number(),
+          path: z.array(z.string()),
+        })
+      ),
+      query: z.string(),
+      total: z.number(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'search_behaviors',
       {
         title: 'Search for Targeting Behaviors',
@@ -136,16 +125,10 @@ export class TargetingToolRegistry implements IToolRegistry {
             .default(25)
             .describe('Maximum number of results to return. Defaults to 25.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.searchBehaviors(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.searchBehaviors(authPayload, params),
+      'Successfully retrieved targeting behaviors.'
     );
   }
 
@@ -153,24 +136,22 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register the search_locations tool
    */
   private registerSearchLocations(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        locations: z.array(
-          z.object({
-            key: z.string(),
-            name: z.string(),
-            type: z.string(),
-            countryCode: z.string(),
-            countryName: z.string(),
-          })
-        ),
-        query: z.string(),
-        total: z.number(),
-      }),
+    const successDataSchema = z.object({
+      locations: z.array(
+        z.object({
+          key: z.string(),
+          name: z.string(),
+          type: z.string(),
+          countryCode: z.string(),
+          countryName: z.string(),
+        })
+      ),
+      query: z.string(),
+      total: z.number(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'search_locations',
       {
         title: 'Search for Geographic Locations',
@@ -180,10 +161,6 @@ export class TargetingToolRegistry implements IToolRegistry {
           query: z
             .string()
             .describe('The location name to search for (e.g., "California", "France").'),
-          type: z
-            .enum(['country', 'region', 'city'])
-            .optional()
-            .describe('Filter results by a specific location type.'),
           limit: z
             .number()
             .int()
@@ -192,16 +169,10 @@ export class TargetingToolRegistry implements IToolRegistry {
             .default(25)
             .describe('Maximum number of results to return. Defaults to 25.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.searchLocations(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.searchLocations(authPayload, params),
+      'Successfully retrieved geographic locations.'
     );
   }
 
@@ -209,23 +180,21 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register the validate_targeting_options tool
    */
   private registerValidateTargetingOptions(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        validationResults: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            isValid: z.boolean(),
-            status: z.string(),
-          })
-        ),
-        totalValidated: z.number(),
-        validCount: z.number(),
-      }),
+    const successDataSchema = z.object({
+      validationResults: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          isValid: z.boolean(),
+          status: z.string(),
+        })
+      ),
+      totalValidated: z.number(),
+      validCount: z.number(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'validate_targeting_options',
       {
         title: 'Validate Targeting Options',
@@ -236,16 +205,10 @@ export class TargetingToolRegistry implements IToolRegistry {
             .array(z.string())
             .describe('A list of targeting option IDs to validate.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.validateTargetingOptions(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.validateTargetingOptions(authPayload, params),
+      'Successfully validated targeting options.'
     );
   }
 }

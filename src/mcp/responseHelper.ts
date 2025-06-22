@@ -38,6 +38,13 @@ export interface CreateMcpSuccessResultOptions {
    * Defaults to false to conserve context window space on subsequent calls.
    */
   attachPrompts?: boolean;
+
+  /**
+   * If true, wraps the success payload in a `{ result: ... }` object.
+   * This is required for compatibility with tools using the `createMcpOutputSchema` helper.
+   * Defaults to false to maintain backward compatibility with legacy success-only schemas.
+   */
+  useResultWrapper?: boolean;
 }
 
 /**
@@ -155,7 +162,7 @@ export async function createMcpSuccessResult<T>(
   data: T,
   description?: string,
   options: CreateMcpSuccessResultOptions = {}
-): Promise<CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> }> {
+): Promise<CallToolResult> {
   // Layer 1: Redact known sensitive fields first.
   const redactedData = redactSensitiveData(data);
 
@@ -177,6 +184,11 @@ export async function createMcpSuccessResult<T>(
     data: sanitizedData,
   };
 
+  const { attachPrompts = false, useResultWrapper = false } = options;
+
+  // Conditionally wrap the success content for compatibility with createMcpOutputSchema
+  const finalStructuredContent = useResultWrapper ? { result: successContent } : successContent;
+
   const textHumanReadableContent: TextContent | undefined = description
     ? {
         type: 'text',
@@ -192,10 +204,9 @@ export async function createMcpSuccessResult<T>(
     // For backwards compatibility, a tool that returns structured content SHOULD also return
     // functionally equivalent unstructured content. (For example, serialized JSON can be returned
     // in a TextContent block.)
-    text: JSON.stringify(successContent, null, 2),
+    text: JSON.stringify(finalStructuredContent, null, 2),
   };
 
-  const { attachPrompts = false } = options;
   // Conditionally create embedded resources for prompt content
   const embeddedResources = attachPrompts ? createPromptEmbeddedResources() : [];
 
@@ -234,11 +245,11 @@ export async function createMcpSuccessResult<T>(
   // Add embedded resources
   content.push(...embeddedResources);
 
-  const result = {
+  const result: CallToolResult = {
     content,
-    structuredContent: successContent,
+    structuredContent: finalStructuredContent,
     isError: false,
-  } as CallToolResult & { structuredContent: McpStructuredSuccess<Sanitized<T>> };
+  };
 
   // Add metadata including description and error information
   if (description || failedFetches.length > 0) {

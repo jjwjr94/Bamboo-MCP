@@ -1,15 +1,14 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   AdCreativeCallToActionTypeSchema,
   MetaAdCreativeResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Creative Tool Registry
@@ -60,16 +59,14 @@ export class AdCreativeToolRegistry implements IToolRegistry {
   }
 
   private registerGetAdCreatives(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adCreatives: z
-          .array(MetaAdCreativeResponseSchema)
-          .describe('A list of ad creatives with all available Meta API fields.'),
-      }),
+    const successDataSchema = z.object({
+      adCreatives: z
+        .array(MetaAdCreativeResponseSchema)
+        .describe('A list of ad creatives with all available Meta API fields.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_ad_creatives',
       {
         title: 'Get Ad Creatives',
@@ -83,30 +80,21 @@ export class AdCreativeToolRegistry implements IToolRegistry {
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.getAdCreatives(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getAdCreatives(authPayload, params),
+      'Successfully retrieved ad creatives.'
     );
   }
 
   private registerCreateAdCreative(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adCreativeId: z.string(),
-        name: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adCreativeId: z.string(),
+      name: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'create_ad_creative',
       {
         title: 'Create Ad Creative',
@@ -167,30 +155,21 @@ export class AdCreativeToolRegistry implements IToolRegistry {
             })
             .describe('The specification for the creative content.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.createAdCreative(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createAdCreative(authPayload, params),
+      'Successfully created ad creative.'
     );
   }
 
   private registerUpdateAdCreative(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adCreativeId: z.string(),
-        updatedFields: z.array(z.string()),
-      }),
+    const successDataSchema = z.object({
+      adCreativeId: z.string(),
+      updatedFields: z.array(z.string()),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'update_ad_creative',
       {
         title: 'Update Ad Creative',
@@ -199,29 +178,20 @@ export class AdCreativeToolRegistry implements IToolRegistry {
           adCreativeId: z.string().describe('The ID of the ad creative to update.'),
           name: z.string().describe('New name for the ad creative.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.updateAdCreative(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.updateAdCreative(authPayload, params),
+      'Successfully updated ad creative.'
     );
   }
 
   private registerDeleteAdCreative(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        adCreativeId: z.string(),
-      }),
+    const successDataSchema = z.object({
+      adCreativeId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'delete_ad_creative',
       {
         title: 'Delete Ad Creative',
@@ -230,40 +200,31 @@ export class AdCreativeToolRegistry implements IToolRegistry {
           adCreativeId: z.string().describe('The ID of the ad creative to delete.'),
           confirmPermanentDelete: z
             .boolean()
-            .describe('Must be set to true to confirm permanent deletion of the ad creative.'),
+            .describe('Confirmation that you want to permanently delete this ad creative.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          // The handler validates raw API responses and sanitization is applied automatically
-          return await this.toolsHandler.deleteAdCreative(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.deleteAdCreative(authPayload, params),
+      'Successfully deleted ad creative.'
     );
   }
 
   private registerRequestCreativeUpload(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        uploadId: z.string().describe('The unique ID for this upload operation.'),
-        uploadUrl: z
-          .string()
-          .url()
-          .describe('The URL for the user to upload the creative asset file via web interface.'),
-      }),
+    const successDataSchema = z.object({
+      uploadId: z.string().describe('The unique ID for this upload operation.'),
+      uploadUrl: z
+        .string()
+        .url()
+        .describe('The URL for the user to upload the creative asset file via web interface.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'request_creative_upload',
       {
         title: 'Request Creative Asset Upload',
         description:
-          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files. Asset type (image/video) is automatically determined from the uploaded file.',
+          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files.',
         inputSchema: {
           adAccountId: z
             .string()
@@ -281,37 +242,29 @@ export class AdCreativeToolRegistry implements IToolRegistry {
             )
             .describe('The name of the file to be uploaded.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.requestCreativeUpload(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.requestCreativeUpload(authPayload, params),
+      'Successfully initiated creative upload.'
     );
   }
 
   private registerCheckUploadStatus(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        status: z
-          .enum(['pending', 'uploading', 'completed', 'failed'])
-          .describe('The current status of the upload.'),
-        metaAssetId: z
-          .string()
-          .optional()
-          .describe(
-            'The asset ID (hash for images, ID for videos) from Meta upon successful completion.'
-          ),
-        errorMessage: z.string().optional().describe('Details of the error if the upload failed.'),
-      }),
+    const successDataSchema = z.object({
+      status: z
+        .enum(['pending', 'uploading', 'completed', 'failed'])
+        .describe('The current status of the upload.'),
+      metaAssetId: z
+        .string()
+        .optional()
+        .describe(
+          'The asset ID (hash for images, ID for videos) from Meta upon successful completion.'
+        ),
+      errorMessage: z.string().optional().describe('Details of the error if the upload failed.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'check_upload_status',
       {
         title: 'Check Creative Asset Upload Status',
@@ -320,16 +273,10 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         inputSchema: {
           uploadId: z.string().describe('The unique ID returned by `request_creative_upload`.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.checkUploadStatus(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.checkUploadStatus(authPayload, params),
+      'Successfully retrieved upload status.'
     );
   }
 }

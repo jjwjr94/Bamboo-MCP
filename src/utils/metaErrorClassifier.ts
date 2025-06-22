@@ -1,7 +1,7 @@
 /**
  * A structured representation of relevant details from a Meta API error.
  */
-interface MetaErrorDetails {
+export interface MetaErrorDetails {
   code?: string;
   subcode?: string;
   type?: string;
@@ -24,7 +24,7 @@ const TRANSIENT_ERROR_CODES = new Set(['SDK_TIMEOUT', 'TIMEOUT_ERROR']);
  * @param error The error object to parse.
  * @returns A structured object with extracted error details.
  */
-function parseErrorDetails(error: unknown): MetaErrorDetails {
+export function parseErrorDetails(error: unknown): MetaErrorDetails {
   if (typeof error !== 'object' || error === null) {
     return {};
   }

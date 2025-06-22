@@ -1,12 +1,11 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import { MetaAdsArchiveResponseSchema } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 export class AdsArchiveToolRegistry implements IToolRegistry {
   private server: McpServer;
@@ -145,122 +144,90 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
   }
 
   private registerSearchAdsArchive(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        ads: z
-          .array(MetaAdsArchiveResponseSchema)
-          .describe('A list of archived ads matching the search criteria.'),
-      }),
+    const successDataSchema = z.object({
+      ads: z
+        .array(MetaAdsArchiveResponseSchema)
+        .describe('A list of archived ads matching the search criteria.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'search_ads_archive',
       {
         title: 'Search Ads Archive',
         description:
           'Search the Meta Ads Archive (Ad Library) for public archived ads. Useful for competitive intelligence, research, and transparency reporting. Returns general archived ads from Facebook and Instagram.',
         inputSchema: AdsArchiveToolRegistry.SearchAdsArchiveInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.searchAdsArchive(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.searchAdsArchive(authPayload, params),
+      'Successfully retrieved archived ads.'
     );
   }
 
   private registerGetPoliticalAds(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        political_ads: z
-          .array(MetaAdsArchiveResponseSchema)
-          .describe('A list of political and social issue ads with transparency data.'),
-      }),
+    const successDataSchema = z.object({
+      political_ads: z
+        .array(MetaAdsArchiveResponseSchema)
+        .describe('A list of political and social issue ads with transparency data.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_political_ads',
       {
         title: 'Get Political & Issue Ads',
         description:
           'Search for political and social issue ads in the Meta Ads Archive. Returns ads with enhanced transparency data including funding entities, demographic targeting, and regional distribution. Essential for political advertising compliance and research.',
         inputSchema: AdsArchiveToolRegistry.GetPoliticalAdsInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getPoliticalAds(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getPoliticalAds(authPayload, params),
+      'Successfully retrieved political and issue ads.'
     );
   }
 
   private registerGetPageArchiveAds(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        page_ads: z
-          .array(MetaAdsArchiveResponseSchema)
-          .describe('A list of archived ads from the specified Facebook Pages.'),
-      }),
+    const successDataSchema = z.object({
+      page_ads: z
+        .array(MetaAdsArchiveResponseSchema)
+        .describe('A list of archived ads from specified Facebook pages.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_page_archive_ads',
       {
         title: 'Get Page Archive Ads',
         description:
-          'Retrieve archived ads from specific Facebook Pages. Search up to 10 pages at once to analyze their advertising history, creative strategies, and campaign patterns. Ideal for competitive analysis and brand monitoring.',
+          'Search archived ads from specific Facebook pages. Returns ads published by the specified pages along with engagement metrics and historical data. Useful for competitive analysis and brand monitoring.',
         inputSchema: AdsArchiveToolRegistry.GetPageArchiveAdsInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getPageArchiveAds(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getPageArchiveAds(authPayload, params),
+      'Successfully retrieved page archive ads.'
     );
   }
 
   private registerGetAdsArchiveInsights(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        ads_insights: z
-          .array(MetaAdsArchiveResponseSchema)
-          .describe('A list of archived ads with enhanced insights and distribution data.'),
-      }),
+    const successDataSchema = z.object({
+      insights: z
+        .array(MetaAdsArchiveResponseSchema)
+        .describe('Enhanced archived ads data with demographic and regional insights.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_ads_archive_insights',
       {
         title: 'Get Ads Archive Insights',
         description:
-          'Advanced ads archive search with optional demographic and regional distribution data. Configure whether to include detailed targeting insights, geographic breakdowns, and enhanced transparency information. Perfect for comprehensive market research and compliance reporting.',
+          'Advanced search for archived ads with enhanced demographic and regional data. Returns detailed insights including age and gender targeting, regional distribution, and estimated spend ranges for transparency reporting.',
         inputSchema: AdsArchiveToolRegistry.GetAdsArchiveInsightsInputSchema.shape,
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getAdsArchiveInsights(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getAdsArchiveInsights(authPayload, params),
+      'Successfully retrieved ads archive insights.'
     );
   }
 }

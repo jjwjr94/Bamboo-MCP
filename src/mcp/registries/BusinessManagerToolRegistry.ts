@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 /**
  * Business Manager Tool Registry
@@ -50,67 +49,59 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
   }
 
   private registerGetBusinessAccounts(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        businesses: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            created_time: z.string().optional(),
-            link: z.string().optional(),
-            verification_status: z.string().optional(),
-            vertical: z.string().optional(),
-            timezone_id: z.number().optional(),
-          })
-        ),
-      }),
+    // Define the schema for the success data payload
+    const successDataSchema = z.object({
+      businesses: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          created_time: z.string().optional(),
+          link: z.string().optional(),
+          verification_status: z.string().optional(),
+          vertical: z.string().optional(),
+          timezone_id: z.number().optional(),
+        })
+      ),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_business_accounts',
       {
         title: 'Get Business Accounts',
         description:
           'List business manager accounts that the user has access to. Requires business_management permission.',
         inputSchema: {},
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (_params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getBusinessAccounts(authPayload);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload) => this.toolsHandler.getBusinessAccounts(authPayload),
+      'Successfully retrieved business accounts.'
     );
   }
 
   private registerGetBusinessUsers(): void {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        users: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string().optional(),
-            email: z.string().optional(),
-            first_name: z.string().optional(),
-            last_name: z.string().optional(),
-            role: z.string().optional(),
-            title: z.string().optional(),
-            finance_permission: z.string().optional(),
-            ip_permission: z.string().optional(),
-            two_fac_status: z.string().optional(),
-            pending_email: z.string().optional(),
-          })
-        ),
-        businessId: z.string(),
-      }),
+    // Define the schema for the success data payload
+    const successDataSchema = z.object({
+      users: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string().optional(),
+          email: z.string().optional(),
+          first_name: z.string().optional(),
+          last_name: z.string().optional(),
+          role: z.string().optional(),
+          title: z.string().optional(),
+          finance_permission: z.string().optional(),
+          ip_permission: z.string().optional(),
+          two_fac_status: z.string().optional(),
+          pending_email: z.string().optional(),
+        })
+      ),
+      businessId: z.string(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_business_users',
       {
         title: 'Get Business Users',
@@ -123,16 +114,10 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
               'The ID of the business to get users for. Use get_business_accounts first to find available business IDs.'
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getBusinessUsers(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getBusinessUsers(authPayload, params),
+      'Successfully retrieved business users.'
     );
   }
 }

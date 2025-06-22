@@ -1,15 +1,14 @@
 import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import {
   CustomAudienceCustomerFileSourceSchema,
   MetaCustomAudienceResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import { logger } from '../../utils/logger.js';
-import { createMcpErrorResult } from '../errorHandler.js';
 import type { IToolRegistry } from '../types.js';
+import { createMcpTool } from './registryHelper.js';
 
 export class CustomAudienceToolRegistry implements IToolRegistry {
   private server: McpServer;
@@ -45,16 +44,14 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
   }
 
   private registerGetCustomAudiences() {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        customAudiences: z
-          .array(MetaCustomAudienceResponseSchema)
-          .describe('A list of custom audiences with all available Meta API fields.'),
-      }),
+    const successDataSchema = z.object({
+      customAudiences: z
+        .array(MetaCustomAudienceResponseSchema)
+        .describe('A list of custom audiences with all available Meta API fields.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'get_custom_audiences',
       {
         title: 'Get Custom Audiences',
@@ -67,28 +64,20 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
               "The ad account ID (e.g., 'act_12345'). If not provided, the selected account will be used."
             ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.getCustomAudiences(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.getCustomAudiences(authPayload, params),
+      'Successfully retrieved custom audiences.'
     );
   }
 
   private registerCreateCustomAudience() {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        id: z.string().describe('The ID of the newly created custom audience.'),
-      }),
+    const successDataSchema = z.object({
+      id: z.string().describe('The ID of the newly created custom audience.'),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'create_custom_audience',
       {
         title: 'Create Custom Audience',
@@ -109,28 +98,20 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
             'The source of the customer data.'
           ),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.createCustomAudience(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.createCustomAudience(authPayload, params),
+      'Successfully created custom audience.'
     );
   }
 
   private registerDeleteCustomAudience() {
-    const outputSchema = z.object({
-      type: z.literal('success'),
-      data: z.object({
-        success: z.boolean(),
-      }),
+    const successDataSchema = z.object({
+      success: z.boolean(),
     });
 
-    this.server.registerTool(
+    createMcpTool(
+      this.server,
       'delete_custom_audience',
       {
         title: 'Delete Custom Audience',
@@ -142,16 +123,10 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
             .boolean()
             .describe('Must be set to true to confirm permanent deletion of the custom audience.'),
         },
-        outputSchema: outputSchema.shape,
+        successDataSchema,
       },
-      async (params, extra) => {
-        try {
-          const authPayload = extractAuthPayload(extra);
-          return await this.toolsHandler.deleteCustomAudience(authPayload, params);
-        } catch (error) {
-          return createMcpErrorResult(error);
-        }
-      }
+      (authPayload, params) => this.toolsHandler.deleteCustomAudience(authPayload, params),
+      'Successfully deleted custom audience.'
     );
   }
 }
