@@ -153,9 +153,12 @@ export class AdCreativeToolRegistry implements IToolRegistry {
                 .optional()
                 .describe('Video data for video-based ads.'),
             })
-            .refine((spec) => spec.linkData || spec.videoData, {
-              message: 'objectStorySpec must contain either linkData or videoData.',
-            })
+            .refine(
+              (spec) => (spec.linkData && !spec.videoData) || (!spec.linkData && spec.videoData),
+              {
+                message: 'objectStorySpec must contain either linkData or videoData, but not both.',
+              }
+            )
             .describe(
               'The specification for the creative content. Must include either linkData for link ads or videoData for video ads.'
             ),
@@ -245,7 +248,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
               /^[^\/\\<>:"|?*]+$/,
               'Filename cannot contain path separators or special system characters (/ \\ < > : " | ? *)'
             )
-            .describe('The name of the file to be uploaded.'),
+            .describe('The name of the file to be uploaded. Should be unique and related to the campaign or ads to run.'),
         },
         successDataSchema,
       },

@@ -46,7 +46,7 @@ export interface CreateCampaignRequest {
   name: string;
   objective: CampaignObjective;
   status: CampaignStatus;
-  buying_type?: string; // Required by Meta API v22, defaults to 'AUCTION'
+  buying_type?: 'AUCTION' | 'RESERVED'; // Required by Meta API v22, defaults to 'AUCTION'
   adAccountId?: string; // Optional to support intelligent account selection
   dailyBudget?: number; // in cents
   lifetimeBudget?: number; // in cents

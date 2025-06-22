@@ -111,9 +111,11 @@ export class CampaignToolRegistry implements IToolRegistry {
           name: z.string().describe('The name of the campaign.'),
           objective: CampaignObjectiveSchema.describe('The campaign objective.'),
           buying_type: z
-            .string()
+            .enum(['AUCTION', 'RESERVED'])
             .default('AUCTION')
-            .describe("The buying type for the campaign. Defaults to 'AUCTION'."),
+            .describe(
+              "The buying type for the campaign. Defaults to 'AUCTION'. RESERVED is for guaranteed delivery campaigns."
+            ),
           status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
           dailyBudget: z
             .number()

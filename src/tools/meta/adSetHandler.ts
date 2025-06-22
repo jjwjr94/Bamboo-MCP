@@ -17,6 +17,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateAdSetResult,
@@ -145,18 +146,20 @@ export class MetaAdSetHandler {
 
         // Check for California targeting
         const targetsCalifornia = params.targeting.geoLocations?.regions?.some(
-          (r) => r.key === '3847' // Meta's key for California
+          (r) => r.key === META_LOCATION_KEYS.CALIFORNIA
         );
 
         // Enforce SAC-CFCA compliance rule
         if (
           isSpecialAdCategory &&
-          params.optimizationGoal === 'OFFSITE_CONVERSIONS' &&
+          (SAC_COMPLIANCE.CCPA_REQUIRED_OPTIMIZATION_GOALS as readonly string[]).includes(
+            params.optimizationGoal
+          ) &&
           targetsCalifornia &&
           params.isSacCfcaTermsCertified !== true
         ) {
           throw new ValidationError(
-            "For Special Ad Category campaigns with a 'OFFSITE_CONVERSIONS' goal targeting California, 'isSacCfcaTermsCertified' must be set to true."
+            `For Special Ad Category campaigns with '${params.optimizationGoal}' goal targeting California, 'isSacCfcaTermsCertified' must be set to true.`
           );
         }
 
