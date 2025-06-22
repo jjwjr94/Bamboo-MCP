@@ -192,11 +192,10 @@ export class AdCreativeUploadHandler {
 
           /*
            * We cannot compute Content-Length because Fastify hands us a pure stream with unknown size.
-           * Instead we rely on chunked transfer encoding (default for form-data) and add an
-           * `Expect: 100-continue` header so Meta acknowledges headers before we stream the body.
-           * This avoids Meta's early-reject race while preserving zero-copy streaming.
+           * We therefore rely on chunked transfer encoding (default for form-data). Testing shows that
+           * Meta's adimages/advideos endpoints accept chunked uploads when sent via Undici's request API.
+           * No extra headers are required.
            */
-          formHeaders['Expect'] = '100-continue';
 
           // Log the complete request details we're about to send
           logger.info('Complete request details being sent to Meta API', {
