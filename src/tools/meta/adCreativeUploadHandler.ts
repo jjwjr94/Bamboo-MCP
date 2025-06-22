@@ -191,31 +191,12 @@ export class AdCreativeUploadHandler {
           const formHeaders = form.getHeaders();
 
           /*
-           * CRITICAL: Compute exact multipart body length and set Content-Length header
-           *
-           * Why this is necessary:
-           * - Global fetch() uses chunked transfer encoding by default (no Content-Length)
-           * - Meta's Graph API rejects chunked uploads for adimages/advideos with error 100/33
-           * - curl succeeds because it automatically calculates and sends Content-Length
-           *
-           * Solution:
-           * - Use form-data package's getLength() to calculate exact multipart size
-           * - Use undici.request() instead of fetch() to send with explicit Content-Length
-           * - This disables chunked encoding and matches curl's behavior
-           *
-           * Memory efficiency:
-           * - The file stream is never buffered in memory
-           * - getLength() calculates size by examining multipart structure, not reading file
-           * - Supports 4GB uploads on 512MB server instances
+           * We cannot compute Content-Length because Fastify hands us a pure stream with unknown size.
+           * Instead we rely on chunked transfer encoding (default for form-data) and add an
+           * `Expect: 100-continue` header so Meta acknowledges headers before we stream the body.
+           * This avoids Meta's early-reject race while preserving zero-copy streaming.
            */
-          const contentLength = await new Promise<number>((resolve, reject) => {
-            (
-              form as unknown as {
-                getLength: (cb: (err: Error | null, len: number) => void) => void;
-              }
-            ).getLength((err, len) => (err ? reject(err) : resolve(len)));
-          });
-          formHeaders['Content-Length'] = String(contentLength);
+          formHeaders['Expect'] = '100-continue';
 
           // Log the complete request details we're about to send
           logger.info('Complete request details being sent to Meta API', {
