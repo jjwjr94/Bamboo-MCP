@@ -1369,3 +1369,80 @@ export const MetaDeleteSuccessResponseSchema = z
     success: z.boolean(),
   })
   .passthrough();
+
+// Ads Archive Response Schemas
+export const MetaAdsArchiveSpendSchema = z.object({
+  lower_bound: z.number(),
+  upper_bound: z.number(),
+});
+
+export const MetaAdsArchiveImpressionsSchema = z.object({
+  lower_bound: z.number(),
+  upper_bound: z.number(),
+});
+
+export const MetaAdsArchiveDemographicDistributionSchema = z.object({
+  age: z.string(),
+  gender: z.string(),
+  percentage: z.number(),
+});
+
+export const MetaAdsArchiveRegionDistributionSchema = z.object({
+  region: z.string(),
+  percentage: z.number(),
+});
+
+export const MetaAdsArchiveResponseSchema = z.object({
+  id: z.string(),
+  ad_creation_time: z.string().optional().nullable(),
+  ad_creative_body: z.string().optional().nullable(),
+  ad_creative_link_caption: z.string().optional().nullable(),
+  ad_creative_link_description: z.string().optional().nullable(),
+  ad_creative_link_title: z.string().optional().nullable(),
+  ad_creative_link_url: z.string().optional().nullable(),
+  ad_delivery_start_time: z.string().optional().nullable(),
+  ad_delivery_stop_time: z.string().optional().nullable(),
+  ad_snapshot_url: z.string().optional().nullable(),
+  ad_type: z.string().optional().nullable(),
+  bylines: z.array(z.string()).optional().nullable(),
+  currency: z.string().optional().nullable(),
+  demographic_distribution: z
+    .array(MetaAdsArchiveDemographicDistributionSchema)
+    .optional()
+    .nullable(),
+  delivery_by_region: z.record(z.unknown()).optional().nullable(),
+  funding_entity: z.string().optional().nullable(),
+  impressions: MetaAdsArchiveImpressionsSchema.optional().nullable(),
+  is_active: z.boolean().optional().nullable(),
+  languages: z.array(z.string()).optional().nullable(),
+  page_id: z.string(),
+  page_name: z.string(),
+  publisher_platforms: z.array(z.string()).optional().nullable(),
+  region_distribution: z.array(MetaAdsArchiveRegionDistributionSchema).optional().nullable(),
+  search_terms: z.array(z.string()).optional().nullable(),
+  spend: MetaAdsArchiveSpendSchema.optional().nullable(),
+});
+
+export const MetaAdsArchiveSearchResponseSchema = z.object({
+  data: z.array(MetaAdsArchiveResponseSchema),
+  paging: z
+    .object({
+      cursors: z
+        .object({
+          before: z.string().optional(),
+          after: z.string().optional(),
+        })
+        .optional(),
+      next: z.string().optional(),
+      previous: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const AdsArchiveListResponseSchema = z.object({
+  ads: z.array(MetaAdsArchiveResponseSchema),
+  paging: PagingSchema,
+});
+
+export type MetaAdsArchiveResponse = z.infer<typeof MetaAdsArchiveResponseSchema>;
+export type MetaAdsArchiveSearchResponse = z.infer<typeof MetaAdsArchiveSearchResponseSchema>;

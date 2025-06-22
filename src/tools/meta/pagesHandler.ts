@@ -29,49 +29,55 @@ export class MetaPagesHandler {
   async getPages(authPayload: JWTPayload) {
     logger.info('Executing get_pages', { userId: authPayload.userId });
 
-    return handleMetaApiCall(async () => {
-      const api = await createMetaApiInstance(authPayload.userId);
-      const fields = [
-        MetaPageSDK.Fields.id,
-        MetaPageSDK.Fields.name,
-        MetaPageSDK.Fields.category,
-        MetaPageSDK.Fields.link,
-        MetaPageSDK.Fields.about,
-      ];
+    return handleMetaApiCall(
+      async () => {
+        const api = await createMetaApiInstance(authPayload.userId);
+        const fields = [
+          MetaPageSDK.Fields.id,
+          MetaPageSDK.Fields.name,
+          MetaPageSDK.Fields.category,
+          MetaPageSDK.Fields.link,
+          MetaPageSDK.Fields.about,
+        ];
 
-      const pagesCursor = await new MetaUserSDK('me', {}, null, api).getAccounts(fields);
+        const pagesCursor = await new MetaUserSDK('me', {}, null, api).getAccounts(fields);
 
-      // Use the common pagination utility to handle all edge cases
-      const allRawPages = await fetchAllPaginatedData<unknown>({
-        cursor: pagesCursor,
-        limit: env.META_MAX_PAGES_TO_FETCH,
-        entityName: 'pages',
-        userId: authPayload.userId,
-      });
+        // Use the common pagination utility to handle all edge cases
+        const allRawPages = await fetchAllPaginatedData<unknown>({
+          cursor: pagesCursor,
+          limit: env.META_MAX_PAGES_TO_FETCH,
+          entityName: 'pages',
+          userId: authPayload.userId,
+        });
 
-      // Validate and transform the response using auto-generated schema
-      const validatedPages: z.infer<typeof MetaPageResponseSchema>[] = [];
-      for (const page of allRawPages) {
-        const result = MetaPageResponseSchema.safeParse(page);
-        if (result.success) {
-          validatedPages.push(result.data);
-        } else {
-          logger.warn('Invalid page data received from Meta API, skipping.', {
-            error: result.error.format(),
-            page,
-            userId: authPayload.userId,
-          });
+        // Validate and transform the response using auto-generated schema
+        const validatedPages: z.infer<typeof MetaPageResponseSchema>[] = [];
+        for (const page of allRawPages) {
+          const result = MetaPageResponseSchema.safeParse(page);
+          if (result.success) {
+            validatedPages.push(result.data);
+          } else {
+            logger.warn('Invalid page data received from Meta API, skipping.', {
+              error: result.error.format(),
+              page,
+              userId: authPayload.userId,
+            });
+          }
         }
-      }
 
-      const response = { pages: validatedPages };
-      logger.info('Successfully retrieved pages', {
+        const response = { pages: validatedPages };
+        logger.info('Successfully retrieved pages', {
+          userId: authPayload.userId,
+          count: validatedPages.length,
+        });
+
+        return await createMcpSuccessResult(response);
+      },
+      {
+        toolName: 'get_pages',
         userId: authPayload.userId,
-        count: validatedPages.length,
-      });
-
-      return await createMcpSuccessResult(response);
-    });
+      }
+    );
   }
 
   /**
@@ -81,80 +87,88 @@ export class MetaPagesHandler {
   async getPagePosts(authPayload: JWTPayload, params: { pageId: string }) {
     logger.info('Executing get_page_posts', { userId: authPayload.userId, params });
 
-    return handleMetaApiCall(async () => {
-      // 1. Create a user-scoped API instance to fetch the page's access token
-      const userApi = await createMetaApiInstance(authPayload.userId);
+    return handleMetaApiCall(
+      async () => {
+        // 1. Create a user-scoped API instance to fetch the page's access token
+        const userApi = await createMetaApiInstance(authPayload.userId);
 
-      logger.info('Fetching page access token', {
-        userId: authPayload.userId,
-        pageId: params.pageId,
-      });
+        logger.info('Fetching page access token', {
+          userId: authPayload.userId,
+          pageId: params.pageId,
+        });
 
-      const page = await new MetaPageSDK(params.pageId, {}, null, userApi).read([
-        MetaPageSDK.Fields.access_token,
-      ]);
-      const pageAccessToken = page.access_token;
+        const page = await new MetaPageSDK(params.pageId, {}, null, userApi).read([
+          MetaPageSDK.Fields.access_token,
+        ]);
+        const pageAccessToken = page.access_token;
 
-      // Validate that a page access token was retrieved
-      if (!pageAccessToken) {
-        throw new AuthorizationError(
-          `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
-        );
-      }
-
-      // 2. Create a new, isolated page-scoped API instance
-      const pageApi = createApiInstanceFromToken(pageAccessToken as string);
-      logger.info('API instance created with page-specific access token', {
-        pageId: params.pageId,
-      });
-
-      const fields = [
-        MetaPagePostSDK.Fields.id,
-        MetaPagePostSDK.Fields.message,
-        MetaPagePostSDK.Fields.created_time,
-        MetaPagePostSDK.Fields.permalink_url,
-        MetaPagePostSDK.Fields.full_picture,
-        MetaPagePostSDK.Fields.story,
-        MetaPagePostSDK.Fields.status_type,
-      ];
-
-      // 3. Use the page-scoped API instance to get posts
-      const postsCursor = await new MetaPageSDK(params.pageId, {}, null, pageApi).getPosts(fields);
-
-      // Use the common pagination utility to handle all edge cases
-      const allRawPosts = await fetchAllPaginatedData<unknown>({
-        cursor: postsCursor,
-        limit: env.META_MAX_POSTS_TO_FETCH,
-        entityName: 'page posts',
-        userId: authPayload.userId,
-        apiContext: { pageId: params.pageId },
-      });
-
-      // Validate and transform the response using auto-generated schema
-      const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
-      for (const post of allRawPosts) {
-        const result = MetaPagePostResponseSchema.safeParse(post);
-        if (result.success) {
-          validatedPosts.push(result.data);
-        } else {
-          logger.warn('Invalid post data received from Meta API, skipping.', {
-            error: result.error.format(),
-            post,
-            userId: authPayload.userId,
-            pageId: params.pageId,
-          });
+        // Validate that a page access token was retrieved
+        if (!pageAccessToken) {
+          throw new AuthorizationError(
+            `Could not retrieve access token for Page ID: ${params.pageId}. Ensure the user has appropriate permissions for this page.`
+          );
         }
-      }
 
-      const response = { posts: validatedPosts };
-      logger.info('Successfully retrieved page posts', {
+        // 2. Create a new, isolated page-scoped API instance
+        const pageApi = createApiInstanceFromToken(pageAccessToken as string);
+        logger.info('API instance created with page-specific access token', {
+          pageId: params.pageId,
+        });
+
+        const fields = [
+          MetaPagePostSDK.Fields.id,
+          MetaPagePostSDK.Fields.message,
+          MetaPagePostSDK.Fields.created_time,
+          MetaPagePostSDK.Fields.permalink_url,
+          MetaPagePostSDK.Fields.full_picture,
+          MetaPagePostSDK.Fields.story,
+          MetaPagePostSDK.Fields.status_type,
+        ];
+
+        // 3. Use the page-scoped API instance to get posts
+        const postsCursor = await new MetaPageSDK(params.pageId, {}, null, pageApi).getPosts(
+          fields
+        );
+
+        // Use the common pagination utility to handle all edge cases
+        const allRawPosts = await fetchAllPaginatedData<unknown>({
+          cursor: postsCursor,
+          limit: env.META_MAX_POSTS_TO_FETCH,
+          entityName: 'page posts',
+          userId: authPayload.userId,
+          apiContext: { pageId: params.pageId },
+        });
+
+        // Validate and transform the response using auto-generated schema
+        const validatedPosts: z.infer<typeof MetaPagePostResponseSchema>[] = [];
+        for (const post of allRawPosts) {
+          const result = MetaPagePostResponseSchema.safeParse(post);
+          if (result.success) {
+            validatedPosts.push(result.data);
+          } else {
+            logger.warn('Invalid post data received from Meta API, skipping.', {
+              error: result.error.format(),
+              post,
+              userId: authPayload.userId,
+              pageId: params.pageId,
+            });
+          }
+        }
+
+        const response = { posts: validatedPosts };
+        logger.info('Successfully retrieved page posts', {
+          userId: authPayload.userId,
+          pageId: params.pageId,
+          count: validatedPosts.length,
+        });
+
+        return await createMcpSuccessResult(response);
+      },
+      {
+        toolName: 'get_page_posts',
         userId: authPayload.userId,
-        pageId: params.pageId,
-        count: validatedPosts.length,
-      });
-
-      return await createMcpSuccessResult(response);
-    });
+      }
+    );
   }
 
   /**
@@ -173,78 +187,87 @@ export class MetaPagesHandler {
   ) {
     logger.info('Executing create_page_post_ad', { userId: authPayload.userId, params });
 
-    return handleMetaApiCall(async () => {
-      const api = await createMetaApiInstance(authPayload.userId);
+    return handleMetaApiCall(
+      async () => {
+        const api = await createMetaApiInstance(authPayload.userId);
 
-      const adAccountId = await accountManager.requireAccountSelection(
-        authPayload.userId,
-        params.adAccountId
-      );
+        const adAccountId = await accountManager.requireAccountSelection(
+          authPayload.userId,
+          params.adAccountId
+        );
 
-      // 1. Create an AdCreative from the existing page post
-      const creativeData: Record<string, unknown> = {
-        [MetaAdCreativeSDK.Fields.name]: `Creative for Ad: ${params.name} (Post: ${params.postId})`,
-        [MetaAdCreativeSDK.Fields.object_story_id]: params.postId,
-      };
+        // 1. Create an AdCreative from the existing page post
+        const creativeData: Record<string, unknown> = {
+          [MetaAdCreativeSDK.Fields.name]:
+            `Creative for Ad: ${params.name} (Post: ${params.postId})`,
+          [MetaAdCreativeSDK.Fields.object_story_id]: params.postId,
+        };
 
-      removeUndefinedProperties(creativeData);
+        removeUndefinedProperties(creativeData);
 
-      const adCreative = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAdCreative(
-        [],
-        creativeData
-      );
-      const creativeValidation = MetaCreateSuccessResponseSchema.safeParse(adCreative);
+        const adCreative = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAdCreative(
+          [],
+          creativeData
+        );
+        const creativeValidation = MetaCreateSuccessResponseSchema.safeParse(adCreative);
 
-      if (!creativeValidation.success) {
-        logger.error('Invalid response from Meta API for create ad creative', {
-          error: creativeValidation.error.format(),
-          response: adCreative,
+        if (!creativeValidation.success) {
+          logger.error('Invalid response from Meta API for create ad creative', {
+            error: creativeValidation.error.format(),
+            response: adCreative,
+          });
+          throw new ValidationError(
+            'Failed to create ad creative from post: Invalid API response.'
+          );
+        }
+
+        const adCreativeId = creativeValidation.data.id;
+
+        // 2. Create the Ad using the new AdCreative
+        const adData: Record<string, unknown> = {
+          name: params.name,
+          adset_id: params.adSetId,
+          creative: { creative_id: adCreativeId },
+          status: params.status || 'PAUSED',
+        };
+
+        removeUndefinedProperties(adData);
+
+        const ad = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAd([], adData);
+        const adValidation = MetaCreateSuccessResponseSchema.safeParse(ad);
+
+        if (!adValidation.success) {
+          logger.error('Invalid response from Meta API for create ad', {
+            error: adValidation.error.format(),
+            response: ad,
+          });
+          throw new ValidationError('Failed to create ad: Invalid API response.');
+        }
+
+        const adId = adValidation.data.id;
+
+        const result = {
+          adId,
+          adCreativeId,
+        };
+
+        logger.info('Successfully created page post ad', {
+          userId: authPayload.userId,
+          adAccountId,
+          adId,
+          adCreativeId,
+          postId: params.postId,
         });
-        throw new ValidationError('Failed to create ad creative from post: Invalid API response.');
-      }
 
-      const adCreativeId = creativeValidation.data.id;
-
-      // 2. Create the Ad using the new AdCreative
-      const adData: Record<string, unknown> = {
-        name: params.name,
-        adset_id: params.adSetId,
-        creative: { creative_id: adCreativeId },
-        status: params.status || 'PAUSED',
-      };
-
-      removeUndefinedProperties(adData);
-
-      const ad = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAd([], adData);
-      const adValidation = MetaCreateSuccessResponseSchema.safeParse(ad);
-
-      if (!adValidation.success) {
-        logger.error('Invalid response from Meta API for create ad', {
-          error: adValidation.error.format(),
-          response: ad,
-        });
-        throw new ValidationError('Failed to create ad: Invalid API response.');
-      }
-
-      const adId = adValidation.data.id;
-
-      const result = {
-        adId,
-        adCreativeId,
-      };
-
-      logger.info('Successfully created page post ad', {
+        return await createMcpSuccessResult(
+          result,
+          `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`
+        );
+      },
+      {
+        toolName: 'create_page_post_ad',
         userId: authPayload.userId,
-        adAccountId,
-        adId,
-        adCreativeId,
-        postId: params.postId,
-      });
-
-      return await createMcpSuccessResult(
-        result,
-        `Successfully created ad '${params.name}' (ID: ${adId}) to promote post ${params.postId}.`
-      );
-    });
+      }
+    );
   }
 }

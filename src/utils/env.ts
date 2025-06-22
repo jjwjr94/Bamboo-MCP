@@ -95,6 +95,7 @@ const envSchema = z.object({
   META_MAX_AUDIENCES_TO_FETCH: z.string().transform(Number).default('1000'),
   META_MAX_PAGES_TO_FETCH: z.string().transform(Number).default('100'),
   META_MAX_POSTS_TO_FETCH: z.string().transform(Number).default('500'),
+  META_MAX_ADS_ARCHIVE_TO_FETCH: z.string().transform(Number).default('5000'),
   MAX_RECURSION_DEPTH: z.string().transform(Number).default('20'),
   MAX_REDACTION_DEPTH: z.string().transform(Number).default('20'),
 

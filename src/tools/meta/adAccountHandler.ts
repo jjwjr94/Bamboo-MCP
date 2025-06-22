@@ -133,133 +133,139 @@ export class MetaAdAccountHandler {
     }
     const { accessToken, metaUserId } = tokenAndMetaId[0];
 
-    return await handleMetaApiCall(async () => {
-      const api = await createMetaApiInstance(authPayload.userId);
+    return await handleMetaApiCall(
+      async () => {
+        const api = await createMetaApiInstance(authPayload.userId);
 
-      const fields = [
-        MetaAdAccountSDK.Fields.id,
-        MetaAdAccountSDK.Fields.name,
-        MetaAdAccountSDK.Fields.account_status,
-        MetaAdAccountSDK.Fields.currency,
-        MetaAdAccountSDK.Fields.timezone_name,
-        MetaAdAccountSDK.Fields.business,
-      ];
+        const fields = [
+          MetaAdAccountSDK.Fields.id,
+          MetaAdAccountSDK.Fields.name,
+          MetaAdAccountSDK.Fields.account_status,
+          MetaAdAccountSDK.Fields.currency,
+          MetaAdAccountSDK.Fields.timezone_name,
+          MetaAdAccountSDK.Fields.business,
+        ];
 
-      // Get ad accounts using the SDK with proper pagination and request-scoped API instance
-      const adAccountsCursor = await new MetaUserSDK('me', {}, null, api).getAdAccounts(fields);
+        // Get ad accounts using the SDK with proper pagination and request-scoped API instance
+        const adAccountsCursor = await new MetaUserSDK('me', {}, null, api).getAdAccounts(fields);
 
-      // Use the common pagination utility to handle all edge cases
-      const allRawAccounts = await fetchAllPaginatedData<unknown>({
-        cursor: adAccountsCursor,
-        limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
-        entityName: 'ad accounts',
-        userId: authPayload.userId,
-      });
-
-      // Validate each account using the auto-generated schema
-      const validatedAccounts: z.infer<typeof MetaAdAccountResponseSchema>[] = [];
-      for (const account of allRawAccounts) {
-        const result = MetaAdAccountResponseSchema.safeParse(account);
-        if (result.success) {
-          validatedAccounts.push(result.data);
-        } else {
-          logger.warn('Skipping invalid ad account data received from Meta API', {
-            accountId: (account as { id?: string }).id || 'Unknown ID',
-            errors: result.error.errors,
-          });
-        }
-      }
-
-      const accountsToStore = await withUserContext(authPayload.userId, async (tx) => {
-        if (validatedAccounts.length === 0) {
-          return [];
-        }
-
-        // Extract data once to use in both phases
-        const extractedAccounts = validatedAccounts.map((acc) => this.extractAccountData(acc));
-
-        // --- Phase 1: Insert/Update basic account info ---
-        // This phase is critical for resolving a circular dependency. Some ad accounts
-        // are business-managed and require a 'business' parameter to fetch permissions.
-        // By first storing the basic account info (including businessId), we ensure
-        // the business context is available in our database for the next phase.
-        const basicAccountData = extractedAccounts.map((acc) => ({
-          ...acc,
+        // Use the common pagination utility to handle all edge cases
+        const allRawAccounts = await fetchAllPaginatedData<unknown>({
+          cursor: adAccountsCursor,
+          limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
+          entityName: 'ad accounts',
           userId: authPayload.userId,
-        }));
+        });
 
-        await tx
-          .insert(adAccounts)
-          .values(basicAccountData)
-          .onConflictDoUpdate({
-            target: [adAccounts.id, adAccounts.userId],
-            set: {
-              name: sql`excluded.name`,
-              status: sql`excluded.status`,
-              currency: sql`excluded.currency`,
-              timezone: sql`excluded.timezone`,
-              businessId: sql`excluded.business_id`,
-              // Note: `permissions` are NOT updated here
-            },
-          });
-
-        // --- Phase 2: Fetch and update permissions (Optimized with Batching) ---
-        // With the basic account info, including businessId, now stored in the database
-        // (within this transaction), we can process all accounts with a single batch request.
-        // This eliminates the N+1 query problem and dramatically improves performance.
-
-        // 1. Create a batch request for each account's permissions.
-        const permissionRequests = extractedAccounts.map((account) =>
-          createPermissionsFetchRequest(account.id, account.businessId || undefined)
-        );
-
-        // 2. Execute the batch request to fetch all permissions in one API call.
-        const batchResponses = await executeBatchRequests(permissionRequests, accessToken);
-
-        // 3. Create a lookup map for efficient response processing.
-        const responseMap = new Map(
-          batchResponses.map((res) => [
-            res.id.replace('permissions_', ''), // Key by ad account ID
-            res,
-          ])
-        );
-
-        // 4. Process each account (ensuring all accounts are included even if permission fetch failed).
-        const finalAccountUpdatePromises = extractedAccounts.map((accountData) =>
-          this.handleAccountPermissionUpdate(
-            tx,
-            accountData,
-            responseMap.get(accountData.id),
-            metaUserId,
-            authPayload.userId
-          )
-        );
-
-        // Await all parallel database operations to complete using Promise.allSettled for resilience
-        const permissionUpdateResults = await Promise.allSettled(finalAccountUpdatePromises);
-
-        const finalAccountsWithPermissions = [];
-        for (const result of permissionUpdateResults) {
-          if (result.status === 'fulfilled') {
-            finalAccountsWithPermissions.push(result.value);
+        // Validate each account using the auto-generated schema
+        const validatedAccounts: z.infer<typeof MetaAdAccountResponseSchema>[] = [];
+        for (const account of allRawAccounts) {
+          const result = MetaAdAccountResponseSchema.safeParse(account);
+          if (result.success) {
+            validatedAccounts.push(result.data);
           } else {
-            // Log the failure for the specific account but don't fail the whole operation
-            logger.error('Failed to process permissions for an ad account', {
-              userId: authPayload.userId,
-              reason: result.reason instanceof Error ? result.reason.message : result.reason,
+            logger.warn('Skipping invalid ad account data received from Meta API', {
+              accountId: (account as { id?: string }).id || 'Unknown ID',
+              errors: result.error.errors,
             });
           }
         }
 
-        return finalAccountsWithPermissions;
-      });
+        const accountsToStore = await withUserContext(authPayload.userId, async (tx) => {
+          if (validatedAccounts.length === 0) {
+            return [];
+          }
 
-      logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
-      return await createMcpSuccessResult(
-        { accounts: accountsToStore },
-        `Retrieved ${accountsToStore.length} ad accounts`,
-        { attachPrompts: true }
-      );
-    });
+          // Extract data once to use in both phases
+          const extractedAccounts = validatedAccounts.map((acc) => this.extractAccountData(acc));
+
+          // --- Phase 1: Insert/Update basic account info ---
+          // This phase is critical for resolving a circular dependency. Some ad accounts
+          // are business-managed and require a 'business' parameter to fetch permissions.
+          // By first storing the basic account info (including businessId), we ensure
+          // the business context is available in our database for the next phase.
+          const basicAccountData = extractedAccounts.map((acc) => ({
+            ...acc,
+            userId: authPayload.userId,
+          }));
+
+          await tx
+            .insert(adAccounts)
+            .values(basicAccountData)
+            .onConflictDoUpdate({
+              target: [adAccounts.id, adAccounts.userId],
+              set: {
+                name: sql`excluded.name`,
+                status: sql`excluded.status`,
+                currency: sql`excluded.currency`,
+                timezone: sql`excluded.timezone`,
+                businessId: sql`excluded.business_id`,
+                // Note: `permissions` are NOT updated here
+              },
+            });
+
+          // --- Phase 2: Fetch and update permissions (Optimized with Batching) ---
+          // With the basic account info, including businessId, now stored in the database
+          // (within this transaction), we can process all accounts with a single batch request.
+          // This eliminates the N+1 query problem and dramatically improves performance.
+
+          // 1. Create a batch request for each account's permissions.
+          const permissionRequests = extractedAccounts.map((account) =>
+            createPermissionsFetchRequest(account.id, account.businessId || undefined)
+          );
+
+          // 2. Execute the batch request to fetch all permissions in one API call.
+          const batchResponses = await executeBatchRequests(permissionRequests, accessToken);
+
+          // 3. Create a lookup map for efficient response processing.
+          const responseMap = new Map(
+            batchResponses.map((res) => [
+              res.id.replace('permissions_', ''), // Key by ad account ID
+              res,
+            ])
+          );
+
+          // 4. Process each account (ensuring all accounts are included even if permission fetch failed).
+          const finalAccountUpdatePromises = extractedAccounts.map((accountData) =>
+            this.handleAccountPermissionUpdate(
+              tx,
+              accountData,
+              responseMap.get(accountData.id),
+              metaUserId,
+              authPayload.userId
+            )
+          );
+
+          // Await all parallel database operations to complete using Promise.allSettled for resilience
+          const permissionUpdateResults = await Promise.allSettled(finalAccountUpdatePromises);
+
+          const finalAccountsWithPermissions = [];
+          for (const result of permissionUpdateResults) {
+            if (result.status === 'fulfilled') {
+              finalAccountsWithPermissions.push(result.value);
+            } else {
+              // Log the failure for the specific account but don't fail the whole operation
+              logger.error('Failed to process permissions for an ad account', {
+                userId: authPayload.userId,
+                reason: result.reason instanceof Error ? result.reason.message : result.reason,
+              });
+            }
+          }
+
+          return finalAccountsWithPermissions;
+        });
+
+        logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
+        return await createMcpSuccessResult(
+          { accounts: accountsToStore },
+          `Retrieved ${accountsToStore.length} ad accounts`,
+          { attachPrompts: true }
+        );
+      },
+      {
+        toolName: 'get_ad_accounts',
+        userId: authPayload.userId,
+      }
+    );
   }
 }

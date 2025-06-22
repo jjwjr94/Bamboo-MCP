@@ -11,11 +11,13 @@ import type { IToolRegistry } from '../types.js';
 import { AdCreativeToolRegistry } from './AdCreativeToolRegistry.js';
 import { AdSetToolRegistry } from './AdSetToolRegistry.js';
 import { AdToolRegistry } from './AdToolRegistry.js';
+import { AdsArchiveToolRegistry } from './AdsArchiveToolRegistry.js';
 import { BusinessManagerToolRegistry } from './BusinessManagerToolRegistry.js';
 import { CampaignToolRegistry } from './CampaignToolRegistry.js';
 import { CustomAudienceToolRegistry } from './CustomAudienceToolRegistry.js';
 import { InsightsToolRegistry } from './InsightsToolRegistry.js';
 import { PagesToolRegistry } from './PagesToolRegistry.js';
+import { TargetingToolRegistry } from './TargetingToolRegistry.js';
 
 export class ToolRegistry {
   private server: McpServer;
@@ -36,6 +38,8 @@ export class ToolRegistry {
       new CustomAudienceToolRegistry(server, toolsHandler),
       new PagesToolRegistry(server, toolsHandler),
       new BusinessManagerToolRegistry(server, toolsHandler),
+      new AdsArchiveToolRegistry(server, toolsHandler),
+      new TargetingToolRegistry(server, toolsHandler),
     ];
   }
 

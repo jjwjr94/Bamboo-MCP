@@ -68,13 +68,23 @@ export async function createMetaApiInstance(userId: string): Promise<FacebookAds
   return api;
 }
 
-export async function handleMetaApiCall<T>(apiCall: () => Promise<T>): Promise<T> {
+export async function handleMetaApiCall<T>(
+  apiCall: () => Promise<T>,
+  context?: {
+    toolName?: string;
+    userId?: string;
+  }
+): Promise<T> {
   try {
     // Create a new resilience policy per request to prevent cross-user circuit breaker impact
     const requestScopedPolicy = createMetaResiliencePolicy();
     return await requestScopedPolicy.execute(apiCall);
   } catch (error: unknown) {
-    logger.error('Meta API call failed', { error: (error as Error).message });
+    logger.error('Meta API call failed', {
+      toolName: context?.toolName,
+      userId: context?.userId,
+      error: (error as Error).message,
+    });
 
     // The SDK often throws errors with a 'response' property or structured error fields
     const errorObj = error as {
@@ -84,7 +94,7 @@ export async function handleMetaApiCall<T>(apiCall: () => Promise<T>): Promise<T
 
     const errorResponse = errorObj.response?.data?.error || errorObj;
 
-    if (errorResponse) {
+    if (typeof errorResponse === 'object' && errorResponse !== null) {
       interface ErrorResponseShape {
         message?: string;
         code?: number | string;

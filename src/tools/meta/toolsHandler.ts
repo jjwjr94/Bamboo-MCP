@@ -1,4 +1,10 @@
 import type {
+  GetAdsArchiveInsightsInput,
+  GetPageArchiveAdsInput,
+  GetPoliticalAdsInput,
+  SearchAdsArchiveInput,
+} from '../../mcp/registries/AdsArchiveToolRegistry.js';
+import type {
   GetAdAccountInsightsInput,
   GetAdInsightsInput,
 } from '../../mcp/registries/InsightsToolRegistry.js';
@@ -16,11 +22,13 @@ import { MetaAdAccountHandler } from './adAccountHandler.js';
 import { MetaAdCreativeHandler } from './adCreativeHandler.js';
 import { MetaAdHandler } from './adHandler.js';
 import { MetaAdSetHandler } from './adSetHandler.js';
+import { MetaAdsArchiveHandler } from './adsArchiveHandler.js';
 import { MetaBusinessManagerHandler } from './businessManagerHandler.js';
 import { MetaCampaignHandler } from './campaignHandler.js';
 import { MetaCustomAudienceHandler } from './customAudienceHandler.js';
 import { MetaInsightsHandler } from './insightsHandler.js';
 import { MetaPagesHandler } from './pagesHandler.js';
+import { MetaTargetingSearchHandler } from './targetingSearchHandler.js';
 
 export class MetaToolsHandler {
   private adAccountHandler = new MetaAdAccountHandler();
@@ -32,6 +40,8 @@ export class MetaToolsHandler {
   private customAudienceHandler = new MetaCustomAudienceHandler();
   private pagesHandler = new MetaPagesHandler();
   private businessManagerHandler = new MetaBusinessManagerHandler();
+  private adsArchiveHandler = new MetaAdsArchiveHandler();
+  private targetingSearchHandler = new MetaTargetingSearchHandler();
 
   // Ad Account methods - delegated to MetaAdAccountHandler
   async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
@@ -210,5 +220,63 @@ export class MetaToolsHandler {
 
   async getBusinessUsers(authPayload: JWTPayload, params: { businessId: string }) {
     return this.businessManagerHandler.getBusinessUsers(authPayload, params);
+  }
+
+  // Ads Archive methods - delegated to MetaAdsArchiveHandler
+  async searchAdsArchive(authPayload: JWTPayload, params: SearchAdsArchiveInput) {
+    return this.adsArchiveHandler.searchAdsArchive(authPayload, params);
+  }
+
+  async getPoliticalAds(authPayload: JWTPayload, params: GetPoliticalAdsInput) {
+    return this.adsArchiveHandler.getPoliticalAds(authPayload, params);
+  }
+
+  async getPageArchiveAds(authPayload: JWTPayload, params: GetPageArchiveAdsInput) {
+    return this.adsArchiveHandler.getPageArchiveAds(authPayload, params);
+  }
+
+  async getAdsArchiveInsights(authPayload: JWTPayload, params: GetAdsArchiveInsightsInput) {
+    return this.adsArchiveHandler.getAdsArchiveInsights(authPayload, params);
+  }
+
+  // Targeting Search methods - delegated to MetaTargetingSearchHandler
+  async searchInterests(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      limit?: number;
+    }
+  ) {
+    return this.targetingSearchHandler.searchInterests(authPayload, params);
+  }
+
+  async searchBehaviors(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      limit?: number;
+    }
+  ) {
+    return this.targetingSearchHandler.searchBehaviors(authPayload, params);
+  }
+
+  async searchLocations(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      type?: 'country' | 'region' | 'city';
+      limit?: number;
+    }
+  ) {
+    return this.targetingSearchHandler.searchLocations(authPayload, params);
+  }
+
+  async validateTargetingOptions(
+    authPayload: JWTPayload,
+    params: {
+      targetingOptionIds: string[];
+    }
+  ) {
+    return this.targetingSearchHandler.validateTargetingOptions(authPayload, params);
   }
 }
