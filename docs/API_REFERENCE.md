@@ -157,13 +157,20 @@ Creates a new ad set with advanced targeting options.
 - `adAccountId` (optional): Target ad account
 - `campaignId` (required): Parent campaign
 - `name` (required): Ad set name
-- `status` (optional): Initial status
-- `dailyBudget` (optional): Daily budget
-- `lifetimeBudget` (optional): Lifetime budget
-- `bidAmount` (optional): Bid amount
-- `targeting` (required): Targeting specification
-- `startTime` (optional): Start time
-- `endTime` (optional): End time
+- `status` (optional): Initial status (default: PAUSED)
+- `dailyBudget` (optional): Daily budget in cents. **Must provide either this or `lifetimeBudget`.**
+- `lifetimeBudget` (optional): Lifetime budget in cents. **Must provide either this or `dailyBudget`.**
+- `bidStrategy` (optional): The bid strategy. Options include `LOWEST_COST_WITHOUT_CAP`, `LOWEST_COST_WITH_BID_CAP`, `COST_CAP`, etc. Defaults to `LOWEST_COST_WITHOUT_CAP`.
+- `bidAmount` (optional): Bid amount in cents, required for certain bid strategies like `LOWEST_COST_WITH_BID_CAP` and `COST_CAP`.
+- `targeting` (required): Targeting specification.
+  - `geoLocations` (required): Geographic targeting including countries, regions, or cities. **Must specify at least one.** Country codes must be 2-letter ISO 3166-1 alpha-2 format (e.g., 'US', 'CA').
+- `billingEvent` (required): Billing event for the ad set
+- `optimizationGoal` (required): Optimization goal for the ad set
+- `startTime` (optional): Start time in ISO format
+- `endTime` (optional): End time in ISO format
+- `attributionSpec` (optional): Modern attribution spec for iOS 14.5+ compliance. Must be an array of objects, e.g., `[{ "event_type": "CLICK_THROUGH", "window_days": 7 }]`. Valid window_days are 1 or 7.
+- `promotedObject` (optional): Required for certain campaign objectives like Page Likes, App Installs, Product Catalog Sales
+- `isSacCfcaTermsCertified` (optional): Certifies CCPA compliance for Special Ad Category campaigns targeting California with CONVERSIONS optimization goal
 
 ### update_adset
 

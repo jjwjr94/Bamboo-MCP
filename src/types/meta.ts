@@ -2,6 +2,7 @@
 
 // Import auto-generated types from schemas
 import type {
+  AdSetBidStrategy,
   AdSetBillingEvent,
   AdSetOptimizationGoal,
   AdsInsightsBreakdowns,
@@ -21,7 +22,7 @@ import type {
 } from '../generated/schemas.js';
 
 export interface MetaTargeting {
-  geoLocations?: {
+  geoLocations: {
     countries?: string[];
     regions?: Array<{ key: string }>;
     cities?: Array<{ key: string }>;
@@ -62,6 +63,11 @@ export interface CreateCampaignRequest {
   specialAdCategoryCountry?: string[];
 }
 
+export interface MetaAttributionSpec {
+  event_type: 'CLICK_THROUGH' | 'VIEW_THROUGH';
+  window_days: 1 | 7;
+}
+
 export interface CreateAdSetRequest {
   adAccountId?: string;
   campaignId: string;
@@ -71,12 +77,24 @@ export interface CreateAdSetRequest {
   targeting: MetaTargeting;
   billingEvent: AdSetBillingEvent;
   optimizationGoal: AdSetOptimizationGoal;
+  bidStrategy?: AdSetBidStrategy;
   bidAmount?: number; // in cents
   startTime?: string; // ISO date
   endTime?: string; // ISO date
   status?: CampaignStatus;
+  /**
+   * Certifies compliance with Meta's California Consumer Privacy Act (CCPA) and related regulations.
+   * Required for Special Ad Category campaigns targeting California (US-CA) that use the CONVERSIONS
+   * optimization goal. Must be set to `true` when applicable.
+   *
+   * This field was introduced in Meta Marketing API v22.0 to ensure advertisers acknowledge compliance
+   * with California's privacy and advertising regulations for special ad categories.
+   *
+   * @see https://developers.facebook.com/docs/marketing-api/reference/ad-set/
+   */
+  isSacCfcaTermsCertified?: boolean;
   promotedObject?: unknown;
-  attributionSpec?: unknown;
+  attributionSpec?: MetaAttributionSpec[];
 }
 
 export interface CreateAdRequest {

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
+  AdSetBidStrategySchema,
   AdSetBillingEventSchema,
   AdSetOptimizationGoalSchema,
   AdSetStatusSchema,
@@ -98,6 +99,25 @@ export class AdSetToolRegistry implements IToolRegistry {
       campaignId: z.string(),
     });
 
+    // Define modern attribution spec schema for v22
+    const ModernAttributionSpecSchema = z
+      .array(
+        z.object({
+          event_type: z
+            .enum(['CLICK_THROUGH', 'VIEW_THROUGH'])
+            .describe("The event type for attribution. Use 'CLICK_THROUGH' or 'VIEW_THROUGH'."),
+          window_days: z
+            .union([z.literal(1), z.literal(7)])
+            .describe(
+              'The attribution window in days. Valid values are 1 or 7 due to iOS 14.5+ restrictions.'
+            ),
+        })
+      )
+      .optional()
+      .describe(
+        'Modern attribution spec for the ad set. Required for some optimization goals. Post-iOS 14.5 only supports 1-day and 7-day windows.'
+      );
+
     createMcpTool(
       this.server,
       'create_adset',
@@ -112,22 +132,38 @@ export class AdSetToolRegistry implements IToolRegistry {
             .int()
             .positive()
             .optional()
-            .describe('Daily budget in cents (e.g., 1000 = $10.00).'),
+            .describe(
+              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget.'
+            ),
           lifetimeBudget: z
             .number()
             .int()
             .positive()
             .optional()
-            .describe('Lifetime budget in cents (e.g., 10000 = $100.00).'),
+            .describe(
+              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget.'
+            ),
           targeting: z
             .object({
               geoLocations: z
                 .object({
-                  countries: z.array(z.string()).optional(),
+                  countries: z
+                    .array(
+                      z
+                        .string()
+                        .toUpperCase()
+                        .regex(
+                          /^[A-Z]{2}$/,
+                          "Must be a 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g., 'US', 'CA', 'GB')"
+                        )
+                    )
+                    .optional(),
                   regions: z.array(z.object({ key: z.string() })).optional(),
                   cities: z.array(z.object({ key: z.string() })).optional(),
                 })
-                .optional(),
+                .describe(
+                  'Geographic targeting is required. Must specify at least one of countries, regions, or cities.'
+                ),
               ageMin: z.number().int().min(13).max(65).optional(),
               ageMax: z.number().int().min(13).max(65).optional(),
               genders: z
@@ -143,33 +179,39 @@ export class AdSetToolRegistry implements IToolRegistry {
               customAudiences: z.array(z.object({ id: z.string() })).optional(),
               excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
             })
-            .describe('Targeting criteria for the ad set.'),
+            .describe(
+              'Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'
+            ),
           billingEvent: AdSetBillingEventSchema.describe('Billing event for the ad set.'),
           optimizationGoal: AdSetOptimizationGoalSchema.describe(
             'Optimization goal for the ad set.'
           ),
-          bidAmount: z.number().int().positive().optional().describe('Bid amount in cents.'),
+          bidStrategy: AdSetBidStrategySchema.optional().describe(
+            'The bid strategy for the ad set. If not specified, defaults to LOWEST_COST_WITHOUT_CAP.'
+          ),
+          bidAmount: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe(
+              'Bid amount in cents. Required for certain bid strategies like LOWEST_COST_WITH_BID_CAP.'
+            ),
           startTime: z.string().optional().describe('Start time in ISO format.'),
           endTime: z.string().optional().describe('End time in ISO format.'),
           status: AdSetStatusSchema.default('PAUSED').describe('The ad set status.'),
-          attributionSpec: z
-            .array(
-              z.object({
-                event_type: z
-                  .string()
-                  .describe('Event type for attribution (e.g., IMPRESSION, CLICK)'),
-                window_days: z.number().int().positive().describe('Attribution window in days'),
-              })
-            )
-            .optional()
-            .describe(
-              'Attribution spec for the ad set. Required when using certain optimization goals.'
-            ),
+          attributionSpec: ModernAttributionSpecSchema,
           promotedObject: z
             .record(z.string(), z.any())
             .optional()
             .describe(
               'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives.'
+            ),
+          isSacCfcaTermsCertified: z
+            .boolean()
+            .optional()
+            .describe(
+              "Certifies CCPA compliance. Required for Special Ad Category campaigns targeting California with the 'CONVERSIONS' optimization goal."
             ),
         },
         successDataSchema,

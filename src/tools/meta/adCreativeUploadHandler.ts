@@ -181,19 +181,58 @@ export class AdCreativeUploadHandler {
             : `act_${uploadRequest.adAccountId}`;
           const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
 
+          // Enhanced logging to validate request parameters before streaming
+          const formHeaders = form.getHeaders();
+          logger.info('Attempting to stream file to Meta API', {
+            userId,
+            uploadId,
+            assetType,
+            url: uploadUrl,
+            formFields: {
+              [fileParamName]: uploadRequest.filename,
+              access_token: 'REDACTED', // For security
+              business: businessId ?? 'not_applicable',
+            },
+            // Log the Content-Type to verify the multipart boundary is set
+            contentTypeHeader: formHeaders['content-type'],
+            mimeType: fileData.mimetype,
+            streamingApproach: 'direct_file_stream_via_FormData',
+          });
+
           const response = await fetch(uploadUrl, {
             method: 'POST',
             body: form,
-            headers: form.getHeaders(),
+            headers: formHeaders,
             signal: AbortSignal.timeout(env.META_UPLOAD_TIMEOUT),
           });
 
           if (!response.ok) {
-            const errorData = (await response.json().catch(() => ({}))) as {
-              error?: { message?: string };
-            };
+            // Improved error parsing to handle non-JSON responses
+            const responseText = await response.text();
+            let errorData: { error?: { message?: string } } | null = null;
+            try {
+              errorData = JSON.parse(responseText);
+            } catch (e) {
+              logger.warn('Meta API error response was not valid JSON', {
+                userId,
+                uploadId,
+                status: response.status,
+                responseText: responseText.substring(0, 500), // Limit length for logs
+              });
+            }
+
+            // Log the full structured error if available
+            if (errorData?.error) {
+              logger.error('Full Meta API error response from upload', {
+                userId,
+                uploadId,
+                errorDetails: errorData.error,
+              });
+            }
+
             const errorMessage =
-              errorData?.error?.message || `Meta API upload failed: ${response.statusText}`;
+              errorData?.error?.message ||
+              `Meta API upload failed with status ${response.status}: ${responseText.substring(0, 250)}`;
             throw new Error(errorMessage);
           }
 

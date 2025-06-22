@@ -112,6 +112,22 @@ export class MetaAdSetHandler {
   ): Promise<CreateAdSetResult> {
     logger.info('Executing create_adset', { userId: authPayload.userId, params });
 
+    // Validate budget requirement: either dailyBudget OR lifetimeBudget must be provided
+    if (!params.dailyBudget && !params.lifetimeBudget) {
+      throw new ValidationError('Either dailyBudget or lifetimeBudget must be provided.');
+    }
+    if (params.dailyBudget && params.lifetimeBudget) {
+      throw new ValidationError('Provide either dailyBudget or lifetimeBudget, but not both.');
+    }
+
+    // Validate geoLocations has at least one targeting criterion
+    const geoLocs = params.targeting.geoLocations;
+    if (!geoLocs.countries?.length && !geoLocs.regions?.length && !geoLocs.cities?.length) {
+      throw new ValidationError(
+        'Geographic targeting must specify at least one of: countries, regions, or cities.'
+      );
+    }
+
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -127,6 +143,7 @@ export class MetaAdSetHandler {
           [MetaAdSetSDK.Fields.status]: params.status || 'PAUSED',
           [MetaAdSetSDK.Fields.optimization_goal]: params.optimizationGoal,
           [MetaAdSetSDK.Fields.billing_event]: params.billingEvent,
+          [MetaAdSetSDK.Fields.bid_strategy]: params.bidStrategy,
           [MetaAdSetSDK.Fields.bid_amount]: params.bidAmount,
           [MetaAdSetSDK.Fields.daily_budget]: params.dailyBudget,
           [MetaAdSetSDK.Fields.lifetime_budget]: params.lifetimeBudget,
@@ -135,6 +152,7 @@ export class MetaAdSetHandler {
           [MetaAdSetSDK.Fields.targeting]: params.targeting,
           [MetaAdSetSDK.Fields.promoted_object]: params.promotedObject,
           [MetaAdSetSDK.Fields.attribution_spec]: params.attributionSpec,
+          is_sac_cfca_terms_certified: params.isSacCfcaTermsCertified,
         };
 
         removeUndefinedProperties(adSetData);

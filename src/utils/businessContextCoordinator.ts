@@ -13,7 +13,7 @@ import { logger } from './logger.js';
  * providing a unified interface for handling business-managed ad accounts.
  * It implements multiple fallback strategies to ensure robust business context resolution.
  */
-export class BusinessContextCoordinator {
+export namespace BusinessContextCoordinator {
   /**
    * Ensures business context is available for a set of ad accounts.
    * This method is designed to be called before any operation that might require business context.
@@ -22,7 +22,7 @@ export class BusinessContextCoordinator {
    * @param accessToken - Meta access token for API calls
    * @param adAccountIds - Array of ad account IDs to ensure business context for
    */
-  static async ensureBusinessContext(
+  export async function ensureBusinessContext(
     userId: string,
     accessToken: string,
     adAccountIds: string[]
@@ -85,7 +85,7 @@ export class BusinessContextCoordinator {
    * @param currentUserId - The Meta user ID
    * @returns Promise that resolves with recovered permissions or null if recovery failed
    */
-  static async recoverFromBusinessContextFailure(
+  export async function recoverFromBusinessContextFailure(
     userId: string,
     accessToken: string,
     adAccountId: string,
@@ -150,7 +150,7 @@ export class BusinessContextCoordinator {
    * @param accessToken - Meta access token for API calls
    * @returns Summary of business context health
    */
-  static async performBusinessContextHealthCheck(
+  export async function performBusinessContextHealthCheck(
     userId: string,
     _accessToken: string
   ): Promise<{

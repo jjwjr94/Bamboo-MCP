@@ -29,7 +29,9 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
       .default(['US'])
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
+      .describe(
+        'Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'
+      ),
     limit: z
       .number()
       .int()
@@ -56,7 +58,9 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
       .default(['US'])
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
+      .describe(
+        'Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'
+      ),
     limit: z
       .number()
       .int()
@@ -86,7 +90,9 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
       .default(['US'])
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
+      .describe(
+        'Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'
+      ),
     limit: z
       .number()
       .int()
@@ -117,7 +123,9 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       .min(1, 'At least one country must be specified')
       .max(50, 'Maximum 50 countries allowed')
       .default(['US'])
-      .describe('Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'),
+      .describe(
+        'Countries where ads were delivered (two-letter ISO codes, e.g., ["US", "GB"]). Defaults to ["US"] if omitted.'
+      ),
     includeRegionalData: z
       .boolean()
       .optional()
