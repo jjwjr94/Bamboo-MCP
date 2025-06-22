@@ -73,7 +73,12 @@ const envSchema = z.object({
   META_UPLOAD_CHUNK_SIZE: z.string().transform(Number).default('4194304'),
 
   // MCP Configuration
-  MCP_REQUEST_TIMEOUT: z.string().transform(Number).default('30000'),
+  // The total time (in milliseconds) allowed for an entire MCP tool request to complete.
+  // This must be long enough to accommodate complex operations involving multiple
+  // sequential API calls, such as pagination over large datasets or batch processing.
+  // Set to 60 seconds to provide a safe buffer for tools like get_ad_accounts,
+  // get_ad_insights, and other operations that may require multiple API round-trips.
+  MCP_REQUEST_TIMEOUT: z.string().transform(Number).default('60000'),
 
   // Circuit Breaker & Retry Configuration
   CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.string().transform(Number).default('5'),

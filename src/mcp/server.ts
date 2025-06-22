@@ -10,12 +10,15 @@ import { ToolRegistry } from './registries/toolRegistry.js';
 
 export class BambooMCPServer {
   private server: McpServer;
+  private isShutdown = false;
+  private readonly requestId: string | undefined;
 
   /**
    * Creates a new, lightweight BambooMCPServer instance for a single request.
    * All expensive resources are passed in via the CoreServices singleton.
    */
-  constructor(coreServices: CoreServices) {
+  constructor(coreServices: CoreServices, requestId?: string) {
+    this.requestId = requestId;
     const promptCache = coreServices.promptCache;
     const systemPrompt = promptCache.getSystemPromptContent();
     const bestPractices = promptCache.getBestPracticesPromptContent();
@@ -51,7 +54,7 @@ Use this context to provide expert guidance on Meta advertising operations, camp
     resourceRegistry.register();
     toolRegistry.register();
 
-    logger.debug('Per-request BambooMCPServer instance created.');
+    logger.debug('Per-request BambooMCPServer instance created.', { requestId: this.requestId });
   }
 
   // Keep the original create method for backward compatibility (stdio mode)
@@ -65,12 +68,34 @@ Use this context to provide expert guidance on Meta advertising operations, camp
   }
 
   /**
-   * Gracefully shuts down the per-request MCP server instance.
+   * Gracefully and idempotently shuts down the per-request MCP server instance.
+   * This method can be called multiple times without causing errors.
    */
   public async shutdown(): Promise<void> {
-    logger.debug('Shutting down per-request Bamboo MCP Server...');
-    await this.server.close();
-    logger.debug('Per-request Bamboo MCP Server shutdown complete.');
+    if (this.isShutdown) {
+      logger.debug('Shutdown already initiated for this BambooMCPServer instance. Skipping.', {
+        requestId: this.requestId,
+      });
+      return;
+    }
+
+    logger.debug('Shutting down per-request Bamboo MCP Server...', { requestId: this.requestId });
+    this.isShutdown = true; // Set flag immediately to ensure idempotency
+
+    try {
+      await this.server.close();
+      logger.debug('Per-request Bamboo MCP Server shutdown complete.', {
+        requestId: this.requestId,
+      });
+    } catch (error) {
+      logger.error('Error during per-request Bamboo MCP Server shutdown.', {
+        requestId: this.requestId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Do not re-throw the error, allowing graceful shutdown of other components
+      // to continue even if one instance fails to close cleanly.
+    }
   }
 
   public async runStdio() {

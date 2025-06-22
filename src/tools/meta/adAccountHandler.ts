@@ -7,14 +7,21 @@ import { MetaAdAccountResponseSchema } from '../../generated/schemas.js';
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { MetaAdAccountAssignedUsersResponse } from '../../types/meta.js';
+import {
+  discoverAndCacheBusinessContext,
+  getBusinessIdForAdAccount,
+} from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
 import { TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import {
+  classifyMetaPermissionError,
   createPermissionsFetchRequest,
   executeBatchRequests,
+  validateBusinessContextForBatch,
 } from '../../utils/metaBatchHelper.js';
 import type { BatchResponse } from '../../utils/metaBatchHelper.js';
+import { MetaApiService } from './ApiService.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 
@@ -30,11 +37,37 @@ export class MetaAdAccountHandler {
     const currency = typeof acc.currency === 'string' ? acc.currency : 'USD';
     const timezoneName = typeof acc.timezone_name === 'string' ? acc.timezone_name : 'UTC';
 
-    // Handle business object which might be complex
-    let businessId: string | undefined;
+    // ⚠️  CRITICAL: Business ID Extraction and Semantics
+    //
+    // This business ID determination is ESSENTIAL for Meta API compliance.
+    // The returned value determines how we call Meta's assigned_users endpoint:
+    //
+    // - `string` (business ID): This account is managed by a Business Manager
+    //   → We MUST include business parameter in API calls
+    //   → Meta API will reject calls without business parameter (Error 100)
+    //
+    // - `null`: This is a confirmed NON-business account (personal/individual)
+    //   → We MUST NOT include business parameter in API calls
+    //   → Including business parameter may cause permission errors
+    //
+    // - `undefined`: Business context is unknown and needs discovery
+    //   → Triggers proactive business context discovery
+    //   → Should not persist - gets resolved to string or null
+    //
+    // ⚠️  DO NOT change these semantics without updating:
+    // - createPermissionsFetchRequest() in metaBatchHelper.ts
+    // - validateBusinessContextForBatch() logic
+    // - All business context resolution functions
+    let businessId: string | null | undefined;
     if (acc.business && typeof acc.business === 'object' && 'id' in acc.business) {
+      // Business object exists with ID → Business-managed account
       businessId =
         typeof acc.business.id === 'string' ? acc.business.id : String(acc.business.id ?? '');
+    } else {
+      // Business field missing/null → Need to determine if non-business or unknown
+      // If business field is explicitly null/false, this is a non-business account
+      // If business field is missing, business context is unknown
+      businessId = acc.business === null ? null : undefined;
     }
 
     return {
@@ -43,7 +76,7 @@ export class MetaAdAccountHandler {
       status: accountStatus,
       currency,
       timezone: timezoneName,
-      businessId,
+      businessId, // ⚠️  CRITICAL: This value determines Meta API call behavior
     };
   }
 
@@ -62,9 +95,9 @@ export class MetaAdAccountHandler {
     };
 
     if (response?.body) {
-      const parsedBody = this.parseJson<{ error?: { code?: number; error_subcode?: number; type?: string; message?: string } }>(
-        response.body
-      );
+      const parsedBody = this.parseJson<{
+        error?: { code?: number; error_subcode?: number; type?: string; message?: string };
+      }>(response.body);
       if (parsedBody?.error) {
         errorDetails.metaErrorCode = parsedBody.error.code;
         errorDetails.metaErrorSubcode = parsedBody.error.error_subcode;
@@ -108,7 +141,8 @@ export class MetaAdAccountHandler {
     logger.warn('User not found in batch permissions response or no tasks assigned', {
       adAccountId,
       metaUserId,
-      availableUsers: permissionData.data?.map((u) => ({ id: u.id, taskCount: u.tasks?.length ?? 0 })) ?? [],
+      availableUsers:
+        permissionData.data?.map((u) => ({ id: u.id, taskCount: u.tasks?.length ?? 0 })) ?? [],
       totalUsersInResponse: permissionData.data?.length ?? 0,
     });
 
@@ -138,6 +172,51 @@ export class MetaAdAccountHandler {
       ...accountData,
       permissions,
     };
+  }
+
+  /**
+   * Handles business parameter errors with intelligent retry using individual API calls
+   * This method is called when batch requests fail due to missing business parameters
+   *
+   * @param adAccountId - Ad account ID that failed
+   * @param accessToken - Meta access token
+   * @param userId - Local user ID
+   * @param metaUserId - Meta user ID
+   * @returns Promise resolving to permissions array
+   */
+  private async handleBusinessParameterError(
+    adAccountId: string,
+    accessToken: string,
+    userId: string,
+    metaUserId: string
+  ): Promise<string[]> {
+    logger.warn('Retrying permission fetch with business context discovery', {
+      adAccountId,
+      userId,
+      strategy: 'individual_api_call',
+    });
+
+    try {
+      // Force business context rediscovery
+      await discoverAndCacheBusinessContext(userId, accessToken, [adAccountId]);
+
+      // Retry with fresh context using the more robust individual API service
+      return await MetaApiService.fetchAdAccountPermissions(
+        adAccountId,
+        accessToken,
+        metaUserId,
+        userId,
+        undefined // Force fresh lookup
+      );
+    } catch (error) {
+      logger.error('Business parameter error recovery failed', {
+        adAccountId,
+        userId,
+        metaUserId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return ['UNKNOWN'];
+    }
   }
 
   async getAdAccounts(authPayload: JWTPayload, params: Record<string, unknown> = {}) {
@@ -240,15 +319,47 @@ export class MetaAdAccountHandler {
           // (within this transaction), we can process all accounts with a single batch request.
           // This eliminates the N+1 query problem and dramatically improves performance.
 
-          // 1. Create a batch request for each account's permissions.
+          // 2a. Pre-validate business context for batch readiness
+          const businessValidation = validateBusinessContextForBatch(extractedAccounts);
+
+          // If some accounts need business discovery, resolve them first
+          if (!businessValidation.isReady && businessValidation.needsDiscovery.length > 0) {
+            logger.info('Discovering business context for accounts with unknown context', {
+              accountsNeedingDiscovery: businessValidation.needsDiscovery,
+            });
+
+            // Force business context discovery for unknown accounts
+            await discoverAndCacheBusinessContext(
+              authPayload.userId,
+              accessToken,
+              businessValidation.needsDiscovery
+            );
+
+            // Refresh business context from database after discovery
+            for (const account of extractedAccounts) {
+              if (account.businessId === undefined) {
+                const resolvedBusinessId = await getBusinessIdForAdAccount(
+                  authPayload.userId,
+                  account.id
+                );
+                account.businessId = resolvedBusinessId;
+                logger.debug('Updated business context after discovery', {
+                  adAccountId: account.id,
+                  businessId: resolvedBusinessId,
+                });
+              }
+            }
+          }
+
+          // 2b. Create a batch request for each account's permissions.
           const permissionRequests = extractedAccounts.map((account) =>
-            createPermissionsFetchRequest(account.id, account.businessId || undefined)
+            createPermissionsFetchRequest(account.id, account.businessId)
           );
 
-          // 2. Execute the batch request to fetch all permissions in one API call.
+          // 2c. Execute the batch request to fetch all permissions in one API call.
           const batchResponses = await executeBatchRequests(permissionRequests, accessToken);
 
-          // 3. Create a lookup map for efficient response processing.
+          // 2d. Create a lookup map for efficient response processing.
           const responseMap = new Map(
             batchResponses.map((res) => [
               res.id.replace('permissions_', ''), // Key by ad account ID
@@ -256,16 +367,65 @@ export class MetaAdAccountHandler {
             ])
           );
 
-          // 4. Process each account (ensuring all accounts are included even if permission fetch failed).
-          const finalAccountUpdatePromises = extractedAccounts.map((accountData) =>
-            this.handleAccountPermissionUpdate(
+          // 2e. Process each account with enhanced error handling for business parameter issues
+          const finalAccountUpdatePromises = extractedAccounts.map(async (accountData) => {
+            const response = responseMap.get(accountData.id);
+
+            // Check if this specific account had a business parameter error
+            if (response && response.code === 400) {
+              try {
+                const errorBody = this.parseJson<{ error?: { code?: number; message?: string } }>(
+                  response.body || '{}'
+                );
+                const errorClassification = classifyMetaPermissionError(errorBody?.error);
+
+                if (errorClassification === 'business_required') {
+                  logger.warn('Business parameter required error detected, attempting recovery', {
+                    adAccountId: accountData.id,
+                    userId: authPayload.userId,
+                  });
+
+                  // Use individual API call with enhanced business context resolution
+                  const recoveredPermissions = await this.handleBusinessParameterError(
+                    accountData.id,
+                    accessToken,
+                    authPayload.userId,
+                    metaUserId
+                  );
+
+                  // Update the account with recovered permissions
+                  await tx
+                    .update(adAccounts)
+                    .set({ permissions: recoveredPermissions })
+                    .where(
+                      and(
+                        eq(adAccounts.id, accountData.id),
+                        eq(adAccounts.userId, authPayload.userId)
+                      )
+                    );
+
+                  return {
+                    ...accountData,
+                    permissions: recoveredPermissions,
+                  };
+                }
+              } catch (error) {
+                logger.error('Error processing business parameter recovery', {
+                  adAccountId: accountData.id,
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                });
+              }
+            }
+
+            // Fall back to standard processing for successful responses or other errors
+            return this.handleAccountPermissionUpdate(
               tx,
               accountData,
-              responseMap.get(accountData.id),
+              response,
               metaUserId,
               authPayload.userId
-            )
-          );
+            );
+          });
 
           // Await all parallel database operations to complete using Promise.allSettled for resilience
           const permissionUpdateResults = await Promise.allSettled(finalAccountUpdatePromises);

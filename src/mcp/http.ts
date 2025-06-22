@@ -10,7 +10,20 @@ import { logger } from '../utils/logger.js';
 import type { CoreServices } from './coreServices.js';
 import { BambooMCPServer } from './server.js';
 
-// Removed createMCPServerInstance function - using singleton pattern instead
+/**
+ * MCP HTTP Transport Design Notes:
+ *
+ * This transport implements a per-request server instance model (`BambooMCPServer`).
+ * - A new `BambooMCPServer` is created for each incoming MCP POST request.
+ * - Each instance is automatically cleaned up when the connection closes.
+ * - This approach provides maximum request isolation, preventing state leakage and
+ *   simplifying resource management, which resolves potential race conditions.
+ * - The trade-off is performance: creating server and registry instances for every
+ *   request has higher overhead than a shared-instance model. This is mitigated by
+ *   the `CoreServices` singleton, which manages expensive, shared resources.
+ * - This design is considered optimal for stability and correctness but should be
+ *   monitored for performance under high-load production environments.
+ */
 
 interface JsonRpcRequestBody {
   id?: string | number | null;
@@ -19,26 +32,40 @@ interface JsonRpcRequestBody {
 }
 
 function setupTransportCleanup(
-  transport: StreamableHTTPServerTransport,
-  reply: FastifyReply
+  reply: FastifyReply,
+  bambooServer: BambooMCPServer,
+  requestId: string
 ): void {
-  const cleanup = () => {
-    logger.debug('Cleaning up MCP resources');
-    transport.close();
+  const cleanup = async () => {
+    logger.debug(`Cleaning up MCP resources for request: ${requestId}`);
+    try {
+      // Simple timeout protection for cleanup
+      await pTimeout(bambooServer.shutdown(), {
+        milliseconds: 5000, // 5-second timeout for cleanup
+        message: `Cleanup timed out for request ${requestId}`,
+      });
+      logger.debug(`Cleanup complete for request: ${requestId}`);
+    } catch (error) {
+      logger.error(`Error during server shutdown for request ${requestId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   };
 
-  // Handle successful response completion
-  reply.raw.on('finish', () => {
-    logger.debug('MCP response successfully completed');
+  // The 'close' event handles both successful completion and client disconnection
+  reply.raw.on('close', () => {
+    logger.debug(`Request stream closed for request: ${requestId}, ensuring cleanup`);
+    cleanup().catch((error) =>
+      logger.error(`Error during 'close' cleanup for request ${requestId}`, { error })
+    );
   });
 
-  // Handle connection close (client disconnect, network error, or after finish)
-  reply.raw.on('close', cleanup);
-
-  // Handle stream errors (must be handled to prevent process crashes)
+  // Handle stream errors, which might not always trigger 'close'
   reply.raw.on('error', (error) => {
-    logger.error('Request error, cleaning up MCP resources', { error });
-    cleanup();
+    logger.error(`Request stream error for request ${requestId}, forcing cleanup`, { error });
+    cleanup().catch((cleanupError) =>
+      logger.error(`Error during 'error' cleanup for request ${requestId}`, { cleanupError })
+    );
   });
 }
 
@@ -147,13 +174,15 @@ async function handleMCPRequest(
     enableJsonResponse: true,
   });
 
-  setupTransportCleanup(transport, reply);
+  // Pass the server instance and request ID to the cleanup handler
+  setupTransportCleanup(reply, bambooServer, request.id);
 
   try {
     await mcpServer.connect(transport);
     logger.debug('Created new MCP transport for request', {
       method,
       userId: authPayload.userId,
+      requestId: request.id,
     });
 
     const authInfo: AuthInfo = {
@@ -178,6 +207,7 @@ async function handleMCPRequest(
       method,
       userId: authPayload.userId,
       error: error instanceof Error ? error.message : 'Unknown error',
+      requestId: request.id,
     });
     throw error;
   }
@@ -195,7 +225,6 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
       const startTime = Date.now();
       const { id = null, method = 'unknown' } = request.body ?? {};
       let authPayload: JWTPayload | undefined;
-      let bambooServer: BambooMCPServer | undefined;
 
       try {
         const token = extractTokenFromHeader(request.headers.authorization);
@@ -209,7 +238,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
         });
 
         // Create a new server instance for this request
-        bambooServer = new BambooMCPServer(coreServices);
+        const bambooServer = new BambooMCPServer(coreServices, request.id);
 
         await handleMCPRequest(request, reply, token, authPayload, method, bambooServer);
 
@@ -225,12 +254,10 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
           authPayload,
           startTime,
         });
-      } finally {
-        // Ensure shutdown is called for the per-request instance
-        if (bambooServer) {
-          await bambooServer.shutdown();
-        }
+        // The 'close' event on reply.raw will trigger the cleanup, so no
+        // manual cleanup is needed here for the bambooServer instance.
       }
+      // The 'finally' block that called bambooServer.shutdown() is intentionally removed.
     }
   );
 

@@ -186,22 +186,166 @@ export function createBusinessContextDiscoveryRequest(adAccountId: string): Batc
 /**
  * Creates a permissions fetch batch request
  *
+ * ⚠️  CRITICAL: Business ID Semantics - DO NOT MODIFY WITHOUT UNDERSTANDING
+ *
+ * The businessId parameter has specific semantics that are essential for Meta API compliance:
+ *
+ * - `string`: Business-managed ad account with this specific Business Manager ID
+ *   → Meta API REQUIRES the business parameter for these accounts
+ *   → Example: "123456789" means account is managed by Business Manager 123456789
+ *
+ * - `null`: Confirmed NON-business account (individual/personal ad account)
+ *   → Meta API MUST NOT receive business parameter for these accounts
+ *   → Example: Personal Facebook user's direct ad account
+ *
+ * - `undefined`: Unknown business context (needs discovery)
+ *   → Should trigger business context discovery before batch execution
+ *   → Example: Newly discovered account that hasn't been categorized yet
+ *
+ * - `""` (empty string): Invalid/corrupted business ID
+ *   → Treated as invalid and excluded from API call
+ *   → Should not occur in normal operation
+ *
+ * ⚠️  BREAKING CHANGE RISK:
+ * - Changing null to undefined will cause failed API calls for non-business accounts
+ * - Changing undefined to null will skip discovery and cause business parameter errors
+ * - Always preserve the exact semantics when refactoring
+ *
  * @param adAccountId - Ad account ID to fetch permissions for
- * @param businessId - Optional business ID for business-managed accounts
+ * @param businessId - Business ID with specific null/undefined semantics (see above)
  * @returns Batch request for permissions fetch
  */
 export function createPermissionsFetchRequest(
   adAccountId: string,
-  businessId?: string
+  businessId?: string | null
 ): BatchRequest {
   const params = new URLSearchParams({ fields: 'id,tasks' });
-  if (businessId) {
+
+  // CRITICAL: Business parameter logic based on Meta API requirements
+  // This logic must match the semantics documented above
+  if (businessId !== null && businessId !== undefined && businessId !== '') {
     params.set('business', businessId);
+    logger.debug('Added business parameter to permissions request', {
+      adAccountId,
+      businessId,
+      reasoning: 'Business-managed account requires business parameter',
+    });
+  } else {
+    logger.debug('No business parameter added to permissions request', {
+      adAccountId,
+      businessId,
+      reason:
+        businessId === null
+          ? 'confirmed non-business account (business parameter forbidden)'
+          : businessId === undefined
+            ? 'unknown business context (discovery needed)'
+            : 'empty/invalid business ID',
+    });
   }
 
   return {
     method: 'GET',
     relativeUrl: `${adAccountId}/assigned_users?${params.toString()}`,
     id: `permissions_${adAccountId}`,
+  };
+}
+
+/**
+ * Interface for Meta API error objects
+ */
+interface MetaApiErrorObject {
+  code?: number;
+  message?: string;
+  type?: string;
+  error_subcode?: number;
+}
+
+/**
+ * Classifies Meta API permission errors to determine appropriate recovery strategy
+ *
+ * @param error - Error object from Meta API response
+ * @returns Error classification for targeted handling
+ */
+export function classifyMetaPermissionError(
+  error: MetaApiErrorObject | null | undefined
+): 'business_required' | 'permission_denied' | 'user_not_found' | 'unknown' {
+  if (!error) return 'unknown';
+
+  if (error.code === 100 && error.message?.includes('business is required')) {
+    return 'business_required';
+  }
+  if (error.code && error.code >= 200 && error.code <= 299) {
+    return 'permission_denied';
+  }
+  if (
+    error.code === 100 &&
+    (error.message?.includes('not found') || error.message?.includes('no tasks'))
+  ) {
+    return 'user_not_found';
+  }
+  return 'unknown';
+}
+
+/**
+ * Validates business context completeness before executing batch requests
+ *
+ * ⚠️  CRITICAL: Business ID Validation Semantics
+ *
+ * This function analyzes business context readiness based on our semantic model:
+ * - businessManagedCount: Accounts with string business IDs (require business parameter)
+ * - nonBusinessCount: Accounts with null business ID (forbid business parameter)
+ * - unknownContextCount: Accounts with undefined business ID (need discovery)
+ *
+ * The batch is "ready" ONLY when unknownContextCount === 0, meaning all accounts
+ * have been categorized as either business-managed (string) or non-business (null).
+ *
+ * ⚠️  DO NOT modify the filtering logic without understanding these semantics.
+ *
+ * @param accounts - Array of account objects with business context
+ * @returns Validation summary with recommendations
+ */
+export function validateBusinessContextForBatch(
+  accounts: Array<{ id: string; businessId?: string | null }>
+): {
+  totalAccounts: number;
+  businessManagedCount: number;
+  unknownContextCount: number;
+  nonBusinessCount: number;
+  needsDiscovery: string[];
+  isReady: boolean;
+} {
+  const totalAccounts = accounts.length;
+
+  // ⚠️  CRITICAL: These filters must match the semantics documented above
+  const businessManagedCount = accounts.filter(
+    (acc) => acc.businessId && acc.businessId !== ''
+  ).length; // string business IDs only
+
+  const unknownContextCount = accounts.filter((acc) => acc.businessId === undefined).length; // undefined = unknown
+
+  const nonBusinessCount = accounts.filter((acc) => acc.businessId === null).length; // null = confirmed non-business
+
+  const needsDiscovery = accounts
+    .filter((acc) => acc.businessId === undefined) // Only undefined accounts need discovery
+    .map((acc) => acc.id);
+
+  const isReady = unknownContextCount === 0; // All accounts have known business context (string or null)
+
+  logger.info('Business context validation summary', {
+    totalAccounts,
+    businessManagedCount,
+    unknownContextCount,
+    nonBusinessCount,
+    needsDiscovery: needsDiscovery.length > 0 ? needsDiscovery : 'none',
+    isReady,
+  });
+
+  return {
+    totalAccounts,
+    businessManagedCount,
+    unknownContextCount,
+    nonBusinessCount,
+    needsDiscovery,
+    isReady,
   };
 }
