@@ -41,9 +41,12 @@ export class MetaAdSetHandler {
           MetaAdSetSDK.Fields.id,
           MetaAdSetSDK.Fields.name,
           MetaAdSetSDK.Fields.status,
+          MetaAdSetSDK.Fields.effective_status,
           MetaAdSetSDK.Fields.targeting,
           MetaAdSetSDK.Fields.optimization_goal,
+          MetaAdSetSDK.Fields.billing_event,
           MetaAdSetSDK.Fields.bid_strategy,
+          MetaAdSetSDK.Fields.attribution_spec,
           MetaAdSetSDK.Fields.daily_budget,
           MetaAdSetSDK.Fields.lifetime_budget,
           MetaAdSetSDK.Fields.start_time,
@@ -131,6 +134,31 @@ export class MetaAdSetHandler {
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
+
+        // Fetch campaign to check for special ad categories
+        const campaign = await new MetaCampaignSDK(params.campaignId, {}, null, api).read([
+          'special_ad_categories',
+        ]);
+        const isSpecialAdCategory = campaign.special_ad_categories?.some(
+          (cat: string) => cat !== 'NONE'
+        );
+
+        // Check for California targeting
+        const targetsCalifornia = params.targeting.geoLocations?.regions?.some(
+          (r) => r.key === '3847' // Meta's key for California
+        );
+
+        // Enforce SAC-CFCA compliance rule
+        if (
+          isSpecialAdCategory &&
+          params.optimizationGoal === 'OFFSITE_CONVERSIONS' &&
+          targetsCalifornia &&
+          params.isSacCfcaTermsCertified !== true
+        ) {
+          throw new ValidationError(
+            "For Special Ad Category campaigns with a 'OFFSITE_CONVERSIONS' goal targeting California, 'isSacCfcaTermsCertified' must be set to true."
+          );
+        }
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,

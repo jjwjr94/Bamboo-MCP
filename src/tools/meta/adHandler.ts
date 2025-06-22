@@ -48,6 +48,8 @@ export class MetaAdHandler {
           MetaAdSDK.Fields.creative,
           MetaAdSDK.Fields.adset_id,
           MetaAdSDK.Fields.campaign_id,
+          MetaAdSDK.Fields.ad_review_feedback,
+          MetaAdSDK.Fields.issues_info,
           MetaAdSDK.Fields.created_time,
           MetaAdSDK.Fields.updated_time,
         ];
@@ -125,6 +127,7 @@ export class MetaAdHandler {
           [MetaAdSDK.Fields.adset_id]: params.adsetId,
           [MetaAdSDK.Fields.creative]: { creative_id: params.creativeId },
           [MetaAdSDK.Fields.status]: params.status,
+          creative_features_spec: params.creative_features_spec,
         };
 
         removeUndefinedProperties(adData);

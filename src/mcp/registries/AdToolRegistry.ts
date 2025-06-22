@@ -120,6 +120,22 @@ export class AdToolRegistry implements IToolRegistry {
           name: z.string().describe('The name of the ad.'),
           creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
           status: AdStatusSchema.default('PAUSED').describe('The status of the ad.'),
+          creative_features_spec: z
+            .object({
+              standard_enhancements: z
+                .object({
+                  enroll_status: z
+                    .enum(['OPT_IN', 'OPT_OUT'])
+                    .optional()
+                    .describe('Enrollment status for standard enhancements.'),
+                })
+                .optional()
+                .describe('Standard enhancement settings for Advantage+ Creative features.'),
+            })
+            .optional()
+            .describe(
+              'Specification for Advantage+ creative features. Required in Meta API v22 if using any Advantage+ features. Individual features must be explicitly opted into.'
+            ),
         },
         successDataSchema,
       },

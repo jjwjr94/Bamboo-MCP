@@ -46,6 +46,7 @@ export interface CreateCampaignRequest {
   name: string;
   objective: CampaignObjective;
   status: CampaignStatus;
+  buying_type?: string; // Required by Meta API v22, defaults to 'AUCTION'
   adAccountId?: string; // Optional to support intelligent account selection
   dailyBudget?: number; // in cents
   lifetimeBudget?: number; // in cents
@@ -102,6 +103,11 @@ export interface CreateAdRequest {
   name: string;
   creativeId: string;
   status?: CampaignStatus;
+  creative_features_spec?: {
+    standard_enhancements?: {
+      enroll_status?: 'OPT_IN' | 'OPT_OUT';
+    };
+  };
 }
 
 export interface CreateAdCreativeRequest {

@@ -110,19 +110,27 @@ export class CampaignToolRegistry implements IToolRegistry {
             ),
           name: z.string().describe('The name of the campaign.'),
           objective: CampaignObjectiveSchema.describe('The campaign objective.'),
+          buying_type: z
+            .string()
+            .default('AUCTION')
+            .describe("The buying type for the campaign. Defaults to 'AUCTION'."),
           status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
           dailyBudget: z
             .number()
             .int()
             .positive()
             .optional()
-            .describe('Daily budget in cents (e.g., 1000 = $10.00).'),
+            .describe(
+              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget.'
+            ),
           lifetimeBudget: z
             .number()
             .int()
             .positive()
             .optional()
-            .describe('Lifetime budget in cents (e.g., 10000 = $100.00).'),
+            .describe(
+              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget.'
+            ),
           specialAdCategories: z
             .array(CampaignSpecialAdCategoriesSchema)
             .default(['NONE'])

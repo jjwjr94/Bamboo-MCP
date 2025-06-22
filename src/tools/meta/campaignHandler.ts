@@ -45,6 +45,7 @@ export class MetaCampaignHandler {
           MetaCampaignSDK.Fields.id,
           MetaCampaignSDK.Fields.name,
           MetaCampaignSDK.Fields.status,
+          MetaCampaignSDK.Fields.effective_status,
           MetaCampaignSDK.Fields.objective,
           MetaCampaignSDK.Fields.created_time,
           MetaCampaignSDK.Fields.updated_time,
@@ -55,6 +56,7 @@ export class MetaCampaignHandler {
           MetaCampaignSDK.Fields.budget_remaining,
           MetaCampaignSDK.Fields.buying_type,
           MetaCampaignSDK.Fields.bid_strategy,
+          MetaCampaignSDK.Fields.special_ad_categories,
         ];
 
         const campaignsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getCampaigns(
@@ -106,6 +108,25 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
+    // Validate budget requirement: either dailyBudget OR lifetimeBudget must be provided
+    if (!params.dailyBudget && !params.lifetimeBudget) {
+      throw new ValidationError('A campaign must have either a dailyBudget or a lifetimeBudget.');
+    }
+    if (params.dailyBudget && params.lifetimeBudget) {
+      throw new ValidationError('Provide either dailyBudget or lifetimeBudget, but not both.');
+    }
+
+    // Validate Special Ad Category requirements
+    const hasSpecialCategory = params.specialAdCategories.some((cat) => cat !== 'NONE');
+    if (
+      hasSpecialCategory &&
+      (!params.specialAdCategoryCountry || params.specialAdCategoryCountry.length === 0)
+    ) {
+      throw new ValidationError(
+        "The 'specialAdCategoryCountry' parameter is required when 'specialAdCategories' contains values other than 'NONE'."
+      );
+    }
+
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -118,6 +139,7 @@ export class MetaCampaignHandler {
         const campaignData: Record<string, unknown> = {
           [MetaCampaignSDK.Fields.name]: params.name,
           [MetaCampaignSDK.Fields.objective]: params.objective,
+          [MetaCampaignSDK.Fields.buying_type]: params.buying_type || 'AUCTION',
           [MetaCampaignSDK.Fields.status]: params.status || 'PAUSED',
           [MetaCampaignSDK.Fields.daily_budget]: params.dailyBudget,
           [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,

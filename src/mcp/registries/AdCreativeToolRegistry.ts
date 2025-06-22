@@ -153,7 +153,12 @@ export class AdCreativeToolRegistry implements IToolRegistry {
                 .optional()
                 .describe('Video data for video-based ads.'),
             })
-            .describe('The specification for the creative content.'),
+            .refine((spec) => spec.linkData || spec.videoData, {
+              message: 'objectStorySpec must contain either linkData or videoData.',
+            })
+            .describe(
+              'The specification for the creative content. Must include either linkData for link ads or videoData for video ads.'
+            ),
         },
         successDataSchema,
       },

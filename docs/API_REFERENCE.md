@@ -98,10 +98,12 @@ Creates a new advertising campaign with full validation.
 - `adAccountId` (optional): Target ad account
 - `name` (required): Campaign name
 - `objective` (required): Campaign objective (CONVERSIONS, TRAFFIC, etc.)
+- `buying_type` (optional): The buying type for the campaign. Defaults to 'AUCTION'.
 - `status` (optional): Initial status (default: PAUSED)
-- `dailyBudget` (optional): Daily budget in cents
-- `lifetimeBudget` (optional): Lifetime budget in cents
-- `specialAdCategories` (optional): Special category compliance
+- `dailyBudget` (optional): Daily budget in cents. **Must provide either this or `lifetimeBudget`.**
+- `lifetimeBudget` (optional): Lifetime budget in cents. **Must provide either this or `dailyBudget`.**
+- `specialAdCategories` (optional): Special category compliance. Defaults to ['NONE']. If set to values other than 'NONE', `specialAdCategoryCountry` is required.
+- `specialAdCategoryCountry` (optional): Required when `specialAdCategories` contains values other than 'NONE'. Array of 2-letter ISO country codes.
 
 **Output:**
 ```json
@@ -207,6 +209,7 @@ Creates a new ad linking creative and ad set.
 - `adSetId` (required): Parent ad set
 - `creativeId` (required): Ad creative to use
 - `status` (optional): Initial status
+- `creative_features_spec` (optional): Specification for Advantage+ creative features. Required in Meta API v22 if using any Advantage+ features. Individual features must be explicitly opted into.
 
 ### update_ad
 
@@ -246,7 +249,7 @@ Creates new ad creative with flexible content options.
 **Input Parameters:**
 - `adAccountId` (optional): Target ad account
 - `name` (required): Creative name
-- `objectStorySpec` (required): Creative content specification
+- `objectStorySpec` (required): Creative content specification. Must include either linkData for link ads or videoData for video ads.
 
 ### update_ad_creative
 

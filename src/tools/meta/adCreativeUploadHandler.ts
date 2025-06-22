@@ -191,13 +191,24 @@ export class AdCreativeUploadHandler {
             formFields: {
               [fileParamName]: uploadRequest.filename,
               access_token: 'REDACTED', // For security
-              business: businessId ?? 'not_applicable',
+              ...(businessId ? { business: businessId } : {}),
             },
             // Log the Content-Type to verify the multipart boundary is set
             contentTypeHeader: formHeaders['content-type'],
             mimeType: fileData.mimetype,
             streamingApproach: 'direct_file_stream_via_FormData',
           });
+
+          fileData.file.on('error', (err) => {
+            logger.error('Stream error', { uploadId, userId, error: err });
+          });
+          fileData.file.on('end', () => {
+            logger.info('File stream ended', { uploadId, userId });
+          });
+
+          if (!fileData.file.readable) {
+            throw new Error('File stream is not readable — was it already consumed?');
+          }
 
           const response = await fetch(uploadUrl, {
             method: 'POST',
@@ -212,7 +223,7 @@ export class AdCreativeUploadHandler {
             let errorData: { error?: { message?: string } } | null = null;
             try {
               errorData = JSON.parse(responseText);
-            } catch (e) {
+            } catch (_e) {
               logger.warn('Meta API error response was not valid JSON', {
                 userId,
                 uploadId,
