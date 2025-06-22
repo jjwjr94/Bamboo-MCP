@@ -33,6 +33,8 @@ export class AdCreativeToolRegistry implements IToolRegistry {
       this.registerCreateAdCreative.bind(this),
       this.registerUpdateAdCreative.bind(this),
       this.registerDeleteAdCreative.bind(this),
+      this.registerRequestCreativeUpload.bind(this),
+      this.registerCheckUploadStatus.bind(this),
     ];
   }
 
@@ -237,6 +239,93 @@ export class AdCreativeToolRegistry implements IToolRegistry {
           const authPayload = extractAuthPayload(extra);
           // The handler validates raw API responses and sanitization is applied automatically
           return await this.toolsHandler.deleteAdCreative(authPayload, params);
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
+      }
+    );
+  }
+
+  private registerRequestCreativeUpload(): void {
+    const outputSchema = z.object({
+      type: z.literal('success'),
+      data: z.object({
+        uploadId: z.string().describe('The unique ID for this upload operation.'),
+        uploadUrl: z
+          .string()
+          .url()
+          .describe('The URL for the user to upload the creative asset file via web interface.'),
+      }),
+    });
+
+    this.server.registerTool(
+      'request_creative_upload',
+      {
+        title: 'Request Creative Asset Upload',
+        description:
+          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files. Asset type (image/video) is automatically determined from the uploaded file.',
+        inputSchema: {
+          adAccountId: z
+            .string()
+            .optional()
+            .describe(
+              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
+            ),
+          filename: z
+            .string()
+            .min(1, 'Filename is required')
+            .max(255, 'Filename too long')
+            .regex(
+              /^[^\/\\<>:"|?*]+$/,
+              'Filename cannot contain path separators or special system characters (/ \\ < > : " | ? *)'
+            )
+            .describe('The name of the file to be uploaded.'),
+        },
+        outputSchema: outputSchema.shape,
+      },
+      async (params, extra) => {
+        try {
+          const authPayload = extractAuthPayload(extra);
+          return await this.toolsHandler.requestCreativeUpload(authPayload, params);
+        } catch (error) {
+          return createMcpErrorResult(error);
+        }
+      }
+    );
+  }
+
+  private registerCheckUploadStatus(): void {
+    const outputSchema = z.object({
+      type: z.literal('success'),
+      data: z.object({
+        status: z
+          .enum(['pending', 'uploading', 'completed', 'failed'])
+          .describe('The current status of the upload.'),
+        metaAssetId: z
+          .string()
+          .optional()
+          .describe(
+            'The asset ID (hash for images, ID for videos) from Meta upon successful completion.'
+          ),
+        errorMessage: z.string().optional().describe('Details of the error if the upload failed.'),
+      }),
+    });
+
+    this.server.registerTool(
+      'check_upload_status',
+      {
+        title: 'Check Creative Asset Upload Status',
+        description:
+          'Checks the status of a file upload initiated by `request_creative_upload`. If completed, it returns the `metaAssetId` required to create an ad creative.',
+        inputSchema: {
+          uploadId: z.string().describe('The unique ID returned by `request_creative_upload`.'),
+        },
+        outputSchema: outputSchema.shape,
+      },
+      async (params, extra) => {
+        try {
+          const authPayload = extractAuthPayload(extra);
+          return await this.toolsHandler.checkUploadStatus(authPayload, params);
         } catch (error) {
           return createMcpErrorResult(error);
         }

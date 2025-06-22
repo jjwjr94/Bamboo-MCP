@@ -47,6 +47,37 @@ export class MetaAdAccountHandler {
     };
   }
 
+  private parseJson<T>(json: string): T | null {
+    try {
+      return JSON.parse(json) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  private logInvalidBatchResponse(response: BatchResponse | undefined, adAccountId: string) {
+    const errorDetails: Record<string, unknown> = {
+      adAccountId,
+      responseCode: response?.code,
+    };
+
+    if (response?.body) {
+      const parsedBody = this.parseJson<{ error?: { code?: number; error_subcode?: number; type?: string; message?: string } }>(
+        response.body
+      );
+      if (parsedBody?.error) {
+        errorDetails.metaErrorCode = parsedBody.error.code;
+        errorDetails.metaErrorSubcode = parsedBody.error.error_subcode;
+        errorDetails.metaErrorType = parsedBody.error.type;
+        errorDetails.metaErrorMessage = parsedBody.error.message;
+      } else {
+        errorDetails.rawErrorBody = response.body.substring(0, 500);
+      }
+    }
+
+    logger.error('Failed batch request for ad account permissions', errorDetails);
+  }
+
   private extractPermissionsFromBatchResponse(
     response: BatchResponse | undefined,
     metaUserId: string,
@@ -55,33 +86,33 @@ export class MetaAdAccountHandler {
     const defaultPermissions = ['UNKNOWN'];
 
     if (!response || response.code !== 200 || !response.body) {
-      logger.error('Failed batch request for ad account permissions', {
-        adAccountId,
-        responseCode: response?.code,
-      });
+      this.logInvalidBatchResponse(response, adAccountId);
       return defaultPermissions;
     }
 
-    try {
-      const permissionData = JSON.parse(response.body) as MetaAdAccountAssignedUsersResponse;
-      const userPermissions = permissionData.data?.find((user) => user.id === metaUserId);
-
-      if (userPermissions?.tasks && userPermissions.tasks.length > 0) {
-        return userPermissions.tasks;
-      }
-
-      logger.warn('User not found in batch permissions response or no tasks assigned', {
-        adAccountId,
-        metaUserId,
-      });
-      return defaultPermissions;
-    } catch (error) {
+    const permissionData = this.parseJson<MetaAdAccountAssignedUsersResponse>(response.body);
+    if (!permissionData) {
       logger.error('Failed to parse permissions from batch response', {
         adAccountId,
-        error: error instanceof Error ? error.message : String(error),
+        responseBodyPreview: response.body.substring(0, 200),
       });
       return defaultPermissions;
     }
+
+    const userPermissions = permissionData.data?.find((user) => user.id === metaUserId);
+
+    if (userPermissions?.tasks?.length) {
+      return userPermissions.tasks;
+    }
+
+    logger.warn('User not found in batch permissions response or no tasks assigned', {
+      adAccountId,
+      metaUserId,
+      availableUsers: permissionData.data?.map((u) => ({ id: u.id, taskCount: u.tasks?.length ?? 0 })) ?? [],
+      totalUsersInResponse: permissionData.data?.length ?? 0,
+    });
+
+    return defaultPermissions;
   }
 
   private async handleAccountPermissionUpdate(

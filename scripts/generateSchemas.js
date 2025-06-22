@@ -126,6 +126,83 @@ const manualConstants = [
   },
 ];
 
+// Manually defined fields for APIs not covered by the facebook-nodejs-business-sdk
+// These APIs require direct Graph API calls and manual schema definitions
+
+// Ads Archive API fields based on official Meta documentation
+// Source: https://developers.facebook.com/docs/graph-api/reference/ads_archive/
+// Validated against official API v23.0 documentation (2024-2025)
+const AdsArchiveFields = [
+  // Core fields (always available)
+  'id',
+  'ad_archive_id',
+  'ad_creation_time',
+  'ad_creative_body',
+  'ad_creative_link_caption',
+  'ad_creative_link_description',
+  'ad_creative_link_title',
+  'ad_delivery_start_time',
+  'ad_delivery_stop_time',
+  'ad_snapshot_url',
+  'country',
+  'currency',
+  'languages',
+  'page_id',
+  'page_name',
+  'publisher_platforms',
+  'search_terms',
+  'is_active',
+  // Political/Issue ads specific fields
+  'bylines',
+  'funding_entity',
+  'demographic_distribution',
+  'delivery_by_region',
+  'region_distribution',
+  'impressions',
+  'spend',
+  'spend_currency',
+  'potential_reach',
+  // EU-specific fields (for ads in EU)
+  'target_locations',
+  'target_gender',
+  'target_ages',
+  'eu_total_reach',
+  'beneficiary_payers',
+  'age_country_gender_reach_breakdown',
+];
+
+// Targeting Search API fields based on official Meta documentation
+// Source: https://developers.facebook.com/docs/marketing-api/targeting-search/
+// Covers adinterest, adgeolocation, and other targeting search types
+const TargetingSearchFields = [
+  // Common fields for all targeting search types
+  'id',
+  'name',
+  'type',
+  // Interest-specific fields (type=adinterest)
+  'audience_size',
+  'path',
+  'topic',
+  'description',
+  // Location-specific fields (type=adgeolocation)
+  'key',
+  'country_code',
+  'country_name',
+  'region_id',
+  'region',
+  'primary_city_id',
+  'primary_city',
+  'supports_region',
+  'supports_city',
+  'geo_hierarchy_level',
+  'geo_hierarchy_name',
+  // Additional fields for different location types
+  'is_worldwide',
+  'country_codes',
+  'subtext',
+  'coverage',
+];
+
 // Curated list of insight metrics to generate from AdsInsights.Fields
 // These are the most commonly used metrics for insights API
 const INSIGHT_METRICS = [
@@ -426,6 +503,18 @@ ${Object.values(PagePost.Fields)
   .join('\n')}
 }).passthrough();
 
+// Ads Archive API response schema - manually defined fields
+// Source: https://developers.facebook.com/docs/graph-api/reference/ads_archive/
+export const MetaAdsArchiveResponseSchema = z.object({
+${AdsArchiveFields.map((field) => `  ${field}: MetaFlexibleField,`).join('\n')}
+}).passthrough();
+
+// Targeting Search API response schema - manually defined fields  
+// Source: https://developers.facebook.com/docs/marketing-api/targeting-search/
+export const MetaTargetingSearchResponseSchema = z.object({
+${TargetingSearchFields.map((field) => `  ${field}: MetaFlexibleField,`).join('\n')}
+}).passthrough();
+
 ${
   hasBusinessFields
     ? `
@@ -503,6 +592,16 @@ export const PageListResponseSchema = z.object({
 
 export const PagePostListResponseSchema = z.object({
   posts: z.array(MetaPagePostResponseSchema),
+  paging: PagingSchema
+});
+
+export const AdsArchiveListResponseSchema = z.object({
+  data: z.array(MetaAdsArchiveResponseSchema),
+  paging: PagingSchema
+});
+
+export const TargetingSearchListResponseSchema = z.object({
+  data: z.array(MetaTargetingSearchResponseSchema),
   paging: PagingSchema
 });
 

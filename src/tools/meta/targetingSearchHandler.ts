@@ -1,5 +1,6 @@
 import { createMcpSuccessResult } from '../../mcp/responseHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
+import { env } from '../../utils/env.js';
 import { MetaApiError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
@@ -62,11 +63,15 @@ export class MetaTargetingSearchHandler {
     let nextUrl: string | undefined = initialUrl;
 
     while (nextUrl && allItems.length < limit) {
-      const response = await fetch(nextUrl);
+      const response = await fetch(nextUrl, {
+        signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+      });
 
       if (!response.ok) {
         try {
-          const errorBody = (await response.json()) as { error?: { message?: string; code?: number; error_subcode?: number } };
+          const errorBody = (await response.json()) as {
+            error?: { message?: string; code?: number; error_subcode?: number };
+          };
           const errorData = errorBody.error;
           throw new MetaApiError(
             errorData?.message || `Pagination request failed with status: ${response.status}`,
@@ -339,11 +344,15 @@ export class MetaTargetingSearchHandler {
           access_token: api.accessToken,
         });
 
-        const response = await fetch(`${searchUrl}?${searchParams}`);
+        const response = await fetch(`${searchUrl}?${searchParams}`, {
+          signal: AbortSignal.timeout(env.META_API_TIMEOUT),
+        });
 
         if (!response.ok) {
           try {
-            const errorBody = (await response.json()) as { error?: { message?: string; code?: number; error_subcode?: number } };
+            const errorBody = (await response.json()) as {
+              error?: { message?: string; code?: number; error_subcode?: number };
+            };
             const errorData = errorBody.error;
             throw new MetaApiError(
               errorData?.message || `Validation request failed with status: ${response.status}`,

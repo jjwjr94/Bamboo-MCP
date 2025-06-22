@@ -209,6 +209,53 @@ export const oauthRefreshTokens = pgTable(
   ]
 );
 
+// Table for tracking creative asset upload requests and their status
+export const creativeAssetUploads = pgTable(
+  'creative_asset_uploads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    adAccountId: text('ad_account_id').notNull(),
+    filename: text('filename').notNull(),
+    assetType: text('asset_type', { enum: ['image', 'video', 'pending'] }).notNull(),
+    status: text('status', { enum: ['pending', 'uploading', 'completed', 'failed'] })
+      .default('pending')
+      .notNull(),
+    metaAssetId: text('meta_asset_id'), // Meta's image hash or video ID
+    errorMessage: text('error_message'),
+    expiresAt: timestamp('expires_at', { withTimezone: true })
+      .default(sql`now() + interval '24 hours'`)
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('creative_asset_uploads_user_id_idx').on(table.userId),
+    index('creative_asset_uploads_status_idx').on(table.status),
+    index('creative_asset_uploads_created_at_idx').on(table.createdAt),
+
+    // RLS Policies - Users can only access their own uploads
+    pgPolicy('uploads_select_own', {
+      for: 'select',
+      to: appUser,
+      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+    }),
+    pgPolicy('uploads_insert_own', {
+      for: 'insert',
+      to: appUser,
+      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+    }),
+    pgPolicy('uploads_update_own', {
+      for: 'update',
+      to: appUser,
+      using: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+      withCheck: sql`${table.userId} = current_setting('app.current_user_id')::uuid`,
+    }),
+  ]
+);
+
 // Export types for type-safe queries
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -230,6 +277,9 @@ export type NewOAuthSession = typeof oauthSessions.$inferInsert;
 
 export type OAuthTempAuthCode = typeof oauthTempAuthCodes.$inferSelect;
 export type NewOAuthTempAuthCode = typeof oauthTempAuthCodes.$inferInsert;
+
+export type CreativeAssetUpload = typeof creativeAssetUploads.$inferSelect;
+export type NewCreativeAssetUpload = typeof creativeAssetUploads.$inferInsert;
 
 // JSONB field types for type safety
 export type UserAccountContext = {

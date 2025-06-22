@@ -127,6 +127,24 @@ export class MetaToolsHandler {
     return this.adCreativeHandler.deleteAdCreative(authPayload, params);
   }
 
+  async requestCreativeUpload(
+    authPayload: JWTPayload,
+    params: { adAccountId?: string; filename: string }
+  ) {
+    return this.adCreativeHandler.requestCreativeUpload(authPayload, params);
+  }
+
+  async checkUploadStatus(authPayload: JWTPayload, params: { uploadId: string }) {
+    return this.adCreativeHandler.checkUploadStatus(authPayload, params);
+  }
+
+  async handleCreativeAssetUpload(
+    uploadId: string,
+    fileData: import('@fastify/multipart').MultipartFile
+  ) {
+    return this.adCreativeHandler.handleCreativeAssetUpload(uploadId, fileData);
+  }
+
   // Ad methods - delegated to MetaAdHandler
   async getAds(
     authPayload: JWTPayload,

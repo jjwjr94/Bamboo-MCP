@@ -262,8 +262,7 @@ export class MetaAdsArchiveHandler {
           'funding_entity', // Political ads specific
           'bylines', // Political ads specific
           'demographic_distribution', // Enhanced transparency
-          'region_distribution', // Geographic transparency
-          'ad_type',
+          'delivery_by_region', // Geographic transparency
         ];
 
         const maxResults = Math.min(params.limit || 250, env.META_MAX_ADS_ARCHIVE_TO_FETCH);
@@ -417,7 +416,6 @@ export class MetaAdsArchiveHandler {
           'impressions',
           'spend',
           'currency',
-          'ad_type',
         ];
 
         // Add enhanced fields based on request parameters
@@ -426,7 +424,7 @@ export class MetaAdsArchiveHandler {
           enhancedFields.push('demographic_distribution');
         }
         if (params.includeRegionalData) {
-          enhancedFields.push('region_distribution', 'delivery_by_region');
+          enhancedFields.push('delivery_by_region');
         }
         if (params.adType === 'POLITICAL_AND_ISSUE_ADS') {
           enhancedFields.push('funding_entity', 'bylines');
