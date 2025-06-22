@@ -280,9 +280,8 @@ export function renderUploadSessionNotFoundPage(): string {
 /**
  * Generates the HTML markup for the main upload form page.
  * @param uploadId The UUID for the upload session.
- * @param filename The expected filename for the upload.
  */
-export function renderUploadFormPage(uploadId: string, filename: string): string {
+export function renderUploadFormPage(uploadId: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -295,7 +294,6 @@ export function renderUploadFormPage(uploadId: string, filename: string): string
   <main class="container">
     <article>
       <h1>Upload Creative Asset</h1>
-      <p>Upload file: <strong>${escapeHtml(filename)}</strong></p>
       <p>The file type (image or video) will be automatically detected.</p>
       <p><small>Supported formats: JPEG, PNG, GIF, WebP, MP4, MOV</small></p>
       <form id="uploadForm" action="/v1/assets/upload/${escapeHtml(uploadId)}" method="post" enctype="multipart/form-data">

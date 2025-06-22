@@ -218,7 +218,6 @@ export const creativeAssetUploads = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     adAccountId: text('ad_account_id').notNull(),
-    filename: text('filename').notNull(),
     assetType: text('asset_type', { enum: ['image', 'video', 'pending'] }).notNull(),
     status: text('status', { enum: ['pending', 'uploading', 'completed', 'failed'] })
       .default('pending')

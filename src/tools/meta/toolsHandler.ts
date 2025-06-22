@@ -129,10 +129,7 @@ export class MetaToolsHandler {
     return this.adCreativeHandler.deleteAdCreative(authPayload, params);
   }
 
-  async requestCreativeUpload(
-    authPayload: JWTPayload,
-    params: { adAccountId?: string; filename: string }
-  ) {
+  async requestCreativeUpload(authPayload: JWTPayload, params: { adAccountId?: string }) {
     return this.adCreativeUploadHandler.requestCreativeUpload(authPayload, params);
   }
 

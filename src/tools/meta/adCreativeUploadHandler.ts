@@ -17,7 +17,7 @@ import type { CheckUploadStatusResult, RequestCreativeUploadResult } from './typ
 export class AdCreativeUploadHandler {
   async requestCreativeUpload(
     authPayload: JWTPayload,
-    params: { adAccountId?: string; filename: string }
+    params: { adAccountId?: string }
   ): Promise<RequestCreativeUploadResult> {
     logger.info('Executing request_creative_upload', { userId: authPayload.userId, params });
 
@@ -34,7 +34,6 @@ export class AdCreativeUploadHandler {
             .values({
               userId: authPayload.userId,
               adAccountId,
-              filename: params.filename,
               assetType: 'pending', // Will be updated when file is uploaded
             })
             .returning();
@@ -264,7 +263,7 @@ export class AdCreativeUploadHandler {
             userId,
             uploadId,
             assetType,
-            filename: uploadRequest.filename,
+            filename: fileData.filename,
             hasBusinessContext: businessId !== null,
           });
 
@@ -276,7 +275,7 @@ export class AdCreativeUploadHandler {
           const form = this.createUploadFormData(
             fileData,
             assetType,
-            uploadRequest.filename,
+            fileData.filename,
             accessToken,
             businessId
           );
@@ -292,7 +291,7 @@ export class AdCreativeUploadHandler {
 
           // Process response
           const metaResponse = this.processMetaResponse(statusCode, responseText, userId, uploadId);
-          const metaAssetId = this.extractAssetId(metaResponse, assetType, uploadRequest.filename);
+          const metaAssetId = this.extractAssetId(metaResponse, assetType, fileData.filename);
 
           return { metaAssetId, assetType };
         },

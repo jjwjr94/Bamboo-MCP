@@ -198,7 +198,7 @@ export async function build(opts = {}) {
       }
 
       // Serve upload form
-      return reply.type('text/html').send(renderUploadFormPage(uploadId, uploadRecord.filename));
+      return reply.type('text/html').send(renderUploadFormPage(uploadId));
     } catch (error) {
       logger.error('Failed to serve upload form', { uploadId, error });
       return reply.status(500).type('text/html').send(renderServerErrorPage());

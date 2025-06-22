@@ -367,6 +367,7 @@ export interface MetaAd {
   updated_time: string;
 }
 
+// Represents an asset object as returned by the Meta Graph API, not our internal DB record
 export interface MetaAsset {
   id: string;
   filename: string;

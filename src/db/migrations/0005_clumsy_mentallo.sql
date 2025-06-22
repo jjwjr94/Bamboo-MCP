@@ -1,0 +1,1 @@
+ALTER TABLE "creative_asset_uploads" DROP COLUMN "filename";

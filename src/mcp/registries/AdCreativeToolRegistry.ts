@@ -232,24 +232,13 @@ export class AdCreativeToolRegistry implements IToolRegistry {
       {
         title: 'Request Creative Asset Upload',
         description:
-          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files.',
+          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files. The filename will be automatically derived from the uploaded file.',
         inputSchema: {
           adAccountId: z
             .string()
             .optional()
             .describe(
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-          filename: z
-            .string()
-            .min(1, 'Filename is required')
-            .max(255, 'Filename too long')
-            .regex(
-              /^[^\/\\<>:"|?*]+$/,
-              'Filename cannot contain path separators or special system characters (/ \\ < > : " | ? *)'
-            )
-            .describe(
-              'The name of the file to be uploaded. Should be unique and related to the campaign or ads to run.'
             ),
         },
         successDataSchema,

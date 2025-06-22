@@ -68,6 +68,49 @@ export async function createMetaApiInstance(userId: string): Promise<FacebookAds
   return api;
 }
 
+function parseMetaApiError(error: unknown): {
+  message: string;
+  statusCode: number;
+  metaErrorCode?: string;
+  errorSubcode?: string;
+} {
+  if (isMetaApiErrorResponse(error)) {
+    // Handle Facebook SDK error structure - status is at top level, error details in response
+    const errorResponse = error.response || error;
+    
+    return {
+      message: errorResponse?.message || error.message || 'Meta API request failed',
+      statusCode: error.status || 400,
+      metaErrorCode: (errorResponse as any)?.code?.toString(),
+      errorSubcode: (errorResponse as any)?.error_subcode?.toString(),
+    };
+  }
+
+  // Fallback for unexpected error structure
+  return {
+    message: error instanceof Error ? error.message : 'An unknown Meta API error occurred',
+    statusCode: 500,
+  };
+}
+
+function isMetaApiErrorResponse(error: unknown): error is {
+  message?: string;
+  status?: number;
+  response?: {
+    data?: { error?: unknown };
+    status?: number;
+    message?: string;
+    code?: number | string;
+    error_subcode?: number | string;
+  };
+} {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ('status' in error || 'response' in error || 'message' in error)
+  );
+}
+
 export async function handleMetaApiCall<T>(
   apiCall: () => Promise<T>,
   context?: {
@@ -86,31 +129,12 @@ export async function handleMetaApiCall<T>(
       error: (error as Error).message,
     });
 
-    // The SDK often throws errors with a 'response' property or structured error fields
-    const errorObj = error as {
-      message?: string;
-      response?: { data?: { error?: unknown }; status?: number };
-    };
-
-    const errorResponse = errorObj.response?.data?.error || errorObj;
-
-    if (typeof errorResponse === 'object' && errorResponse !== null) {
-      interface ErrorResponseShape {
-        message?: string;
-        code?: number | string;
-        error_subcode?: number | string;
-      }
-
-      const { message, code, error_subcode } = errorResponse as ErrorResponseShape;
-
-      throw new MetaApiError(
-        message || (errorObj as Error).message || 'Meta API request failed',
-        code?.toString(),
-        error_subcode?.toString(),
-        errorObj.response?.status || 400
-      );
-    }
-
-    throw new MetaApiError((errorObj as Error).message || 'An unknown Meta API error occurred.');
+    const parsedError = parseMetaApiError(error);
+    throw new MetaApiError(
+      parsedError.message,
+      parsedError.metaErrorCode,
+      parsedError.errorSubcode,
+      parsedError.statusCode
+    );
   }
 }
