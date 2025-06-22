@@ -193,10 +193,10 @@ export class AdCreativeUploadHandler {
           }
 
           // Select endpoint based on determined asset type
-          const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
-          const accountSegment = uploadRequest.adAccountId.startsWith('act_')
-            ? uploadRequest.adAccountId
-            : `act_${uploadRequest.adAccountId}`;
+          // const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
+          // const accountSegment = uploadRequest.adAccountId.startsWith('act_')
+          //   ? uploadRequest.adAccountId
+          //   : `act_${uploadRequest.adAccountId}`;
           const uploadUrl = 'https://httpbin.org/post';
           logger.warn('DEBUG MODE: Uploads are being sent to httpbin.org/post instead of Meta API');
 
