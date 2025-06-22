@@ -88,6 +88,123 @@ export class AdCreativeUploadHandler {
   }
 
   /**
+   * Creates a FormData object for the Meta API upload request
+   */
+  private createUploadFormData(
+    fileData: MultipartFile,
+    assetType: string,
+    filename: string,
+    accessToken: string,
+    businessId: string | null
+  ): FormData {
+    const form = new FormData();
+
+    // Use correct form field name based on asset type
+    const fileParamName = assetType === 'image' ? 'filename' : 'source';
+    form.append(fileParamName, fileData.file, { filename });
+    form.append('access_token', accessToken);
+
+    // Add business parameter for business-managed accounts
+    if (businessId) {
+      form.append('business', businessId);
+    }
+
+    return form;
+  }
+
+  /**
+   * Constructs the Meta API upload URL based on asset type and account
+   */
+  private buildUploadUrl(assetType: string, adAccountId: string): string {
+    const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
+    const accountSegment = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+    return `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
+  }
+
+  /**
+   * Extracts the asset ID from Meta API response based on asset type
+   */
+  private extractAssetId(
+    metaResponse: { hash?: string; id?: string; images?: { [key: string]: { hash: string } } },
+    assetType: string,
+    filename: string
+  ): string {
+    let metaAssetId: string | undefined;
+
+    if (assetType === 'image') {
+      metaAssetId = metaResponse.images?.[filename]?.hash || metaResponse.hash;
+    } else {
+      metaAssetId = metaResponse.id;
+    }
+
+    if (!metaAssetId) {
+      throw new Error('Could not extract asset ID from Meta API response');
+    }
+
+    return metaAssetId;
+  }
+
+  /**
+   * Handles the HTTP request to Meta API
+   */
+  private async sendToMetaAPI(
+    uploadUrl: string,
+    form: FormData,
+    userId: string,
+    uploadId: string
+  ): Promise<{ statusCode: number; responseText: string }> {
+    try {
+      const { statusCode, body: responseBody } = await httpRequest(uploadUrl, {
+        method: 'POST',
+        headers: form.getHeaders(),
+        body: form,
+        maxRedirections: 0,
+        headersTimeout: env.META_UPLOAD_TIMEOUT,
+      });
+
+      const responseText = await responseBody.text();
+      return { statusCode, responseText };
+    } catch (netErr: unknown) {
+      const errMsg = netErr instanceof Error ? netErr.message : String(netErr);
+      logger.error('Network error during Meta upload', { userId, uploadId, error: errMsg });
+      throw new Error(`Network error uploading asset: ${errMsg}`);
+    }
+  }
+
+  /**
+   * Processes Meta API response and handles errors
+   */
+  private processMetaResponse(
+    statusCode: number,
+    responseText: string,
+    userId: string,
+    uploadId: string
+  ): { hash?: string; id?: string; images?: { [key: string]: { hash: string } } } {
+    if (statusCode < 200 || statusCode >= 300) {
+      let errorData: { error?: { message?: string } } | null = null;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch {
+        // Non-JSON error response
+      }
+
+      const errorMessage =
+        errorData?.error?.message || `Meta API upload failed with status ${statusCode}`;
+
+      logger.error('Meta API upload error', {
+        userId,
+        uploadId,
+        statusCode,
+        errorMessage,
+      });
+
+      throw new Error(errorMessage);
+    }
+
+    return JSON.parse(responseText);
+  }
+
+  /**
    * Handles creative asset file uploads for the MCP server.
    *
    * This method exists because MCP clients (like Claude) cannot directly send large files
@@ -100,7 +217,7 @@ export class AdCreativeUploadHandler {
    * and the file is streamed directly to the appropriate Meta API endpoint without local storage.
    */
   async handleCreativeAssetUpload(uploadId: string, fileData: MultipartFile) {
-    // 1. Look up upload session to get user context (no RLS needed for initial lookup)
+    // Look up upload session to get user context
     const initialUploadRecord = await db.query.creativeAssetUploads.findFirst({
       where: eq(creativeAssetUploads.id, uploadId),
     });
@@ -112,18 +229,17 @@ export class AdCreativeUploadHandler {
     const userId = initialUploadRecord.userId;
     logger.info('Executing handle_creative_asset_upload', { userId, uploadId });
 
-    // Use a try/catch block to ensure database status is updated on any failure
     try {
-      // 2. Determine asset type from MIME type (available immediately from headers)
+      // Determine asset type from MIME type
       const assetType = detectAssetTypeFromMimeType(fileData.mimetype);
 
-      // 3. Atomically claim the upload session and set the determined asset type
+      // Atomically claim the upload session and set the determined asset type
       const uploadRequest = await withUserContext(userId, async (tx) => {
         const [updatedRecord] = await tx
           .update(creativeAssetUploads)
           .set({
             status: 'uploading',
-            assetType, // Set based on uploaded file's MIME type
+            assetType,
             updatedAt: new Date(),
           })
           .where(
@@ -138,190 +254,52 @@ export class AdCreativeUploadHandler {
         throw new ValidationError('Upload session is invalid, already used, or expired');
       }
 
-      // 4. Stream file to Meta API with resilience policy
+      // Stream file to Meta API
       const result = await handleMetaApiCall(
         async () => {
           const accessToken = await fetchUserTokenString(userId);
-
-          // Resolve business context for the ad account
           const businessId = await getBusinessIdForAdAccount(userId, uploadRequest.adAccountId);
-          logger.info('Resolved business context for media upload', {
-            userId,
-            uploadId,
-            adAccountId: uploadRequest.adAccountId,
-            businessId: businessId ?? 'non-business',
-            hasBusinessContext: businessId !== null,
-          });
 
-          const form = new FormData();
-
-          // Basic stream sanity check (no verbose chunk logging in production)
-          fileData.file.on('error', (err) => {
-            logger.error('Upload stream error', { err });
-          });
-
-          // Use correct form field name based on asset type
-          const fileParamName = assetType === 'image' ? 'filename' : 'source';
-          form.append(fileParamName, fileData.file, { filename: uploadRequest.filename });
-          form.append('access_token', accessToken);
-
-          // CRITICAL: Add business parameter for business-managed accounts
-          if (businessId) {
-            form.append('business', businessId);
-            logger.debug('Added business parameter to media upload FormData', {
-              adAccountId: uploadRequest.adAccountId,
-              businessId,
-              reasoning: 'Business-managed account requires business parameter',
-            });
-          } else {
-            logger.debug('No business parameter added to media upload', {
-              adAccountId: uploadRequest.adAccountId,
-              reason: 'Non-business account (business parameter forbidden)',
-            });
-          }
-
-          // Select endpoint based on determined asset type
-          const endpoint = assetType === 'image' ? 'adimages' : 'advideos';
-          const accountSegment = uploadRequest.adAccountId.startsWith('act_')
-            ? uploadRequest.adAccountId
-            : `act_${uploadRequest.adAccountId}`;
-          const uploadUrl = `https://graph.facebook.com/${env.META_API_VERSION}/${accountSegment}/${endpoint}`;
-
-          // Enhanced logging to validate request parameters before streaming
-          const formHeaders = form.getHeaders();
-
-          /*
-           * We cannot compute Content-Length because Fastify hands us a pure stream with unknown size.
-           * We therefore rely on chunked transfer encoding (default for form-data). Testing shows that
-           * Meta's adimages/advideos endpoints accept chunked uploads when sent via Undici's request API.
-           * No extra headers are required.
-           */
-
-          // Log the complete request details we're about to send
-          logger.info('Complete request details being sent to Meta API', {
-            userId,
-            uploadId,
-            method: 'POST',
-            url: uploadUrl,
-            headers: {
-              ...formHeaders,
-              // Redact sensitive headers but show structure
-              'content-type': formHeaders['content-type'],
-              'content-length': formHeaders['content-length'] || 'not-set',
-            },
-            formDataFields: {
-              [fileParamName]: `<file-stream: ${uploadRequest.filename}>`,
-              access_token: '<REDACTED>',
-              ...(businessId ? { business: businessId } : {}),
-            },
-            streamInfo: {
-              assetType,
-              mimeType: fileData.mimetype,
-              filename: uploadRequest.filename,
-              isReadable: fileData.file.readable,
-              isPaused: fileData.file.isPaused?.() || 'unknown',
-            },
-          });
-
-          logger.info('Attempting to stream file to Meta API', {
+          logger.info('Streaming asset to Meta API', {
             userId,
             uploadId,
             assetType,
-            url: uploadUrl,
-            formFields: {
-              [fileParamName]: uploadRequest.filename,
-              access_token: 'REDACTED', // For security
-              business: businessId ?? 'not_applicable',
-            },
-            // Log the Content-Type to verify the multipart boundary is set
-            contentTypeHeader: formHeaders['content-type'],
-            mimeType: fileData.mimetype,
-            streamingApproach: 'direct_file_stream_via_FormData',
+            filename: uploadRequest.filename,
+            hasBusinessContext: businessId !== null,
           });
 
           if (!fileData.file.readable) {
-            throw new Error('File stream is not readable — was it already consumed?');
+            throw new Error('File stream is not readable');
           }
 
-          /*
-           * Use Undici's low-level request API instead of fetch()
-           *
-           * Reasons:
-           * 1. fetch() forces chunked encoding when Content-Length is manually set
-           * 2. undici.request() respects explicit Content-Length and disables chunking
-           * 3. Preserves zero-copy streaming from Fastify → form-data → Meta API
-           * 4. Matches the exact HTTP semantics that Meta's servers expect
-           */
-          let statusCode: number;
-          let responseText: string;
-          try {
-            const { statusCode: sc, body: responseBody } = await httpRequest(uploadUrl, {
-              method: 'POST',
-              headers: formHeaders,
-              body: form,
-              maxRedirections: 0,
-              headersTimeout: env.META_UPLOAD_TIMEOUT,
-            });
-            statusCode = sc;
-            responseText = await responseBody.text();
-          } catch (netErr: unknown) {
-            const errMsg = netErr instanceof Error ? netErr.message : String(netErr);
-            logger.error('Network error during Meta upload', { userId, uploadId, error: errMsg });
-            throw new Error(`Network error uploading asset: ${errMsg}`);
-          }
+          // Prepare upload request
+          const form = this.createUploadFormData(
+            fileData,
+            assetType,
+            uploadRequest.filename,
+            accessToken,
+            businessId
+          );
+          const uploadUrl = this.buildUploadUrl(assetType, uploadRequest.adAccountId);
 
-          if (statusCode < 200 || statusCode >= 300) {
-            let errorData: { error?: { message?: string } } | null = null;
-            try {
-              errorData = JSON.parse(responseText);
-            } catch {
-              logger.error('Meta API non-JSON error response', {
-                userId,
-                uploadId,
-                statusCode,
-                responseSnippet: responseText.substring(0, 500),
-              });
-            }
-            if (errorData?.error) {
-              logger.error('Meta API upload error', {
-                userId,
-                uploadId,
-                statusCode,
-                errorDetails: errorData.error,
-              });
-            }
-            throw new Error(
-              errorData?.error?.message ||
-                `Meta API upload failed with status ${statusCode}: ${responseText}`
-            );
-          }
+          // Send to Meta API
+          const { statusCode, responseText } = await this.sendToMetaAPI(
+            uploadUrl,
+            form,
+            userId,
+            uploadId
+          );
 
-          const metaResponse = JSON.parse(responseText) as {
-            hash?: string;
-            id?: string;
-            images?: { [key: string]: { hash: string } };
-          };
-
-          // Extract the correct asset ID based on the asset type
-          let metaAssetId: string | undefined;
-          if (assetType === 'image') {
-            // For images, the response contains an 'images' object with filename as key
-            metaAssetId = metaResponse.images?.[uploadRequest.filename]?.hash || metaResponse.hash;
-          } else {
-            // For videos, the response contains a direct 'id' field
-            metaAssetId = metaResponse.id;
-          }
-
-          if (!metaAssetId) {
-            throw new Error('Could not extract asset ID from Meta API response');
-          }
+          // Process response
+          const metaResponse = this.processMetaResponse(statusCode, responseText, userId, uploadId);
+          const metaAssetId = this.extractAssetId(metaResponse, assetType, uploadRequest.filename);
 
           return { metaAssetId, assetType };
         },
         { toolName: 'handle_creative_asset_upload', userId }
       );
 
-      // 5. Update DB with completion status
+      // Update DB with completion status
       await withUserContext(userId, async (tx) => {
         await tx
           .update(creativeAssetUploads)
@@ -342,7 +320,7 @@ export class AdCreativeUploadHandler {
 
       return { success: true, metaAssetId: result.metaAssetId, assetType: result.assetType };
     } catch (error: unknown) {
-      // 6. On any error, update the DB with failure status
+      // Update DB with failure status
       const errorMessage = error instanceof Error ? error.message : 'Unknown upload error';
       logger.error('Creative asset upload failed', { userId, uploadId, error: errorMessage });
 
