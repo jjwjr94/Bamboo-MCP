@@ -28,9 +28,7 @@ export async function withUserContext<T>(
     await tx.execute(sql`SET LOCAL ROLE app_user`);
     await tx.execute(sql`SELECT set_config('app.current_user_id', ${userId}, true)`);
 
-    logger.dbOperation('SET_USER_CONTEXT', 'session', true, 0);
-
-    return await callback(tx);
+    return callback(tx);
   });
 }
 

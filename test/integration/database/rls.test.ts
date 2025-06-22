@@ -22,23 +22,8 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
     facebookUserId: 'fb_user_rls_2',
   };
 
-  // FIX: Add a third user for testing token insertion without violating unique constraint
-  const user3 = {
-    id: randomUUID(),
-    facebookUserId: 'fb_user_rls_3',
-  };
-
   // RLS-protected table names for cleanup (in dependency order)
-  const tableNames = [
-    'creative_asset_uploads',
-    'oauth_refresh_tokens',
-    'oauth_tokens',
-    'ad_accounts',
-    'users',
-    'oauth_clients',
-    'oauth_sessions',
-    'oauth_temp_auth_codes',
-  ];
+  const tableNames = ['creative_asset_uploads', 'oauth_tokens', 'ad_accounts', 'users'];
 
   beforeEach(async () => {
     // Clean database and seed test data for isolation testing
@@ -52,10 +37,10 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
         await tx.execute(sql.raw(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`));
       }
 
-      // Create test users (bypassing RLS) - FIX: Add user3 for token insertion test
-      await tx.insert(users).values([user1, user2, user3]);
+      // Create test users (bypassing RLS)
+      await tx.insert(users).values([user1, user2]);
 
-      // Create OAuth tokens for user1 and user2 only (bypassing RLS)
+      // Create OAuth tokens for each user (bypassing RLS)
       await tx.insert(oauthTokens).values([
         {
           userId: user1.id,
@@ -109,20 +94,16 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
 
   afterEach(async () => {
     // Verify RLS context is not set globally after tests
-    const res = await db.execute(
-      sql`SELECT COALESCE(current_setting('app.current_user_id', true), '') AS current_setting`
-    );
+    const res = await db.execute(sql`SELECT current_setting('app.current_user_id', true)`);
     const currentSetting = res[0]?.current_setting;
-    // current_setting returns empty string when the setting is unset, but Drizzle may return undefined
-    expect(currentSetting || '').toBe(''); // Convert undefined to empty string for comparison
+    // current_setting returns empty string when the setting is unset (transaction ends)
+    expect(currentSetting).toBe('');
   });
 
   describe('withUserContext()', () => {
     it('should set app.current_user_id correctly within transaction', async () => {
       await withUserContext(user1.id, async (tx) => {
-        const result = await tx.execute(sql`SELECT 
-          set_config('app.current_user_id', ${user1.id}, true) AS set_result,
-          current_setting('app.current_user_id') AS current_setting`);
+        const result = await tx.execute(sql`SELECT current_setting('app.current_user_id')`);
         expect(result[0]?.current_setting).toBe(user1.id);
       });
     });
@@ -131,15 +112,11 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
       // Test context isolation between concurrent operations
       const [result1, result2] = await Promise.all([
         withUserContext(user1.id, async (tx) => {
-          const context = await tx.execute(sql`SELECT 
-            set_config('app.current_user_id', ${user1.id}, true) AS set_result,
-            current_setting('app.current_user_id') AS current_setting`);
+          const context = await tx.execute(sql`SELECT current_setting('app.current_user_id')`);
           return context[0]?.current_setting;
         }),
         withUserContext(user2.id, async (tx) => {
-          const context = await tx.execute(sql`SELECT 
-            set_config('app.current_user_id', ${user2.id}, true) AS set_result,
-            current_setting('app.current_user_id') AS current_setting`);
+          const context = await tx.execute(sql`SELECT current_setting('app.current_user_id')`);
           return context[0]?.current_setting;
         }),
       ]);
@@ -184,11 +161,8 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
       });
 
       // Outside the transaction, the context should be cleared
-      const res = await db.execute(
-        sql`SELECT COALESCE(current_setting('app.current_user_id', true), '') AS current_setting`
-      );
-      // Drizzle may return undefined for empty results, so convert to empty string for comparison
-      expect(res[0]?.current_setting || '').toBe('');
+      const res = await db.execute(sql`SELECT current_setting('app.current_user_id', true)`);
+      expect(res[0]?.current_setting).toBe('');
     });
 
     it('should handle nested context operations correctly', async () => {
@@ -278,18 +252,17 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
       });
 
       it('should allow user to insert token for themselves', async () => {
-        // FIX: Use user3 who doesn't have an existing token to avoid unique constraint violation
         const newToken: NewOAuthToken = {
-          userId: user3.id,
-          accessToken: 'new_token_user3',
+          userId: user1.id,
+          accessToken: 'new_token_user1',
           scopes: ['read_profile'],
         };
 
-        await withUserContext(user3.id, (tx) => tx.insert(oauthTokens).values(newToken));
+        await withUserContext(user1.id, (tx) => tx.insert(oauthTokens).values(newToken));
 
         // Verify token was created
-        const tokens = await withUserContext(user3.id, (tx) =>
-          tx.select().from(oauthTokens).where(eq(oauthTokens.accessToken, 'new_token_user3'))
+        const tokens = await withUserContext(user1.id, (tx) =>
+          tx.select().from(oauthTokens).where(eq(oauthTokens.accessToken, 'new_token_user1'))
         );
         expect(tokens).toHaveLength(1);
       });
