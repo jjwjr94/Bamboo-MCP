@@ -154,6 +154,19 @@ export class AdCreativeUploadHandler {
 
           const form = new FormData();
 
+          logger.debug('Checking stream status before appending to FormData', {
+            isReadable: fileData.file.readable,
+            isPaused: fileData.file.isPaused?.(), // optional, some streams expose this
+            type: typeof fileData.file,
+          });
+
+          fileData.file.on('error', (err) => {
+            logger.error('Stream error before upload', { err });
+          });
+          fileData.file.on('end', () => {
+            logger.debug('File stream ended');
+          });
+
           // Use correct form field name based on asset type
           const fileParamName = assetType === 'image' ? 'filename' : 'source';
           form.append(fileParamName, fileData.file, { filename: uploadRequest.filename });
@@ -197,13 +210,6 @@ export class AdCreativeUploadHandler {
             contentTypeHeader: formHeaders['content-type'],
             mimeType: fileData.mimetype,
             streamingApproach: 'direct_file_stream_via_FormData',
-          });
-
-          fileData.file.on('error', (err) => {
-            logger.error('Stream error', { uploadId, userId, error: err });
-          });
-          fileData.file.on('end', () => {
-            logger.info('File stream ended', { uploadId, userId });
           });
 
           if (!fileData.file.readable) {
