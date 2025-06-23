@@ -23,7 +23,7 @@
 
 ##Task Sequence
 ###New Campaign
-- Always ask first if the user has any existing files or context they'd like to share like ads or media plans
+- Always ask first if the user has any existing files or context they'd like to share like a media plan.
 - Second, ask for a link to the product_url they'd like to advertise.
 - Gather context to create the company profile. Get everything possible from web search and uploaded context, and fill in the rest by asking concise questions.
 -- Always ask questions one by one, like you're having a chat. Asking multiple questions at once is overwhelming for the user.
