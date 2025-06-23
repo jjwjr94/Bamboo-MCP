@@ -33,19 +33,8 @@ export interface PaginatedFetchOptions<T> {
 }
 
 /**
- * A generic utility to handle pagination for Meta API responses. It fetches all items from a
- * paginated cursor up to a configurable safety limit.
- *
- * This utility provides:
- * 1. Array.isArray protection for single-object responses.
- * 2. Safe pagination loops with nullish coalescing.
- * 3. Configurable safety limits.
- * 4. Consistent logging for key events.
- * 5. Type safety via TypeScript generics.
- *
- * @template T - The expected type of the returned items.
- * @param options - Configuration for the fetch operation.
- * @returns A promise that resolves to an array of fetched items.
+ * Fetches all items from a paginated Meta API response.
+ * Handles single-object responses and enforces safety limits.
  */
 export async function fetchAllPaginatedData<T>({
   cursor,
@@ -57,26 +46,22 @@ export async function fetchAllPaginatedData<T>({
 }: PaginatedFetchOptions<T>): Promise<T[]> {
   const allRawItems: unknown[] = [];
 
-  // 1. Array.isArray protection: Handle cases where the API returns a single object
+  // Handle single object responses
   if (cursor && !Array.isArray(cursor)) {
     logger.warn(`Meta API returned a single object for ${entityName}, expected an array.`, {
       userId,
       ...apiContext,
     });
     allRawItems.push(cursor);
-    // Return immediately after handling single object case
     return allRawItems.map(dataExtractor);
   }
 
   let currentCursor = cursor as MetaPaginatedCursor<unknown> | null;
 
-  // 2. Safe pagination loop
   while (currentCursor && currentCursor.length > 0) {
     allRawItems.push(...currentCursor);
 
-    // 3. Apply configurable safety limit
     if (allRawItems.length >= limit) {
-      // 4. Provide consistent logging
       logger.warn(`Reached maximum ${entityName} limit, truncating results.`, {
         limit,
         retrievedCount: allRawItems.length,
@@ -86,7 +71,6 @@ export async function fetchAllPaginatedData<T>({
       break;
     }
 
-    // Safely advance to the next page using optional chaining and nullish coalescing
     if (currentCursor.hasNext?.()) {
       currentCursor = (await currentCursor.next?.()) ?? null;
     } else {
@@ -94,6 +78,5 @@ export async function fetchAllPaginatedData<T>({
     }
   }
 
-  // 5. Use the dataExtractor to return a standardized array of the correct type
   return allRawItems.map(dataExtractor);
 }

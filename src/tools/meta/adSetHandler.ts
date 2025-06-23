@@ -95,10 +95,9 @@ export class MetaAdSetHandler {
         }
 
         const response = { adSets: validatedAdSets };
-        logger.info('Successfully retrieved ad sets', {
+        logger.info('Retrieved ad sets', {
           userId: authPayload.userId,
           count: validatedAdSets.length,
-          params,
         });
 
         return response;
@@ -210,7 +209,7 @@ export class MetaAdSetHandler {
           campaignId: params.campaignId,
           status: params.status || 'PAUSED',
         };
-        logger.info('Successfully created ad set', {
+        logger.info('Created ad set', {
           userId: authPayload.userId,
           adAccountId,
           adSetId,
@@ -272,7 +271,7 @@ export class MetaAdSetHandler {
           );
         }
 
-        logger.info('Ad set updated successfully', { adSetId: params.adSetId });
+        logger.info('Ad set updated', { adSetId: params.adSetId });
 
         const result: UpdateAdSetResult = {
           adSetId: params.adSetId,
@@ -318,7 +317,7 @@ export class MetaAdSetHandler {
           );
         }
 
-        logger.info('Ad set deleted successfully', { adSetId: params.adSetId });
+        logger.info('Ad set deleted', { adSetId: params.adSetId });
 
         const result: DeleteAdSetResult = {
           adSetId: params.adSetId,

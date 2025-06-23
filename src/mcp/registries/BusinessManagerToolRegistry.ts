@@ -2,7 +2,6 @@ import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -39,13 +38,9 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
    * Register all business manager-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Business Manager MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Business Manager MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetBusinessAccounts(): void {

@@ -73,7 +73,7 @@ export class AdAccountPermissionsProcessor {
       }
     }
 
-    logger.error('Failed batch request for ad account permissions', errorDetails);
+    logger.error('Failed batch permissions request', errorDetails);
   }
 
   private extractPermissionsFromBatchResponse(

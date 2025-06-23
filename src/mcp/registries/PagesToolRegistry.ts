@@ -3,7 +3,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -31,13 +30,9 @@ export class PagesToolRegistry implements IToolRegistry {
   }
 
   public register() {
-    logger.info('Registering Pages MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Pages MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetPages() {

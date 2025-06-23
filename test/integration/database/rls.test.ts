@@ -77,14 +77,12 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
         {
           userId: user1.id,
           adAccountId: 'act_rls_1',
-          filename: 'user1_creative.jpg',
           assetType: 'image',
           status: 'completed',
         } as NewCreativeAssetUpload,
         {
           userId: user2.id,
           adAccountId: 'act_rls_2',
-          filename: 'user2_creative.jpg',
           assetType: 'image',
           status: 'pending',
         } as NewCreativeAssetUpload,
@@ -412,21 +410,20 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
         );
         expect(user1Uploads).toHaveLength(1);
         expect(user1Uploads[0]?.userId).toBe(user1.id);
-        expect(user1Uploads[0]?.filename).toBe('user1_creative.jpg');
+        expect(user1Uploads[0]?.assetType).toBe('image');
 
         const user2Uploads = await withUserContext(user2.id, (tx) =>
           tx.select().from(creativeAssetUploads)
         );
         expect(user2Uploads).toHaveLength(1);
         expect(user2Uploads[0]?.userId).toBe(user2.id);
-        expect(user2Uploads[0]?.filename).toBe('user2_creative.jpg');
+        expect(user2Uploads[0]?.assetType).toBe('image');
       });
 
       it('should allow user to insert upload for themselves', async () => {
         const newUpload: NewCreativeAssetUpload = {
           userId: user1.id,
           adAccountId: 'act_rls_1',
-          filename: 'new_creative.png',
           assetType: 'image',
           status: 'pending',
         };
@@ -434,10 +431,7 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
         await withUserContext(user1.id, (tx) => tx.insert(creativeAssetUploads).values(newUpload));
 
         const uploads = await withUserContext(user1.id, (tx) =>
-          tx
-            .select()
-            .from(creativeAssetUploads)
-            .where(eq(creativeAssetUploads.filename, 'new_creative.png'))
+          tx.select().from(creativeAssetUploads).where(eq(creativeAssetUploads.status, 'pending'))
         );
         expect(uploads).toHaveLength(1);
       });
@@ -446,7 +440,6 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
         const maliciousUpload: NewCreativeAssetUpload = {
           userId: user2.id,
           adAccountId: 'act_rls_2',
-          filename: 'malicious.jpg',
           assetType: 'image',
           status: 'pending',
         };
@@ -455,11 +448,11 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
           withUserContext(user1.id, (tx) => tx.insert(creativeAssetUploads).values(maliciousUpload))
         ).rejects.toThrow(); // Any error indicates RLS is working
 
-        // Verify the malicious upload was not created
+        // Verify the malicious upload was not created by checking user2 still has only 1 upload
         const user2Uploads = await withUserContext(user2.id, (tx) =>
           tx.select().from(creativeAssetUploads)
         );
-        expect(user2Uploads.every((upload) => upload.filename !== 'malicious.jpg')).toBe(true);
+        expect(user2Uploads).toHaveLength(1); // Should still be just the original upload
       });
 
       it('should prevent user from updating another user upload', async () => {
@@ -467,18 +460,15 @@ describe('Row-Level Security (RLS) Data Isolation', { timeout: 30000 }, () => {
           tx
             .update(creativeAssetUploads)
             .set({ status: 'failed', errorMessage: 'Hijacked' })
-            .where(eq(creativeAssetUploads.filename, 'user2_creative.jpg'))
+            .where(eq(creativeAssetUploads.status, 'pending'))
             .returning()
         );
 
         expect(result).toHaveLength(0);
 
-        // Verify user2's upload was not modified
+        // Verify user2's upload was not modified by checking it directly
         const user2Upload = await withUserContext(user2.id, (tx) =>
-          tx
-            .select()
-            .from(creativeAssetUploads)
-            .where(eq(creativeAssetUploads.filename, 'user2_creative.jpg'))
+          tx.select().from(creativeAssetUploads).where(eq(creativeAssetUploads.status, 'pending'))
         );
         expect(user2Upload[0]?.status).toBe('pending');
         expect(user2Upload[0]?.errorMessage).toBeNull();

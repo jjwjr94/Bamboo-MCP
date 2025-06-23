@@ -177,7 +177,7 @@ function parseBusinessContextBatchResponse(
       const name = data.name ?? 'Unknown Account';
       const status = data.status ?? 'UNKNOWN';
 
-      logger.debug('Parsed business context from batch response', {
+      logger.debug('Parsed business context', {
         adAccountId,
         userId,
         businessId,

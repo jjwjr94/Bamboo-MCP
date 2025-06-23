@@ -8,13 +8,10 @@ import {
   MetaCampaignResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
 /**
- * Campaign Tool Registry
- *
  * Handles registration of campaign-related MCP tools:
  * - get_campaigns: Retrieve campaigns for an ad account
  * - create_campaign: Create a new advertising campaign
@@ -45,17 +42,10 @@ export class CampaignToolRegistry implements IToolRegistry {
     return 'Campaign';
   }
 
-  /**
-   * Register all campaign-related MCP tools
-   */
   public register(): void {
-    logger.info('Registering Campaign MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Campaign MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetCampaigns(): void {

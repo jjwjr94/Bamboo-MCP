@@ -1,320 +1,221 @@
 # Meta Ads MCP Server
 
-An MCP (Model Context Protocol) server for Meta's Marketing API. This server handles OAuth flows, provides access to Meta's advertising APIs, and includes the tooling needed to run it in production.
+The Meta Ads MCP Server provides secure, scalable, and resilient access to the Meta Marketing API, designed for consumption by AI agents and other automated systems via the Model Context Protocol (MCP) - an open standard that enables AI models to securely interact with external tools and data sources. It wraps the complexity of the Meta Ads API in a set of well-defined, production-ready tools.
 
-## Status
+This server handles authentication, error resilience, business context, and API abstraction, allowing developers and AI agents to focus on building powerful advertising automation workflows without needing deep expertise in the underlying Meta Marketing API.
 
-The server is running in production and handles the core advertising workflows. Recent work focused on pagination safety, business account context, and making delete operations harder to accidentally trigger.
+## Table of Contents
 
-## What it does
+- [Key Features](#key-features)
+- [Local Development Setup](#local-development-setup)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Database Setup](#database-setup)
+  - [Environment Variables](#environment-variables)
+  - [Running Migrations](#running-migrations)
+  - [Starting the Server](#starting-the-server)
+- [Testing with MCP Inspector](#testing-with-mcp-inspector)
+- [Available Scripts](#available-scripts)
+- [Project Architecture](#project-architecture)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Tools (28 total)
+## Key Features
 
-**Ad Account Management**
-- `get_ad_accounts` - List accessible ad accounts
+This server is built with enterprise-grade standards to ensure security, reliability, and ease of use.
 
-**Campaign Management** 
-- `get_campaigns` - List campaigns with filtering
-- `create_campaign` - Create new campaigns
-- `update_campaign` - Modify campaign settings and budgets
-- `delete_campaign` - Archive campaigns (soft delete)
+-   **Comprehensive API Coverage**: Implements 38 granular tools covering the entire ad management lifecycle, from campaigns and ad sets to creatives and insights.
+-   **Enterprise-Grade Security**:
+    -   **OAuth 2.1 + PKCE**: Modern, secure authentication flow.
+    -   **JWT with EdDSA**: Cryptographically secure, stateless tokens for internal authorization.
+    -   **Row-Level Security (RLS)**: Database-level data isolation ensures users can only access their own data.
+-   **Advanced Resilience**:
+    -   **Circuit Breakers**: Automatically detects and recovers from external API failures.
+    -   **Exponential Backoff**: Intelligent retry logic for transient Meta API errors.
+    -   **Request-Scoped Policies**: Prevents failures for one user from impacting others.
+-   **Business Context Handling**: Seamlessly manages both personal and business-managed ad accounts, automatically resolving and applying the correct business context for API calls.
+-   **Production Ready**:
+    -   **Pagination Safety**: Automatic limits on all list operations prevent resource exhaustion from runaway queries.
+    -   **Delete Protection**: Destructive operations require explicit confirmation flags to prevent accidental data loss.
+    -   **Schema Validation**: Rigorous input/output validation using Zod for all 38 tools.
+-   **Superior Developer Experience**:
+    -   **Fully Type-Safe**: End-to-end type safety from database to API handlers.
+    -   **Auto-Generated Schemas**: A script (`scripts/generateSchemas.js`) generates Zod schemas directly from the Meta SDK, ensuring our server stays in sync with API changes.
+    -   **Clear Abstractions**: Handlers are decoupled from the MCP protocol, simplifying tool implementation.
 
-**Ad Set Management**
-- `get_adsets` - List ad sets with targeting info
-- `create_adset` - Create ad sets with targeting rules
-- `update_adset` - Modify targeting, budgets, scheduling
-- `delete_adset` - Archive ad sets (soft delete)
+## Local Development Setup
 
-**Ad Management**
-- `get_ads` - List ads with filtering
-- `create_ad` - Create ads (links creatives to ad sets)
-- `update_ad` - Modify ad configuration
-- `delete_ad` - Permanent deletion (requires confirmation flag)
+Follow these steps to get the server running on your local machine.
 
-**Ad Creative Management**
-- `get_ad_creatives` - List creatives
-- `create_ad_creative` - Create new creatives
-- `update_ad_creative` - Modify creative properties
-- `delete_ad_creative` - Permanent deletion (requires confirmation flag)
+### Prerequisites
 
-**Insights & Analytics**
-- `get_ad_insights` - Performance metrics for ads/sets/campaigns
-- `get_ad_account_insights` - Account-level metrics
-
-**Custom Audience Management**
-- `get_custom_audiences` - List custom audiences
-- `create_custom_audience` - Create audiences for targeting
-- `delete_custom_audience` - Permanent deletion (requires confirmation flag)
-
-**Pages Management**
-- `get_pages` - List accessible Facebook Pages
-- `get_page_posts` - List posts from pages
-- `create_page_post_ad` - Promote existing posts
-
-**Business Manager**
-- `get_business_accounts` - List business accounts
-- `get_business_users` - List business account users
-
-### Security
-
-Uses OAuth 2.1 with PKCE for Meta authentication. JWTs are signed with EdDSA and refresh tokens rotate on use. Database uses row-level security to isolate user data. Business context is validated to prevent cross-account access.
-
-Input validation uses Zod schemas and all database queries are parameterized. The auth flow stores encrypted tokens and handles business-managed accounts properly.
-
-### Reliability 
-
-Circuit breakers prevent cascading failures and retries use exponential backoff. All list operations have configurable pagination limits. Database connections are pooled and health checks monitor external dependencies.
-
-Error handling classifies Meta API errors and applies appropriate retry policies. Structured logging helps with debugging and monitoring.
-
-## Setup
-
-### Requirements
-
-- Node.js 18+, pnpm
-- PostgreSQL 14+
-- Meta Developer Account with app setup
+-   [Node.js](https://nodejs.org/) (v18.0.0 or higher)
+-   [pnpm](https://pnpm.io/) (v10.x or higher)
+-   [Docker](https://www.docker.com/) and Docker Compose
 
 ### Installation
 
-```bash
-git clone <repository-url>
-cd mcp
-pnpm install
+1.  Clone the repository:
+    ```bash
+    git clone <repository-url>
+    cd bamboo-mcp
+    ```
+2.  Install dependencies using pnpm:
+    ```bash
+    pnpm install
+    ```
 
-# Configure environment
-cp .env.example .env
-# Edit .env file with your credentials
+### Database Setup
 
-# Database setup
-pnpm db:generate
-pnpm db:migrate
+The project uses a PostgreSQL database. The test environment uses Testcontainers, but for local development, a persistent Docker container is recommended.
 
-# Start server
-pnpm start
-```
+1.  **Start a PostgreSQL container:**
+
+    ```bash
+    docker run --name bamboo-postgres -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_password -e POSTGRES_DB=bamboo_test -p 5432:5432 -d postgres:15
+    ```
+
+    This command starts a PostgreSQL 15 container, creates the database and user, and maps port `5432` to your local machine.
 
 ### Environment Variables
 
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/mcp_db"
+1.  Create a `.env` file in the project root by copying the example:
 
-# Facebook OAuth
-FACEBOOK_APP_ID="your_facebook_app_id"
-FACEBOOK_APP_SECRET="your_facebook_app_secret"
-FACEBOOK_CALLBACK_URL="http://localhost:3000/auth/callback"
+    ```bash
+    cp .env.example .env
+    ```
 
-# JWT (EdDSA Ed25519 asymmetric keys)
-JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-...your Ed25519 private key...
------END PRIVATE KEY-----"
-JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
-...your Ed25519 public key...
------END PUBLIC KEY-----"
-JWT_EXPIRES_IN="24h"
+2.  **Generate JWT Keys**: The server uses EdDSA keys for signing JWTs. Generate a key pair:
 
-# Server
-PORT=3000
-NODE_ENV=production
-BASE_URL="http://localhost:3000"
-```
+    ```bash
+    npx jose-util-generate-key-pair EdDSA
+    ```
 
-## Usage
+3.  **Fill out the `.env` file** with the following values:
 
-### Basic operations
+    ```env
+    # .env
 
-```typescript
-// List campaigns
-const campaigns = await mcp.call("get_campaigns", {
-  adAccountId: "act_123456789"
-});
+    # -- Database --
+    # Connection string for the local Docker container
+    DATABASE_URL="postgresql://test_user:test_password@localhost:5432/bamboo_test"
 
-// Create campaign
-const newCampaign = await mcp.call("create_campaign", {
-  name: "Summer Sale 2024",
-  objective: "CONVERSIONS",
-  dailyBudget: 5000, // cents
-  status: "PAUSED"
-});
+    # -- Meta App Credentials --
+    # Get these from your Meta for Developers App Dashboard
+    FACEBOOK_APP_ID="<your_facebook_app_id>"
+    FACEBOOK_APP_SECRET="<your_facebook_app_secret>"
+    # This must match the "Valid OAuth Redirect URIs" in your app settings
+    FACEBOOK_CALLBACK_URL="http://localhost:3000/oauth/callback"
 
-// Update campaign
-await mcp.call("update_campaign", {
-  campaignId: "campaign_123",
-  status: "ACTIVE",
-  dailyBudget: 7500
-});
-```
+    # -- JWT Authentication --
+    # Paste the keys generated in the previous step
+    JWT_PRIVATE_KEY='<your_private_jwk_key>'
+    JWT_PUBLIC_KEY='<your_public_jwk_key>'
 
-### Delete operations
+    # -- Server Configuration --
+    # Base URL for the running server
+    BASE_URL="http://localhost:3000"
+    # Scopes your server requests from Meta.
+    FACEBOOK_OAUTH_SCOPES="ads_management,ads_read,read_insights,business_management,pages_show_list,pages_manage_posts,pages_read_engagement"
+    ```
 
-Some deletes are permanent and require confirmation:
+### Running Migrations
 
-```typescript
-// Permanent deletion (ads, creatives, audiences)
-await mcp.call("delete_ad", {
-  adId: "ad_123",
-  confirmPermanentDelete: true // required
-});
-
-// Archive operations (campaigns, ad sets)
-await mcp.call("delete_campaign", {
-  campaignId: "campaign_123" // just sets status to DELETED
-});
-```
-
-### Getting insights
-
-```typescript
-// Performance data
-const insights = await mcp.call("get_ad_insights", {
-  campaignId: "campaign_123",
-  metrics: ["impressions", "clicks", "spend", "conversions"],
-  breakdowns: ["age", "gender"],
-  datePreset: "last_30d"
-});
-
-// Account totals
-const accountInsights = await mcp.call("get_ad_account_insights", {
-  adAccountId: "act_123456789",
-  metrics: ["spend", "impressions", "clicks"],
-  timeRange: {
-    since: "2024-01-01",
-    until: "2024-01-31"
-  }
-});
-```
-
-## Architecture
-
-The server uses a layered approach:
-
-```
-AI Client
-    ↓ MCP Protocol (JSON-RPC)
-MCP Server (tool registration, error handling)
-    ↓
-Business Logic (handlers, validation)
-    ↓
-Integration Layer (Meta SDK, resilience, schemas)
-    ↓
-Data Access (Drizzle ORM, connection pooling)
-    ↓
-External Services (Meta API, PostgreSQL)
-```
-
-Key decisions:
-- Security validation at multiple layers
-- Circuit breakers for external service calls
-- Type safety with auto-generated schemas
-- Business context isolation in the database
-- Structured logging for debugging
-
-## Documentation
-
-- [`API_REFERENCE.md`](./API_REFERENCE.md) - Complete tool reference and schemas
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) - System design and patterns
-- [`DEPLOYMENT.md`](./DEPLOYMENT.md) - Production deployment guide
-- [`SECURITY.md`](./SECURITY.md) - Security implementation details
-
-## Deployment
-
-### Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN pnpm install --frozen-lockfile --prod
-COPY . .
-RUN pnpm build
-EXPOSE 3000
-CMD ["pnpm", "start"]
-```
-
-### Environment considerations
-
-- **Development**: Local PostgreSQL, debug logging enabled
-- **Staging**: Managed database, structured logging
-- **Production**: Connection pooling, health checks, monitoring
-
-The server is stateless and scales horizontally. Database connections use pooling and support read replicas.
-
-## Monitoring
-
-Logs are structured JSON with request IDs for tracing:
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "level": "info",
-  "message": "Executing get_campaigns",
-  "userId": "user_123",
-  "adAccountId": "act_456",
-  "requestId": "req_789",
-  "duration": 245
-}
-```
-
-Health checks monitor database connectivity and Meta API availability. Error rates and response times are tracked per endpoint.
-
-## Development
+Once your database is running and your `.env` file is configured, apply the database schema:
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Development database
-pnpm db:generate
 pnpm db:migrate
-
-# Development mode with hot reload
-pnpm dev
-
-# Run tests
-pnpm test
-
-# Lint and type check
-pnpm checks
 ```
 
-### Code organization
+This command uses Drizzle Kit to apply all migrations located in `src/db/migrations`. It will also set up the `app_user` role required for Row-Level Security.
 
-- TypeScript with strict checking
-- Zod for runtime validation
-- Drizzle ORM for database access
-- Biome for linting and formatting
-- Comprehensive test coverage
+### Starting the Server
+
+You can now start the development server:
+
+```bash
+pnpm dev
+```
+
+The server will be running on `http://localhost:3000`. It automatically rebuilds on file changes.
+
+## Testing with MCP Inspector
+
+`mcp-inspector` is a powerful tool for interacting with MCP servers. This project is pre-configured to work with it.
+
+1.  **Install MCP Inspector globally** (if you haven't already):
+    ```bash
+    npm install -g @modelcontextprotocol/inspector
+    ```
+2.  **Start the server** in one terminal:
+    ```bash
+    pnpm dev
+    ```
+3.  **Run the inspector** in another terminal. You can connect via HTTP or Stdio:
+
+    -   **HTTP (Recommended for most development):**
+        ```bash
+        pnpm mcp:inspect:http
+        ```
+    -   **Stdio (For direct process communication):**
+        ```bash
+        pnpm mcp:inspect:stdio
+        ```
+
+This will open a web interface where you can browse and call all registered tools and prompts.
+
+## Available Scripts
+
+Here's a breakdown of the scripts in `package.json`:
+
+| Script                  | Description                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dev`                   | Starts the server in development mode with `tsx` for live reloading. Runs `prebuild` first.               |
+| `build`                 | Compiles the TypeScript project to JavaScript in `dist/` and copies static assets.                      |
+| `start`                 | Runs the production-ready server from the `dist/` directory.                                            |
+| `test`                  | Runs the full test suite using Vitest.                                                                  |
+| `test:ui`               | Runs Vitest with its interactive UI for a visual testing experience.                                    |
+| `checks`                | Runs Biome for code formatting/linting and `tsc` for type-checking. Ideal for pre-commit hooks.         |
+| `lint`                  | An alias for `biome check .`.                                                                           |
+| `db:generate`           | Generates new SQL migration files based on changes to `src/db/schema.ts`.                               |
+| `db:migrate`            | Applies pending database migrations to the configured database.                                         |
+| `mcp:server:stdio`      | Runs the MCP server in Stdio mode for direct interaction.                                               |
+| `mcp:inspect:http`      | Starts the MCP Inspector and connects to the running HTTP server.                                       |
+| `mcp:inspect:stdio`     | Starts the MCP Inspector and connects to a new server instance via Stdio.                               |
+
+## Project Architecture
+
+The server is designed with a layered architecture to separate concerns and ensure maintainability. For a deep dive, see `docs/ARCHITECTURE.md`.
+
+-   `src/auth`: Handles all OAuth 2.1, JWT, and session management logic.
+-   `src/db`: Contains the Drizzle ORM schema, client, and migrations.
+-   `src/mcp`: The core MCP layer, including tool/resource/prompt registries and the server implementations (HTTP and Stdio).
+-   `src/tools/meta`: The business logic layer. Each `*Handler.ts` file encapsulates API calls for a specific Meta entity (e.g., `campaignHandler.ts`).
+-   `src/utils`: Contains shared utilities for error handling, logging, resilience, and security.
+-   `src/generated`: Contains Zod schemas automatically generated by `scripts/generateSchemas.js`. **Do not edit these manually.**
+-   `src/prompts`: Contains the static text content for system prompts provided to the AI.
 
 ## Troubleshooting
 
-**Authentication issues**
-- Check Meta app credentials and redirect URI
-- Verify JWT secret is set correctly
-- Ensure database migrations are applied
-
-**Database connection problems**
-- Validate connection string format
-- Check PostgreSQL is running and accessible
-- Verify connection pool configuration
-
-**API rate limits**
-- Monitor Meta API usage in dashboard
-- Consider business manager accounts for higher limits
-- Implement client-side request throttling if needed
+| Problem                                                                         | Solution                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Database Connection Fails**                                                   | Verify your Docker container is running (`docker ps`). Check that the `DATABASE_URL` in your `.env` file matches the user, password, port, and database name from your `docker run` command.                                                                                     |
+| **`Invalid OAuth access token` Error**                                          | This is a common Meta API error. Your Meta access token has expired. You need to re-authenticate through the OAuth flow. If using `mcp-inspector`, generate a new authentication token.                                                                                         |
+| **`Application does not have permission` or `App is in development mode` Error** | Your Meta App is in "Development Mode". To use the API, your Facebook account must be added as a "Tester" in the App Dashboard under "Roles". Alternatively, move the app to "Live Mode" after completing App Review.                                                               |
+| **`(#3) To make this call... a business is required` Error**                     | The ad account is managed by a Meta Business Portfolio, but the `business` parameter was not sent. The server's business context resolution should handle this automatically, but a failure indicates a sync issue. Running `get_ad_accounts` usually resolves this by refreshing the context. |
+| **`Permission denied` or `Insufficient permission` Error**                      | Your user account lacks the required permissions on the ad account (e.g., `MANAGE`, `ADVERTISE`) or your Meta App was not granted the necessary OAuth scopes (e.g., `ads_management`). Check your permissions in Meta Business Settings.                                            |
+| **Tests are failing with timeouts or deadlocks**                                | The test suite is configured to run tests sequentially (`maxConcurrency: 1`) to prevent database deadlocks. If you see these issues, ensure this configuration in `vitest.config.ts` has not been changed.                                                                      |
 
 ## Contributing
 
-1. Fork and create a feature branch
-2. Add tests for new functionality
-3. Run `pnpm checks` to verify code quality
-4. Update documentation as needed
-5. Submit PR with clear description
+Please follow these guidelines:
+
+1.  **Branching**: Create a new feature branch from `main`.
+2.  **Code Style**: Run `pnpm checks` before committing to ensure code is formatted, linted, and type-safe.
+3.  **Testing**: Add unit and integration tests for new features. Ensure all existing tests pass by running `pnpm test`.
+4.  **Pull Requests**: Open a PR against `main` with a clear description of the changes.
 
 ## License
 
-Proprietary License - see [LICENSE](LICENSE) file.
-
----
-
-This server handles production traffic and implements the patterns needed for reliable operation. The architecture prioritizes correctness and debuggability over cleverness. 
+This project is proprietary. Please refer to the license agreement for more details.

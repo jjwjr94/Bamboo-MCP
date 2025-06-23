@@ -42,17 +42,12 @@ export class MetaAdAccountHandler {
   }
 
   /**
-   * Encapsulates the nuanced business-ID extraction logic.
+   * Business ID semantics for Meta API compliance:
+   * • string   → Business-managed account (include `business` param)
+   * • null     → Confirmed non-business account (exclude param)
+   * • undefined → Unknown context, triggers discovery
    *
-   * Business ID semantics are ESSENTIAL for Meta API compliance:
-   *  • string   → Business-managed account (include `business` param)
-   *  • null     → Confirmed non-business account (do NOT include param)
-   *  • undefined→ Unknown context, triggers discovery
-   *
-   * ⚠️  DO NOT change these semantics without also updating:
-   *   – createPermissionsFetchRequest() in metaBatchHelper.ts
-   *   – validateBusinessContextForBatch() logic
-   *   – All business context resolution functions
+   * Critical: changing these semantics requires updating metaBatchHelper.ts
    */
   private determineBusinessId(business: unknown): string | null | undefined {
     if (business && typeof business === 'object' && 'id' in (business as Record<string, unknown>)) {
@@ -60,8 +55,6 @@ export class MetaAdAccountHandler {
       return rawId != null ? String(rawId) : undefined;
     }
 
-    // If the business field is explicitly null, this is a non-business account.
-    // Otherwise the context is unknown and a discovery process should follow.
     return business === null ? null : undefined;
   }
 

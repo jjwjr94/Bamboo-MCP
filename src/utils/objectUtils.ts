@@ -3,17 +3,10 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 
 /**
- * Recursively removes properties with `undefined` values from an object and any
- * nested objects or arrays. This function mutates the original object.
- * It is useful for preparing data payloads for APIs that
- * reject or misinterpret undefined keys.
- *
- * Includes circular reference and depth protection to prevent stack overflows.
- *
- * @param obj The object to clean. It will be mutated directly.
+ * Recursively removes undefined properties from an object.
+ * Mutates the original object and includes circular reference protection.
  */
 export function removeUndefinedProperties(obj: Record<string, unknown>): void {
-  // Use a WeakSet to keep track of visited objects to handle circular references.
   const visited = new WeakSet<object>();
 
   const cleanArray = (arr: unknown[], nextDepth: number): void => {
@@ -33,24 +26,20 @@ export function removeUndefinedProperties(obj: Record<string, unknown>): void {
   };
 
   function removeRecursively(current: unknown, depth: number): void {
-    // 1. Guard Clause: Stop if not an object, null, or already visited.
     if (current === null || typeof current !== 'object') {
       return;
     }
 
-    // 2. Guard Clause: Protect against deep recursion / potential stack overflow.
     if (depth > env.MAX_RECURSION_DEPTH) {
-      logger.warn('Maximum recursion depth exceeded in removeUndefinedProperties.', { depth });
+      logger.warn('Max recursion depth exceeded in removeUndefinedProperties', { depth });
       return;
     }
 
-    // 3. Guard Clause: Handle circular references.
     if (visited.has(current)) {
       return;
     }
     visited.add(current);
 
-    // 4. Recursive Traversal: Process arrays and objects.
     if (Array.isArray(current)) {
       cleanArray(current, depth + 1);
     } else {

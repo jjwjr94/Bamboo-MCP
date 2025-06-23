@@ -54,11 +54,8 @@ export interface McpStructuredSuccess<T> {
 function createPromptEmbeddedResources(): EmbeddedResource[] {
   const resources: EmbeddedResource[] = [];
 
-  // Only include resources if the prompt content cache is initialized
   if (!promptContentCache.isInitialized()) {
-    logger.warn(
-      'Prompt content cache not initialized, embedded prompt resources will be omitted from response'
-    );
+    logger.warn('Prompt cache not initialized, omitting embedded resources');
     return resources;
   }
 
@@ -72,8 +69,7 @@ function createPromptEmbeddedResources(): EmbeddedResource[] {
         uri: 'bamboo://prompts/system',
         name: 'system-prompt',
         title: 'System Prompt',
-        description:
-          'Core system instructions defining the AI agent behavior and expertise for Meta advertising operations',
+        description: 'Core system instructions for Meta advertising operations',
         mimeType: 'text/markdown',
         text: systemPrompt,
       },
@@ -87,8 +83,7 @@ function createPromptEmbeddedResources(): EmbeddedResource[] {
         uri: 'bamboo://prompts/best-practices',
         name: 'best-practices-prompt',
         title: 'Best Practices Prompt',
-        description:
-          'Comprehensive Meta Ads best practices organized by vertical and campaign objective for expert guidance',
+        description: 'Meta Ads best practices by vertical and campaign objective',
         mimeType: 'text/markdown',
         text: bestPractices,
       },
@@ -103,55 +98,39 @@ export async function createMcpSuccessResult<T>(
   description?: string,
   options: CreateMcpSuccessResultOptions = {}
 ): Promise<CallToolResult> {
-  // Layer 1: Redact known sensitive fields first.
   const redactedData = redactSensitiveData(data);
-
-  // Layer 2: Sanitize the redacted data to remove internal properties (e.g., _api).
   const sanitizedData = removeUnderscoreProperties(redactedData);
 
-  // Wrap the data in the standardized success structure
   const successContent: McpStructuredSuccess<Sanitized<T>> = {
     type: 'success',
     data: sanitizedData,
   };
 
   const { attachPrompts = false } = options;
-
-  // Always wrap the success content for discriminated union compatibility
   const finalStructuredContent = { result: successContent };
 
   const textHumanReadableContent: TextContent | undefined = description
     ? {
         type: 'text',
-        // Use the human-readable description if available, otherwise serialize the structured content.
-        // This provides a more useful summary for text-only clients, similar to error messages.
         text: description,
       }
     : undefined;
 
   const textStructuredContent: TextContent = {
     type: 'text',
-    // From the 2025-06-18 MCP spec:
-    // For backwards compatibility, a tool that returns structured content SHOULD also return
-    // functionally equivalent unstructured content. (For example, serialized JSON can be returned
-    // in a TextContent block.)
+    // MCP spec backward compatibility: structured content as JSON
     text: JSON.stringify(finalStructuredContent, null, 2),
   };
 
-  // Conditionally create embedded resources for prompt content
   const embeddedResources = attachPrompts ? createPromptEmbeddedResources() : [];
 
   const content: ContentBlock[] = [];
 
-  // Add human-readable description if provided
   if (textHumanReadableContent) {
     content.push(textHumanReadableContent);
   }
 
-  // Add structured JSON content for backwards compatibility
   content.push(textStructuredContent);
-
-  // Add embedded resources
   content.push(...embeddedResources);
 
   const result: CallToolResult = {
@@ -160,7 +139,6 @@ export async function createMcpSuccessResult<T>(
     isError: false,
   };
 
-  // Add metadata if description is provided
   if (description) {
     result._meta = {
       description,

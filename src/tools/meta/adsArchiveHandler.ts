@@ -152,7 +152,7 @@ export class MetaAdsArchiveHandler {
       if (validation.success) {
         validatedResults.push(validation.data);
       } else {
-        logger.warn('Skipping invalid ads archive data received from Meta API', {
+        logger.warn('Skipping invalid ads archive data', {
           adId: (result as { id?: string }).id || 'Unknown ID',
           errors: validation.error.errors,
           userId,

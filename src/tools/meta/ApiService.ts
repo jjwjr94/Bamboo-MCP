@@ -142,7 +142,7 @@ export class MetaApiService {
           const errorData = (await adAccountsResponse
             .json()
             .catch(() => ({}))) as MetaGraphApiError;
-          logger.warn('Failed to fetch ad accounts page during auth', {
+          logger.warn('Failed to fetch ad accounts page', {
             userId,
             status: adAccountsResponse.status,
             error: errorData.error?.message,

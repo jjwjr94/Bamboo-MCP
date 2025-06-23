@@ -2,7 +2,6 @@ import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -43,11 +42,9 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register all targeting-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Targeting Search MCP tools');
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-    logger.info('Targeting Search MCP tools registered', { count: this.getToolCount() });
   }
 
   /**

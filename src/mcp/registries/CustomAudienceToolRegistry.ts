@@ -6,7 +6,6 @@ import {
   MetaCustomAudienceResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -34,13 +33,9 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
   }
 
   public register() {
-    logger.info('Registering Custom Audience MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Custom Audience MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetCustomAudiences() {

@@ -112,14 +112,13 @@ export function deriveUnknownErrorDetails(error: unknown): {
   message: string;
   metadata: McpErrorMetadata;
 } {
-  const unknownError = error instanceof Error ? error : new Error('An unknown error occurred.');
-  logger.error('Unhandled exception in MCP tool execution', {
+  const unknownError = error instanceof Error ? error : new Error('Unknown error');
+  logger.error('Unhandled MCP tool exception', {
     error: unknownError.message,
     stack: unknownError.stack,
   });
   return {
-    message:
-      'An unexpected internal server error occurred. Please contact support if the issue persists.',
+    message: 'Internal server error. Contact support if the issue persists.',
     metadata: {
       retryable: false,
       errorCode: 'INTERNAL_UNHANDLED_ERROR',

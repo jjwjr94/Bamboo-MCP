@@ -9,7 +9,6 @@ import {
   MetaAdSetResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -50,13 +49,9 @@ export class AdSetToolRegistry implements IToolRegistry {
    * Register all ad set-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Ad Set MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Ad Set MCP tools registered', { count: this.getToolCount() });
   }
 
   /**

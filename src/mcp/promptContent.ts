@@ -42,7 +42,7 @@ class PromptContentCache {
       }
 
       this.initialized = true;
-      logger.info('Global prompt content cache initialized successfully');
+      logger.info('Prompt content cache initialized');
     } catch (error) {
       logger.error('Failed to initialize global prompt content cache', { error });
       throw error;

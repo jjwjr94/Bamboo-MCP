@@ -1,0 +1,39 @@
+{
+  "create": {
+    "campaign": {
+      "id": "23844883336250033"
+    },
+    "adSet": {
+      "id": "23845307583250045"
+    },
+    "ad": {
+      "id": "23845308108250056"
+    },
+    "adCreative": {
+      "id": "23845308133250067"
+    },
+    "customAudience": {
+      "id": "23845308158250078"
+    }
+  },
+  "update": {
+    "success": true
+  },
+  "delete": {
+    "success": true
+  },
+  "batchRequest": {
+    "data": [
+      {
+        "code": 200,
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\"id\":\"23844883336250033\"}"
+      }
+    ]
+  }
+}

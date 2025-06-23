@@ -283,19 +283,16 @@ export async function build(opts = {}) {
   });
 
   const gracefulShutdown = async (signal: string) => {
-    logger.info(`Received ${signal}, starting graceful shutdown`);
+    logger.info(`Received ${signal}, shutting down`);
 
     try {
       await app.close();
-      // Cleanup CoreServices
       coreServices.destroy();
-      // Per-request bambooServer instances are cleaned up automatically
-      // We only need to close the shared database connection pool
       await closeDatabase();
-      logger.info('Graceful shutdown completed');
+      logger.info('Shutdown complete');
       process.exit(0);
     } catch (error) {
-      logger.error('Error during shutdown', { error });
+      logger.error('Shutdown error', { error });
       process.exit(1);
     }
   };

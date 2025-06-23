@@ -78,11 +78,10 @@ export class OAuthDatabaseService {
       isActive: true,
     });
 
-    logger.info('Successfully registered MCP client with server-defined Facebook API scopes', {
+    logger.info('Registered MCP client with server-defined scopes', {
       clientId: client.client_id,
       clientName,
-      mcpClientScope: client.scope, // Log original MCP scope for reference
-      serverScopePolicy: 'All MCP clients granted identical Facebook API access',
+      scope: client.scope,
     });
     return client;
   }

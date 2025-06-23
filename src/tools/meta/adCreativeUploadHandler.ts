@@ -8,7 +8,7 @@ import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
-import { NotFoundError, ValidationError } from '../../utils/errors.js';
+import { MetaApiError, NotFoundError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { detectAssetTypeFromMimeType } from '../../utils/mimeTypeDetector.js';
 import { fetchUserTokenString, handleMetaApiCall } from './api.js';
@@ -137,7 +137,7 @@ export class AdCreativeUploadHandler {
     }
 
     if (!metaAssetId) {
-      throw new Error('Could not extract asset ID from Meta API response');
+      throw new ValidationError('Could not extract asset ID from Meta API response');
     }
 
     return metaAssetId;
@@ -166,7 +166,13 @@ export class AdCreativeUploadHandler {
     } catch (netErr: unknown) {
       const errMsg = netErr instanceof Error ? netErr.message : String(netErr);
       logger.error('Network error during Meta upload', { userId, uploadId, error: errMsg });
-      throw new Error(`Network error uploading asset: ${errMsg}`);
+      // Use MetaApiError to wrap network failures, indicating a potential gateway timeout or service unavailability.
+      throw new MetaApiError(
+        `Network error uploading asset: ${errMsg}`,
+        'NETWORK_ERROR',
+        undefined,
+        504
+      );
     }
   }
 
@@ -180,26 +186,28 @@ export class AdCreativeUploadHandler {
     uploadId: string
   ): { hash?: string; id?: string; images?: { [key: string]: { hash: string } } } {
     if (statusCode < 200 || statusCode >= 300) {
-      let errorData: { error?: { message?: string } } | null = null;
+      let errorBody: { error?: { message?: string; code?: number; error_subcode?: number } } = {};
       try {
-        errorData = JSON.parse(responseText);
+        errorBody = JSON.parse(responseText);
       } catch {
-        // Non-JSON error response
+        // Non-JSON error response, the raw response text is still useful.
       }
-
       const errorMessage =
-        errorData?.error?.message || `Meta API upload failed with status ${statusCode}`;
+        errorBody.error?.message ||
+        `Meta API upload failed with status ${statusCode}: ${responseText}`;
+      const metaErrorCode = errorBody.error?.code?.toString();
+      const metaErrorSubcode = errorBody.error?.error_subcode?.toString();
 
       logger.error('Meta API upload error', {
         userId,
         uploadId,
         statusCode,
         errorMessage,
+        metaErrorCode,
+        metaErrorSubcode,
       });
-
-      throw new Error(errorMessage);
+      throw new MetaApiError(errorMessage, metaErrorCode, metaErrorSubcode, statusCode);
     }
-
     return JSON.parse(responseText);
   }
 
@@ -268,7 +276,7 @@ export class AdCreativeUploadHandler {
           });
 
           if (!fileData.file.readable) {
-            throw new Error('File stream is not readable');
+            throw new ValidationError('File stream is not readable');
           }
 
           // Prepare upload request

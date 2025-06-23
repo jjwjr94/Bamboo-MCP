@@ -1,0 +1,124 @@
+{
+  "invalidParameter": {
+    "error": {
+      "message": "Invalid parameter",
+      "type": "OAuthException",
+      "code": 100,
+      "error_subcode": 1349174,
+      "fbtrace_id": "AWJ7tpNAJkYmBnIgL9_TDd8"
+    }
+  },
+  "invalidAccessToken": {
+    "error": {
+      "message": "Invalid OAuth access token.",
+      "type": "OAuthException",
+      "code": 190,
+      "error_subcode": 463,
+      "fbtrace_id": "A4TBZM5Q6P6h1HQZaQZfKy7"
+    }
+  },
+  "rateLimitExceeded": {
+    "error": {
+      "message": "Application request limit reached",
+      "type": "OAuthException",
+      "code": 4,
+      "error_subcode": 2018022,
+      "fbtrace_id": "BO3-YHhT_pA"
+    }
+  },
+  "adAccountNotFound": {
+    "error": {
+      "message": "Ad account not found",
+      "type": "OAuthException",
+      "code": 100,
+      "error_subcode": 1349003,
+      "fbtrace_id": "BD8GQsH0d8A"
+    }
+  },
+  "insufficientPermissions": {
+    "error": {
+      "message": "Insufficient permission to access object",
+      "type": "OAuthException",
+      "code": 200,
+      "error_subcode": 1348092,
+      "fbtrace_id": "CI7-QPOBWwP"
+    }
+  },
+  "campaignNotFound": {
+    "error": {
+      "message": "Campaign not found",
+      "type": "OAuthException",
+      "code": 100,
+      "error_subcode": 1487742,
+      "fbtrace_id": "QT6fQr-5nAR"
+    }
+  },
+  "validationError": {
+    "error": {
+      "message": "Campaign name is required",
+      "type": "FacebookApiException",
+      "code": 100,
+      "error_subcode": 1885634,
+      "fbtrace_id": "RF7-GH8qMkL"
+    }
+  },
+  "temporaryServerError": {
+    "error": {
+      "message": "Please reduce the amount of data you're asking for, then retry your request",
+      "type": "OAuthException",
+      "code": 80004,
+      "error_subcode": 2009,
+      "fbtrace_id": "E1F2G3H4I5J6",
+      "is_transient": true
+    }
+  },
+  "applicationThrottling": {
+    "error": {
+      "message": "The app has reached its call limit",
+      "type": "OAuthException",
+      "code": 341,
+      "error_subcode": 2009,
+      "fbtrace_id": "K7L8M9N0O1P2",
+      "is_transient": true
+    }
+  },
+  "pageThrottling": {
+    "error": {
+      "message": "Too many calls to this page access token",
+      "type": "OAuthException",
+      "code": 368,
+      "error_subcode": 2018022,
+      "fbtrace_id": "Q3R4S5T6U7V8",
+      "user_message": "Too many calls to this page access token.",
+      "is_transient": true
+    }
+  },
+  "businessRequired": {
+    "error": {
+      "message": "(#100) business is required for this action",
+      "type": "OAuthException",
+      "code": 100,
+      "error_subcode": 33,
+      "fbtrace_id": "W9X0Y1Z2A3B4"
+    }
+  },
+  "developmentModeError": {
+    "error": {
+      "message": "(#200) Application does not have permission for this action because the app is in Development Mode.",
+      "type": "OAuthException",
+      "code": 200,
+      "error_subcode": 33,
+      "fbtrace_id": "C5D6E7F8G9H0"
+    }
+  },
+  "serverError503": {
+    "error": {
+      "message": "Temporary failure, please retry",
+      "type": "FacebookApiException",
+      "code": 2,
+      "error_subcode": 2009,
+      "fbtrace_id": "O7P8Q9R0S1T2",
+      "is_transient": true
+    }
+  }
+}

@@ -85,9 +85,8 @@ export class MetaCustomAudienceHandler {
         }
 
         const response = { audiences: validatedAudiences };
-        logger.info('Successfully retrieved custom audiences', {
+        logger.info('Retrieved custom audiences', {
           userId: authPayload.userId,
-          adAccountId,
           count: validatedAudiences.length,
         });
 

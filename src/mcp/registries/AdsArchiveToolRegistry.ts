@@ -3,7 +3,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { MetaAdsArchiveResponseSchema } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -166,13 +165,9 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
    * Register all ads archive-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Ads Archive MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Ads Archive MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerSearchAdsArchive(): void {

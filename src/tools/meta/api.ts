@@ -46,26 +46,23 @@ export async function createMetaApiInstance(userId: string): Promise<FacebookAds
   const tokenRecord = await fetchUserToken(userId);
 
   if (tokenRecord.expiresAt && new Date() >= new Date(tokenRecord.expiresAt)) {
-    logger.warn('Meta access token has expired', { userId, expiresAt: tokenRecord.expiresAt });
+    logger.warn('Meta token expired', { userId, expiresAt: tokenRecord.expiresAt });
     throw new TokenError('Meta access token has expired. Please re-authenticate.');
   }
 
-  // Warn if token expires soon (within 7 days)
+  // Warn if token expires within 7 days
   if (tokenRecord.expiresAt) {
     const daysUntilExpiry =
       (new Date(tokenRecord.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
     if (daysUntilExpiry <= 7) {
-      logger.warn('Meta access token expires soon', {
+      logger.warn('Meta token expires soon', {
         userId,
         daysUntilExpiry: Math.round(daysUntilExpiry),
       });
     }
   }
 
-  // Create and return a new, isolated instance instead of initializing a global singleton.
-  const api = createApiInstanceFromToken(tokenRecord.accessToken);
-  logger.info('New request-scoped Meta Ads API instance created', { userId });
-  return api;
+  return createApiInstanceFromToken(tokenRecord.accessToken);
 }
 
 function parseMetaApiError(error: unknown): {
@@ -75,25 +72,23 @@ function parseMetaApiError(error: unknown): {
   errorSubcode?: string;
 } {
   if (isMetaApiErrorResponse(error)) {
-    // Handle Facebook SDK error structure - status is at top level, error details in response
     const errorResponse = error.response || error;
-    
+
     return {
       message: errorResponse?.message || error.message || 'Meta API request failed',
       statusCode: error.status || 400,
-      metaErrorCode: (errorResponse as any)?.code?.toString(),
-      errorSubcode: (errorResponse as any)?.error_subcode?.toString(),
+      metaErrorCode: errorResponse?.code?.toString() || error.code?.toString(),
+      errorSubcode: errorResponse?.error_subcode?.toString() || error.error_subcode?.toString(),
     };
   }
 
-  // Fallback for unexpected error structure
   return {
-    message: error instanceof Error ? error.message : 'An unknown Meta API error occurred',
+    message: error instanceof Error ? error.message : 'Unknown Meta API error',
     statusCode: 500,
   };
 }
 
-function isMetaApiErrorResponse(error: unknown): error is {
+interface MetaApiErrorResponse {
   message?: string;
   status?: number;
   response?: {
@@ -103,7 +98,11 @@ function isMetaApiErrorResponse(error: unknown): error is {
     code?: number | string;
     error_subcode?: number | string;
   };
-} {
+  code?: number | string;
+  error_subcode?: number | string;
+}
+
+function isMetaApiErrorResponse(error: unknown): error is MetaApiErrorResponse {
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -119,7 +118,6 @@ export async function handleMetaApiCall<T>(
   }
 ): Promise<T> {
   try {
-    // Create a new resilience policy per request to prevent cross-user circuit breaker impact
     const requestScopedPolicy = createMetaResiliencePolicy();
     return await requestScopedPolicy.execute(apiCall);
   } catch (error: unknown) {

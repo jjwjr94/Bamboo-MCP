@@ -87,9 +87,8 @@ export class MetaCampaignHandler {
         }
 
         const response: GetCampaignsResult = { campaigns: validatedCampaigns };
-        logger.info('Successfully retrieved campaigns', {
+        logger.info('Retrieved campaigns', {
           userId: authPayload.userId,
-          adAccountId,
           count: validatedCampaigns.length,
         });
 
@@ -171,9 +170,8 @@ export class MetaCampaignHandler {
           objective: params.objective,
           status: params.status || 'PAUSED',
         };
-        logger.info('Successfully created campaign', {
+        logger.info('Created campaign', {
           userId: authPayload.userId,
-          adAccountId,
           campaignId,
           name: params.name,
         });
@@ -225,15 +223,12 @@ export class MetaCampaignHandler {
           throw new ValidationError('Failed to update campaign: Invalid API response.');
         }
 
+        logger.info('Updated campaign', { campaignId: params.campaignId });
+
         const result: UpdateCampaignResult = {
           campaignId: params.campaignId,
           updatedFields: Object.keys(updateData),
         };
-        logger.info('Successfully updated campaign', {
-          userId: authPayload.userId,
-          campaignId: params.campaignId,
-          updatedFields: Object.keys(updateData),
-        });
 
         return result;
       },
@@ -261,24 +256,26 @@ export class MetaCampaignHandler {
         const api = await createMetaApiInstance(authPayload.userId);
 
         const campaign = new MetaCampaignSDK(params.campaignId, {}, null, api);
-        const deleteResponse = await campaign.delete([]);
+
+        // The Facebook Marketing API uses a POST call with the object ID to delete
+        // campaigns – the SDK exposes this via the `.delete()` helper.
+        const deleteResponse = await campaign.delete([], {});
 
         const validation = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
 
         if (!validation.success) {
-          logger.error('Invalid response from Meta API for delete campaign', {
-            error: validation.error.format(),
+          logger.warn('Invalid deleteCampaign response from Meta API', {
             response: deleteResponse,
+            errors: validation.error.errors,
           });
-          throw new ValidationError('Failed to delete campaign: Invalid API response.');
+          throw new ValidationError(
+            'Meta API returned an invalid response after deleting the campaign. The operation status is uncertain.'
+          );
         }
 
-        const result: DeleteCampaignResult = { campaignId: params.campaignId };
-        logger.info('Successfully deleted campaign', {
-          userId: authPayload.userId,
-          campaignId: params.campaignId,
-        });
+        logger.info('Deleted campaign', { campaignId: params.campaignId });
 
+        const result: DeleteCampaignResult = { campaignId: params.campaignId };
         return result;
       },
       {

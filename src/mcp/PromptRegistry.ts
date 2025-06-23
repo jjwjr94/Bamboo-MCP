@@ -134,7 +134,7 @@ export class PromptRegistry {
       }
     );
 
-    logger.info('MCP prompts and resources registered successfully', {
+    logger.info('MCP prompts and resources registered', {
       prompts: 2,
       resources: 2,
     });

@@ -41,21 +41,19 @@ export class CoreServices {
   }
 
   private static async performInitialization(): Promise<CoreServices> {
-    logger.info('Initializing CoreServices...');
+    logger.info('Initializing CoreServices');
     try {
-      // Perform async initialization for shared resources here.
       await promptContentCache.initialize();
       CoreServices.instance = new CoreServices();
-      logger.info('CoreServices singleton initialized successfully.');
+      logger.info('CoreServices initialized');
       return CoreServices.instance;
     } catch (error) {
-      logger.error('CoreServices initialization failed.', {
+      logger.error('CoreServices initialization failed', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      // Critical: Reset the promise on failure to allow future retries.
+      // Reset promise on failure to allow retries
       CoreServices.initializationPromise = null;
-      // Re-throw the original error to notify the caller of the failure.
       throw error;
     }
   }

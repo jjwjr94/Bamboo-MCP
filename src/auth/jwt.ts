@@ -75,7 +75,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload> {
     }
 
     if (error instanceof joseErrors.JWTClaimValidationFailed) {
-      logger.warn('JWT verification failed', { error: error.message });
+      logger.warn('JWT claim validation failed', { error: error.message });
       throw new TokenError(`Invalid JWT: ${error.message}`);
     }
 
@@ -85,7 +85,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload> {
     }
 
     if (error instanceof joseErrors.JWTInvalid) {
-      logger.warn('JWT format invalid', { error: error.message });
+      logger.warn('JWT invalid format', { error: error.message });
       throw new TokenError(`Invalid JWT: ${error.message}`);
     }
 

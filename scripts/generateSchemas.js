@@ -240,9 +240,9 @@ function filterDeprecatedValues(name, values) {
     const validValues = values.filter((value) => CURRENT_VALID_OBJECTIVES.includes(value));
     const deprecatedValues = values.filter((value) => Object.hasOwn(DEPRECATED_OBJECTIVES, value));
 
-    console.info(`\n📋 ${name} Filtering Results:`);
-    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
-    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+    console.info(`\n${name} Filtering Results:`);
+    console.info(`Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
 
     // Log deprecation mappings
     for (const deprecated of deprecatedValues) {
@@ -256,9 +256,9 @@ function filterDeprecatedValues(name, values) {
     const validValues = values.filter((value) => !DEPRECATED_CTA_TYPES.includes(value));
     const deprecatedValues = values.filter((value) => DEPRECATED_CTA_TYPES.includes(value));
 
-    console.info(`\n📋 ${name} Filtering Results:`);
-    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
-    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+    console.info(`\n${name} Filtering Results:`);
+    console.info(`Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
 
     // Log deprecated CTA types
     for (const deprecated of deprecatedValues) {
@@ -274,9 +274,9 @@ function filterDeprecatedValues(name, values) {
       DEPRECATED_SPECIAL_AD_CATEGORIES.includes(value)
     );
 
-    console.info(`\n📋 ${name} Filtering Results:`);
-    console.info(`✅ Valid (${validValues.length}):`, validValues.join(', '));
-    console.info(`❌ Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+    console.info(`\n${name} Filtering Results:`);
+    console.info(`Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
 
     // Log deprecation mappings
     for (const deprecated of deprecatedValues) {
@@ -328,10 +328,10 @@ function generateInsightMetricEnum() {
 
   const enumValues = validMetrics.map((value) => `'${value}'`).join(', ');
 
-  console.info('\n📊 InsightMetric Generation:');
-  console.info(`✅ Valid metrics (${validMetrics.length}):`, validMetrics.join(', '));
+  console.info('\nInsightMetric Generation:');
+  console.info(`Valid metrics (${validMetrics.length}):`, validMetrics.join(', '));
   if (invalidMetrics.length > 0) {
-    console.info(`❌ Invalid metrics (${invalidMetrics.length}):`, invalidMetrics.join(', '));
+    console.info(`Invalid metrics (${invalidMetrics.length}):`, invalidMetrics.join(', '));
   }
 
   return `
@@ -667,10 +667,10 @@ const totalFields =
   (hasBusinessFields ? Object.keys(Business.Fields).length : 0) +
   (hasBusinessUserFields ? Object.keys(BusinessUser.Fields).length : 0);
 
-console.info(`✅ Generated schemas written to ${outputPath}`);
+console.info(`Generated schemas written to ${outputPath}`);
 console.info(
-  `📊 Generated ${constantsToGenerate.length + manualConstants.length} enum types and schemas`
+  `Generated ${constantsToGenerate.length + manualConstants.length} enum types and schemas`
 );
 console.info(
-  `📋 Generated ${totalFields}${hasAdsInsightsFields ? ` + ${Object.keys(AdsInsights.Fields).length}` : ''} response schema fields`
+  `Generated ${totalFields}${hasAdsInsightsFields ? ` + ${Object.keys(AdsInsights.Fields).length}` : ''} response schema fields`
 );

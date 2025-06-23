@@ -13,6 +13,7 @@ import type {
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
@@ -78,7 +79,9 @@ export class MetaInsightsHandler {
           insightsCursor = await apiObject.getInsights([], insightsParams);
         } else {
           // This case should not occur due to validation in the registry, but handle gracefully
-          throw new Error('At least one of adId, adSetId, or campaignId must be provided.');
+          throw new ValidationError(
+            'At least one of adId, adSetId, or campaignId must be provided.'
+          );
         }
 
         // Use the common pagination utility to handle all edge cases

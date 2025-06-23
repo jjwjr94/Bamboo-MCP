@@ -69,28 +69,22 @@ Use this context to provide expert guidance on Meta advertising operations, camp
    */
   public async shutdown(): Promise<void> {
     if (this.isShutdown) {
-      logger.debug('Shutdown already initiated for this BambooMCPServer instance. Skipping.', {
-        requestId: this.requestId,
-      });
+      logger.debug('MCP server already shutting down', { requestId: this.requestId });
       return;
     }
 
-    logger.debug('Shutting down per-request Bamboo MCP Server...', { requestId: this.requestId });
+    logger.debug('Shutting down MCP server', { requestId: this.requestId });
     this.isShutdown = true;
 
     try {
       await this.server.close();
-      logger.debug('Per-request Bamboo MCP Server shutdown complete.', {
-        requestId: this.requestId,
-      });
+      logger.debug('MCP server shutdown complete', { requestId: this.requestId });
     } catch (error) {
-      logger.error('Error during per-request Bamboo MCP Server shutdown.', {
+      logger.error('MCP server shutdown error', {
         requestId: this.requestId,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      // Do not re-throw the error, allowing graceful shutdown of other components
-      // to continue even if one instance fails to close cleanly.
     }
   }
 

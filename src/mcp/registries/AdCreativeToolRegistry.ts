@@ -6,7 +6,6 @@ import {
   MetaAdCreativeResponseSchema,
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -49,13 +48,9 @@ export class AdCreativeToolRegistry implements IToolRegistry {
    * Register all ad creative-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Ad Creative MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Ad Creative MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetAdCreatives(): void {

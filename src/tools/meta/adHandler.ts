@@ -93,10 +93,9 @@ export class MetaAdHandler {
         }
 
         const response = { ads: validatedAds };
-        logger.info('Successfully retrieved ads', {
+        logger.info('Retrieved ads', {
           userId: authPayload.userId,
           count: validatedAds.length,
-          params,
         });
 
         return response;
@@ -192,15 +191,12 @@ export class MetaAdHandler {
           throw new ValidationError('Failed to update ad: Invalid API response.');
         }
 
-        const result = {
+        logger.info('Updated ad', { adId: params.adId });
+
+        const result: UpdateAdResult = {
           adId: params.adId,
           updatedFields: Object.keys(updateData),
         };
-        logger.info('Successfully updated ad', {
-          userId: authPayload.userId,
-          adId: params.adId,
-          updatedFields: Object.keys(updateData),
-        });
 
         return result;
       },
@@ -231,21 +227,19 @@ export class MetaAdHandler {
         const deleteResponse = await ad.delete([]);
 
         const validation = MetaDeleteSuccessResponseSchema.safeParse(deleteResponse);
-
         if (!validation.success) {
-          logger.error('Invalid response from Meta API for delete ad', {
-            error: validation.error.format(),
+          logger.warn('Invalid deleteAd response from Meta API', {
             response: deleteResponse,
+            errors: validation.error.errors,
           });
-          throw new ValidationError('Failed to delete ad: Invalid API response.');
+          throw new ValidationError(
+            'Meta API returned an invalid response after deleting the ad. The operation status is uncertain.'
+          );
         }
 
-        const result = { adId: params.adId };
-        logger.info('Successfully deleted ad', {
-          userId: authPayload.userId,
-          adId: params.adId,
-        });
+        logger.info('Deleted ad', { adId: params.adId });
 
+        const result = { adId: params.adId };
         return result;
       },
       {

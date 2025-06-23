@@ -3,7 +3,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { AdStatusSchema, MetaAdResponseSchema } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -44,13 +43,9 @@ export class AdToolRegistry implements IToolRegistry {
    * Register all ad-related MCP tools
    */
   public register(): void {
-    logger.info('Registering Ad MCP tools');
-
     for (const registerMethod of this.registrationMethods) {
       registerMethod();
     }
-
-    logger.info('Ad MCP tools registered', { count: this.getToolCount() });
   }
 
   private registerGetAds(): void {

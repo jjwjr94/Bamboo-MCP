@@ -130,7 +130,7 @@ async function processMcpPostError({
   logger.mcpRequest(method, userId, false, duration);
 
   if (error instanceof TimeoutError) {
-    logger.error('MCP request timed out', {
+    logger.error('MCP request timeout', {
       method,
       userId,
       error: error.message,
