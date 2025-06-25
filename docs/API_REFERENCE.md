@@ -17,7 +17,51 @@ The authentication process is as follows:
 
 The server handles the complexity of managing Meta's access tokens, providing a stable JWT for your client to use. The JWT contains the necessary user context (`userId`, `clientId`, `scopes`) for all subsequent API operations.
 
-## 2. Tool Categories
+## 2. Deletion Safety and Confirmation Patterns
+
+**Important: All destructive operations in this server implement comprehensive safety mechanisms to prevent accidental data loss.**
+
+### 2.1. Mandatory User Prompting
+
+All deletion tools require that **users must be prompted to confirm the permanent deletion before the tool is called**. This is not just a recommendation but a required workflow pattern that should be implemented by all clients:
+
+1. **Detect Deletion Intent**: When an AI agent or user expresses intent to delete a resource, the client must first prompt the user for explicit confirmation.
+2. **Present Clear Warning**: The prompt should clearly state that the deletion is permanent and cannot be undone.
+3. **Require Explicit Confirmation**: Only proceed with the tool call after receiving explicit user confirmation.
+4. **Pass Confirmation Flag**: Set `confirmPermanentDelete: true` in the tool call parameters.
+
+### 2.2. Standardized Confirmation Parameter
+
+All deletion tools use a consistent parameter pattern:
+
+```typescript
+{
+  // ... other parameters
+  confirmPermanentDelete: true  // REQUIRED - Must be exactly `true` (boolean literal)
+}
+```
+
+**Important:** The `confirmPermanentDelete` parameter must be set to the boolean literal `true`. Other values like `"true"` (string), `1`, or any truthy value will be rejected with a validation error.
+
+### 2.3. Validation and Error Handling
+
+If the confirmation parameter is missing or invalid, the server will respond with a clear, actionable error message:
+
+```json
+{
+  "isError": true,
+  "content": [
+    {
+      "type": "text",
+      "text": "Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed."
+    }
+  ]
+}
+```
+
+This validation occurs **before** any API calls to Meta, ensuring fast failure and no unintended side effects.
+
+## 3. Tool Categories
 
 The available tools are organized into the following logical categories based on the Meta Ads object model:
 
@@ -35,7 +79,7 @@ The available tools are organized into the following logical categories based on
 
 ---
 
-## 3. Tool Reference
+## 4. Tool Reference
 
 This section details all 38 available MCP tools.
 
@@ -108,11 +152,11 @@ Updates an existing campaign's properties.
     *   `updatedFields` (array of strings): A list of the fields that were updated.
 
 #### `delete_campaign`
-Permanently deletes a campaign. This action cannot be undone.
+**DESTRUCTIVE OPERATION**: Permanently deletes a campaign by setting its status to DELETED. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.
 
 *   **Input Parameters**:
     *   `campaignId` (string, **required**): The ID of the campaign to delete.
-    *   `confirmPermanentDelete` (boolean, **required**): Must be `true` to confirm deletion.
+    *   `confirmPermanentDelete` (boolean literal `true`, **required**): Must be exactly `true` to confirm deletion. See [Deletion Safety](#2-deletion-safety-and-confirmation-patterns) for details.
 *   **Successful Output**:
     *   `campaignId` (string): The ID of the deleted campaign.
 
@@ -165,11 +209,11 @@ Updates an existing ad set.
     *   `updatedFields` (array of strings): A list of the fields that were updated.
 
 #### `delete_adset`
-Permanently deletes an ad set.
+**DESTRUCTIVE OPERATION**: Permanently deletes an ad set. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.
 
 *   **Input Parameters**:
     *   `adSetId` (string, **required**): The ID of the ad set to delete.
-    *   `confirmPermanentDelete` (boolean, **required**): Must be `true`.
+    *   `confirmPermanentDelete` (boolean literal `true`, **required**): Must be exactly `true` to confirm deletion. See [Deletion Safety](#2-deletion-safety-and-confirmation-patterns) for details.
 *   **Successful Output**:
     *   `adSetId` (string): The ID of the deleted ad set.
 
@@ -237,11 +281,11 @@ Updates an existing ad creative's name.
     *   `updatedFields` (array of strings): Will contain `['name']`.
 
 #### `delete_ad_creative`
-Permanently deletes an ad creative.
+**DESTRUCTIVE OPERATION**: Permanently deletes an ad creative. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.
 
 *   **Input Parameters**:
     *   `adCreativeId` (string, **required**): The ID of the creative to delete.
-    *   `confirmPermanentDelete` (boolean, **required**): Must be `true`.
+    *   `confirmPermanentDelete` (boolean literal `true`, **required**): Must be exactly `true` to confirm deletion. See [Deletion Safety](#2-deletion-safety-and-confirmation-patterns) for details.
 *   **Successful Output**:
     *   `adCreativeId` (string): The ID of the deleted creative.
 
@@ -288,11 +332,11 @@ Updates an existing ad.
     *   `updatedFields` (array of strings): A list of the fields that were updated.
 
 #### `delete_ad`
-Permanently deletes an ad.
+**DESTRUCTIVE OPERATION**: Permanently deletes an ad. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.
 
 *   **Input Parameters**:
     *   `adId` (string, **required**): The ID of the ad to delete.
-    *   `confirmPermanentDelete` (boolean, **required**): Must be `true`.
+    *   `confirmPermanentDelete` (boolean literal `true`, **required**): Must be exactly `true` to confirm deletion. See [Deletion Safety](#2-deletion-safety-and-confirmation-patterns) for details.
 *   **Successful Output**:
     *   `adId` (string): The ID of the deleted ad.
 
@@ -345,11 +389,11 @@ Creates a new custom audience for list-based retargeting.
     *   `id` (string): The ID of the newly created custom audience.
 
 #### `delete_custom_audience`
-Permanently deletes a custom audience.
+**DESTRUCTIVE OPERATION**: Permanently deletes a custom audience by its ID. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.
 
 *   **Input Parameters**:
     *   `customAudienceId` (string, **required**): The ID of the audience to delete.
-    *   `confirmPermanentDelete` (boolean, **required**): Must be `true`.
+    *   `confirmPermanentDelete` (boolean literal `true`, **required**): Must be exactly `true` to confirm deletion. See [Deletion Safety](#2-deletion-safety-and-confirmation-patterns) for details.
 *   **Successful Output**:
     *   `success` (boolean): `true` if the deletion was successful.
 
@@ -487,7 +531,7 @@ Checks if a list of targeting option IDs (from interests, behaviors, etc.) are s
 
 ---
 
-## 4. Error Handling
+## 5. Error Handling
 
 The server returns structured errors to provide clear guidance for clients. All errors, whether from the Meta API or internal validation, are standardized into the following format.
 
@@ -517,7 +561,7 @@ The server returns structured errors to provide clear guidance for clients. All 
 | `api_error` | A general, non-transient error returned by the Meta API. | No |
 | `internal` | An unexpected server-side error occurred. Includes transient issues like network timeouts. | Sometimes |
 
-## 5. Rate Limiting and Resilience
+## 6. Rate Limiting and Resilience
 
 The server is designed with resilience to handle transient failures from the Meta API.
 *   **Retries with Exponential Backoff**: The server will automatically retry API calls that fail due to temporary issues (like server-side errors or timeouts) with an increasing delay between attempts.

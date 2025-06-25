@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ZodObject, ZodTypeAny, z } from 'zod';
+import { z } from 'zod';
+import type { ZodObject, ZodTypeAny } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { createMcpErrorResult } from '../errorHandler.js';
@@ -65,3 +66,13 @@ export function createMcpTool<
     }
   );
 }
+
+/**
+ * Common deletion confirmation schema for all deletion tools.
+ * Ensures consistent behavior across the codebase for permanent deletion operations.
+ */
+export const DeletionConfirmationSchema = z.literal(true, {
+  errorMap: () => ({
+    message: 'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.',
+  }),
+});

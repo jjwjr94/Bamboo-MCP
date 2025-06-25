@@ -65,6 +65,25 @@ const DEPRECATED_SPECIAL_AD_CATEGORIES = [
   'CREDIT', // Deprecated in favor of FINANCIAL_PRODUCTS_SERVICES
 ];
 
+// Deprecated AdSetBillingEvent values
+// Source: Meta API research - CLICKS replaced by LINK_CLICKS, others are legacy/no longer recommended
+const DEPRECATED_BILLING_EVENTS = [
+  'CLICKS', // Deprecated in favor of LINK_CLICKS
+  'PAGE_LIKES',
+  'OFFER_CLAIMS',
+];
+
+// Deprecated AdSetOptimizationGoal values
+// Source: Meta API research - these goals are legacy or have been replaced by outcome-based goals
+const DEPRECATED_OPTIMIZATION_GOALS = [
+  'OFFSITE_CONVERSIONS',
+  'PAGE_LIKES',
+  'POST_ENGAGEMENT',
+  'AD_RECALL_LIFT',
+  'NONE',
+  'DERIVED_EVENTS',
+];
+
 // Note: TARGET_COST bid strategy was deprecated in v9 but is no longer in the SDK
 
 // Configuration for constants to auto-generate from Meta SDK
@@ -79,8 +98,8 @@ const constantsToGenerate = [
     constant: Campaign.SpecialAdCategories,
     filterDeprecated: true,
   },
-  { name: 'AdSetBillingEvent', constant: AdSet.BillingEvent },
-  { name: 'AdSetOptimizationGoal', constant: AdSet.OptimizationGoal },
+  { name: 'AdSetBillingEvent', constant: AdSet.BillingEvent, filterDeprecated: true },
+  { name: 'AdSetOptimizationGoal', constant: AdSet.OptimizationGoal, filterDeprecated: true },
   { name: 'AdSetBidStrategy', constant: AdSet.BidStrategy },
   { name: 'AdSetConfiguredStatus', constant: AdSet.ConfiguredStatus },
   { name: 'AdSetEffectiveStatus', constant: AdSet.EffectiveStatus },
@@ -286,6 +305,36 @@ function filterDeprecatedValues(name, values) {
     return validValues;
   }
 
+  if (name === 'AdSetBillingEvent') {
+    const validValues = values.filter((value) => !DEPRECATED_BILLING_EVENTS.includes(value));
+    const deprecatedValues = values.filter((value) => DEPRECATED_BILLING_EVENTS.includes(value));
+
+    console.info(`\n${name} Filtering Results:`);
+    console.info(`Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+    console.info('   CLICKS → LINK_CLICKS (Official replacement)');
+    console.info('   PAGE_LIKES, OFFER_CLAIMS → (Legacy values - no direct replacement)');
+
+    return validValues;
+  }
+
+  if (name === 'AdSetOptimizationGoal') {
+    const validValues = values.filter((value) => !DEPRECATED_OPTIMIZATION_GOALS.includes(value));
+    const deprecatedValues = values.filter((value) =>
+      DEPRECATED_OPTIMIZATION_GOALS.includes(value)
+    );
+
+    console.info(`\n${name} Filtering Results:`);
+    console.info(`Valid (${validValues.length}):`, validValues.join(', '));
+    console.info(`Deprecated (${deprecatedValues.length}):`, deprecatedValues.join(', '));
+
+    for (const deprecated of deprecatedValues) {
+      console.info(`   ${deprecated} → (Legacy/Deprecated goal - no direct replacement)`);
+    }
+
+    return validValues;
+  }
+
   return values; // No filtering for other enums
 }
 
@@ -387,6 +436,14 @@ function generateEnumSchemaAndType(name, constant, options = {}) {
     deprecationNotice = `
 // Note: CREDIT category has been filtered out as it's deprecated in favor of FINANCIAL_PRODUCTS_SERVICES
 // See: Meta policy updates 2024/2025 - use FINANCIAL_PRODUCTS_SERVICES for financial products`;
+  } else if (name === 'AdSetBillingEvent') {
+    deprecationNotice = `
+// Note: Deprecated billing events like CLICKS, PAGE_LIKES, and OFFER_CLAIMS have been filtered out
+// Use LINK_CLICKS instead of CLICKS`;
+  } else if (name === 'AdSetOptimizationGoal') {
+    deprecationNotice = `
+// Note: Deprecated optimization goals like OFFSITE_CONVERSIONS, PAGE_LIKES, and NONE have been filtered out
+// Please use current, outcome-based optimization goals`;
   }
 
   return `${deprecationNotice}

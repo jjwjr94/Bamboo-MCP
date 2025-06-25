@@ -11,6 +11,158 @@ export type UploadSuccessResult = {
   metaAssetId: string;
 };
 
+// CSS styles for the Copy-to-AI functionality
+const AI_COPY_STYLES = `
+  .ai-copy-container {
+    margin: var(--bamboo-space-6) 0;
+    padding: var(--bamboo-space-4);
+    background-color: var(--bamboo-color-background);
+    border: var(--bamboo-border-width) solid var(--bamboo-color-border);
+    border-radius: var(--bamboo-border-radius);
+  }
+  .ai-copy-container h3 {
+    margin-top: 0;
+    color: var(--bamboo-color-secondary);
+    font-size: var(--bamboo-font-size-base);
+  }
+  .ai-copy-text {
+    background-color: var(--bamboo-color-code-bg);
+    padding: var(--bamboo-space-3);
+    border-radius: var(--bamboo-border-radius);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: var(--bamboo-font-size-sm);
+    margin: var(--bamboo-space-3) 0;
+  }
+  .copy-btn {
+    margin-top: var(--bamboo-space-3);
+    padding: var(--bamboo-space-2) var(--bamboo-space-4);
+    font-size: var(--bamboo-font-size-sm);
+    transition: background-color 0.2s ease;
+  }
+  .copy-btn.copied {
+    background-color: var(--bamboo-color-success);
+  }
+`;
+
+// JavaScript functionality for copy-to-clipboard
+const AI_COPY_SCRIPT = `
+  const initializeAiCopy = () => {
+    const copyButton = document.querySelector('.copy-btn');
+    if (!copyButton) return;
+
+    const targetSelector = copyButton.dataset.copyTarget;
+    const textElement = document.querySelector(targetSelector);
+    if (!textElement) return;
+
+    copyButton.addEventListener('click', async () => {
+      const text = textElement.textContent.trim();
+      
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          showCopyFeedback(copyButton, 'Copied!');
+          return;
+        } catch (err) {
+          console.warn('Modern clipboard API failed, trying fallback:', err);
+        }
+      }
+      
+      // Fallback to legacy method
+      try {
+        fallbackCopyToClipboard(text);
+        showCopyFeedback(copyButton, 'Copied!');
+      } catch (err) {
+        console.error('All copy methods failed:', err);
+        showCopyFeedback(copyButton, 'Copy failed', true);
+        showToast('Copy failed. Please manually select and copy the text above.', true);
+      }
+    });
+  };
+  
+  function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (!successful) {
+        throw new Error('execCommand returned false');
+      }
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
+  
+  function showCopyFeedback(button, message, isError = false) {
+    const originalText = button.textContent;
+    button.textContent = message;
+    if (isError) {
+      button.style.backgroundColor = '#dc3545';
+    } else {
+      button.classList.add('copied');
+    }
+    button.disabled = true;
+
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.classList.remove('copied');
+      button.style.backgroundColor = '';
+      button.disabled = false;
+    }, 2000);
+  }
+  
+  function showToast(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = \`
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 6px;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      background-color: \${isError ? '#dc3545' : '#28a745'};
+      transition: opacity 0.3s ease;
+      max-width: 300px;
+    \`;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }, 4000);
+  }
+  
+  initializeAiCopy();
+`;
+
 // Troubleshooting blocks broken out to avoid inline cognitive overload
 export const TROUBLESHOOTING_TEMPLATES = {
   // NEW: Template for Meta App Development Mode issues
@@ -104,6 +256,7 @@ export const TROUBLESHOOTING_TEMPLATES = {
  * Generates the HTML markup for a successful upload response.
  */
 export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSuccessResult): string {
+  const aiPrompt = `I successfully uploaded creative asset ${metaAssetId}, please verify it.`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -111,6 +264,7 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload Complete | Bamboo</title>
   <link rel="stylesheet" href="/bamboo-ui.css">
+  <style>${AI_COPY_STYLES}</style>
 </head>
 <body>
   <main class="container">
@@ -118,9 +272,18 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
       <h1>✅ Upload Complete!</h1>
       <p><strong>Asset Type:</strong> ${escapeHtml(assetType)}</p>
       <p><strong>Meta Asset ID:</strong> ${escapeHtml(metaAssetId)}</p>
+      
+      <div class="ai-copy-container">
+        <h3>Communicate with AI Assistant</h3>
+        <p>Copy the following message to your AI assistant to confirm the upload.</p>
+        <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
+        <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+      </div>
+
       <p>Your file has been successfully uploaded to Meta. You can now close this window.</p>
     </article>
   </main>
+  <script>${AI_COPY_SCRIPT}</script>
 </body>
 </html>`;
 }
@@ -214,6 +377,7 @@ export function renderUploadFailedPage(
   errorMessage: string,
   troubleshootingSteps: string
 ): string {
+  const aiPrompt = `My attempt to upload a creative asset failed with the error: "${errorMessage}". Could you please provide a new upload link?`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -221,6 +385,7 @@ export function renderUploadFailedPage(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload Failed | Bamboo</title>
   <link rel="stylesheet" href="/bamboo-ui.css">
+  <style>${AI_COPY_STYLES}</style>
 </head>
 <body>
   <main class="container">
@@ -231,6 +396,14 @@ export function renderUploadFailedPage(
         <p><strong>Error Details:</strong></p>
         <code>${escapeHtml(errorMessage)}</code>
       </div>
+
+      <div class="ai-copy-container">
+        <h3>Request Assistance from AI</h3>
+        <p>To get a new upload link, copy the message below and send it to your AI assistant.</p>
+        <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
+        <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+      </div>
+      
       ${troubleshootingSteps}
       <div>
         <p><strong>Need Help?</strong> If you continue to experience issues, please:</p>
@@ -249,7 +422,56 @@ export function renderUploadFailedPage(
   <script>
     document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
     document.getElementById('closeBtn')?.addEventListener('click', () => window.close());
+    ${AI_COPY_SCRIPT}
   </script>
+</body>
+</html>`;
+}
+
+/**
+ * Generates the HTML markup for the "Upload In Progress" (409) page.
+ */
+export function renderUploadInProgressPage(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="10">
+  <title>Upload In Progress | Bamboo</title>
+  <link rel="stylesheet" href="/bamboo-ui.css">
+  <style>
+    .container {
+      text-align: center;
+    }
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border-left-color: var(--bamboo-color-primary);
+      animation: spin 1s ease infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <article>
+      <h1>⏳ Upload In Progress</h1>
+      <div class="spinner"></div>
+      <p>This asset is currently being uploaded. This page will automatically refresh every 10 seconds to check the status.</p>
+      <p>You can also close this window. The process will continue in the background.</p>
+    </article>
+  </main>
 </body>
 </html>`;
 }
@@ -258,6 +480,8 @@ export function renderUploadFailedPage(
  * Generates the HTML markup for the "Upload Session Not Found" (404) page.
  */
 export function renderUploadSessionNotFoundPage(): string {
+  const aiPrompt =
+    'My upload link is invalid, expired, or has already been used. Could you please provide a new upload link?';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -265,14 +489,23 @@ export function renderUploadSessionNotFoundPage(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload Session Not Found | Bamboo</title>
   <link rel="stylesheet" href="/bamboo-ui.css">
+  <style>${AI_COPY_STYLES}</style>
 </head>
 <body>
   <main class="container">
     <article>
       <h1>Upload Session Not Found</h1>
       <p>This upload session is invalid, expired, or has already been used.</p>
+      
+      <div class="ai-copy-container">
+        <h3>Request New Upload Link</h3>
+                 <p>Copy the message below and send it to your AI assistant to get a new upload link.</p>
+         <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
+         <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+      </div>
     </article>
   </main>
+  <script>${AI_COPY_SCRIPT}</script>
 </body>
 </html>`;
 }
@@ -323,8 +556,13 @@ export function renderUploadFormPage(uploadId: string): string {
 
 /**
  * Generates the HTML markup for a generic server error (500) page.
+ * @param customMessage An optional, user-facing error message to display.
  */
-export function renderServerErrorPage(): string {
+export function renderServerErrorPage(customMessage?: string): string {
+  const displayMessage = customMessage
+    ? escapeHtml(customMessage)
+    : 'An unexpected error occurred. We have been notified and are looking into it.';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -337,7 +575,10 @@ export function renderServerErrorPage(): string {
   <main class="container">
     <article>
       <h1>Server Error</h1>
-      <p>Unable to load upload form. Please try again later.</p>
+      <p>${displayMessage}</p>
+      <div class="actions">
+        <button onclick="window.location.reload()" class="secondary">Try Again</button>
+      </div>
     </article>
   </main>
 </body>

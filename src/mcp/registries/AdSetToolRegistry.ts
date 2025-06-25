@@ -10,7 +10,7 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
-import { createMcpTool } from './registryHelper.js';
+import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Set Tool Registry
@@ -128,7 +128,7 @@ export class AdSetToolRegistry implements IToolRegistry {
             .positive()
             .optional()
             .describe(
-              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget.'
+              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
             ),
           lifetimeBudget: z
             .number()
@@ -136,7 +136,7 @@ export class AdSetToolRegistry implements IToolRegistry {
             .positive()
             .optional()
             .describe(
-              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget.'
+              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
             ),
           targeting: z
             .object({
@@ -177,9 +177,11 @@ export class AdSetToolRegistry implements IToolRegistry {
             .describe(
               'Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'
             ),
-          billingEvent: AdSetBillingEventSchema.describe('Billing event for the ad set.'),
+          billingEvent: AdSetBillingEventSchema.describe(
+            'Billing event for the ad set. Must be compatible with optimization goal.'
+          ),
           optimizationGoal: AdSetOptimizationGoalSchema.describe(
-            'Optimization goal for the ad set.'
+            'Optimization goal for the ad set. APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id.'
           ),
           bidStrategy: AdSetBidStrategySchema.optional().describe(
             'The bid strategy for the ad set. If not specified, defaults to LOWEST_COST_WITHOUT_CAP.'
@@ -200,13 +202,19 @@ export class AdSetToolRegistry implements IToolRegistry {
             .record(z.string(), z.any())
             .optional()
             .describe(
-              'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives.'
+              'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives: APP_INSTALLS needs application_id, LEAD_GENERATION needs page_id.'
             ),
           isSacCfcaTermsCertified: z
             .boolean()
             .optional()
             .describe(
-              "Certifies CCPA compliance. Required for Special Ad Category campaigns targeting California with the 'CONVERSIONS' optimization goal."
+              "Certifies CCPA compliance. Required for Special Ad Category campaigns targeting California with optimization goals like 'VALUE', 'LEAD_GENERATION', or 'CONVERSIONS'."
+            ),
+          isEligibleForSacCampaigns: z
+            .boolean()
+            .optional()
+            .describe(
+              "Confirms eligibility for Special Ad Category campaigns. Required for all SAC campaigns from January 2025 as part of Meta's enhanced compliance framework."
             ),
         },
         successDataSchema,
@@ -240,13 +248,17 @@ export class AdSetToolRegistry implements IToolRegistry {
             .int()
             .positive()
             .optional()
-            .describe('New daily budget in cents (e.g., 1000 = $10.00).'),
+            .describe(
+              'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
+            ),
           lifetimeBudget: z
             .number()
             .int()
             .positive()
             .optional()
-            .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
+            .describe(
+              'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
+            ),
           bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
         },
         successDataSchema,
@@ -269,12 +281,13 @@ export class AdSetToolRegistry implements IToolRegistry {
       'delete_adset',
       {
         title: 'Delete Ad Set',
-        description: 'Permanently deletes an ad set. This action cannot be undone.',
+        description:
+          'Permanently deletes an ad set. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
         inputSchema: {
           adSetId: z.string().describe('The ID of the ad set to delete.'),
-          confirmPermanentDelete: z
-            .boolean()
-            .describe('Confirmation that you want to permanently delete this ad set.'),
+          confirmPermanentDelete: DeletionConfirmationSchema.describe(
+            'Must be set to true to confirm permanent deletion.'
+          ),
         },
         successDataSchema,
       },

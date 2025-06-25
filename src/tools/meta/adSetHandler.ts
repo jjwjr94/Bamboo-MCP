@@ -3,12 +3,14 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
+import { z } from 'zod';
 import {
   MetaAdSetResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -17,7 +19,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
-import { META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
+import { ADSET_COMPATIBILITY, META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateAdSetResult,
@@ -26,6 +28,99 @@ import type {
   MetaAdSet,
   UpdateAdSetResult,
 } from './types.js';
+
+// Define comprehensive validation schemas for ad sets following 2025 best practices
+const CreateAdSetValidationSchema = z
+  .object({
+    dailyBudget: z.number().optional(),
+    lifetimeBudget: z.number().optional(),
+    targeting: z.object({
+      geoLocations: z.object({
+        countries: z.array(z.string()).optional(),
+        regions: z.array(z.object({ key: z.string() })).optional(),
+        cities: z.array(z.object({ key: z.string() })).optional(),
+      }),
+    }),
+    optimizationGoal: z.string(),
+    billingEvent: z.string(),
+    promotedObject: z.record(z.string(), z.any()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // 1. Budget XOR validation
+    if (!data.dailyBudget && !data.lifetimeBudget) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Either dailyBudget or lifetimeBudget must be provided.',
+        path: ['dailyBudget'],
+      });
+    }
+    if (data.dailyBudget && data.lifetimeBudget) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide either dailyBudget or lifetimeBudget, but not both.',
+        path: ['dailyBudget'],
+      });
+    }
+
+    // 2. Geographic targeting validation
+    const geoLocs = data.targeting.geoLocations;
+    if (!geoLocs.countries?.length && !geoLocs.regions?.length && !geoLocs.cities?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Geographic targeting must specify at least one of: countries, regions, or cities.',
+        path: ['targeting', 'geoLocations'],
+      });
+    }
+
+    // 3. Promoted object requirements based on optimization goal
+    if (data.optimizationGoal === 'APP_INSTALLS' && !data.promotedObject?.application_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "For the 'APP_INSTALLS' optimization goal, 'promotedObject' must include 'application_id'.",
+        path: ['promotedObject'],
+      });
+    }
+    if (data.optimizationGoal === 'LEAD_GENERATION' && !data.promotedObject?.page_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "For the 'LEAD_GENERATION' optimization goal, 'promotedObject' must include 'page_id'.",
+        path: ['promotedObject'],
+      });
+    }
+
+    // 4. Billing event compatibility matrix validation
+    const billingEvent = data.billingEvent;
+    if (billingEvent in ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP) {
+      const compatibleGoals =
+        ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP[
+          billingEvent as keyof typeof ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP
+        ];
+      if (!compatibleGoals.includes(data.optimizationGoal as never)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Optimization goal '${data.optimizationGoal}' is not compatible with billing event '${billingEvent}'. Valid optimization goals for '${billingEvent}' are: ${compatibleGoals.join(', ')}.`,
+          path: ['optimizationGoal'],
+        });
+      }
+    }
+  });
+
+const UpdateAdSetValidationSchema = z
+  .object({
+    dailyBudget: z.number().optional(),
+    lifetimeBudget: z.number().optional(),
+  })
+  .refine((data) => !(data.dailyBudget && data.lifetimeBudget), {
+    message: 'Provide either dailyBudget or lifetimeBudget for an update, but not both.',
+    path: ['dailyBudget'],
+  });
+
+const DeleteAdSetValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
 
 export class MetaAdSetHandler {
   async getAdSets(
@@ -115,27 +210,19 @@ export class MetaAdSetHandler {
   ): Promise<CreateAdSetResult> {
     logger.info('Executing create_adset', { userId: authPayload.userId, params });
 
-    // Validate budget requirement: either dailyBudget OR lifetimeBudget must be provided
-    if (!params.dailyBudget && !params.lifetimeBudget) {
-      throw new ValidationError('Either dailyBudget or lifetimeBudget must be provided.');
-    }
-    if (params.dailyBudget && params.lifetimeBudget) {
-      throw new ValidationError('Provide either dailyBudget or lifetimeBudget, but not both.');
-    }
-
-    // Validate geoLocations has at least one targeting criterion
-    const geoLocs = params.targeting.geoLocations;
-    if (!geoLocs.countries?.length && !geoLocs.regions?.length && !geoLocs.cities?.length) {
-      throw new ValidationError(
-        'Geographic targeting must specify at least one of: countries, regions, or cities.'
-      );
+    // Validate all synchronous rules using comprehensive Zod schema
+    const validation = CreateAdSetValidationSchema.safeParse(params);
+    if (!validation.success) {
+      // Extract the first validation error for clear error messaging
+      const error = validation.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Fetch campaign to check for special ad categories
+        // Fetch campaign to check for special ad categories (async validation)
         const campaign = await new MetaCampaignSDK(params.campaignId, {}, null, api).read([
           'special_ad_categories',
         ]);
@@ -143,12 +230,12 @@ export class MetaAdSetHandler {
           (cat: string) => cat !== 'NONE'
         );
 
-        // Check for California targeting
+        // Check for California targeting (async validation)
         const targetsCalifornia = params.targeting.geoLocations?.regions?.some(
           (r) => r.key === META_LOCATION_KEYS.CALIFORNIA
         );
 
-        // Enforce SAC-CFCA compliance rule
+        // Enforce SAC-CFCA compliance rule (requires async data)
         if (
           isSpecialAdCategory &&
           (SAC_COMPLIANCE.CCPA_REQUIRED_OPTIMIZATION_GOALS as readonly string[]).includes(
@@ -159,6 +246,13 @@ export class MetaAdSetHandler {
         ) {
           throw new ValidationError(
             `For Special Ad Category campaigns with '${params.optimizationGoal}' goal targeting California, 'isSacCfcaTermsCertified' must be set to true.`
+          );
+        }
+
+        // Validate SAC campaign eligibility field (requires async data)
+        if (isSpecialAdCategory && params.isEligibleForSacCampaigns !== true) {
+          throw new ValidationError(
+            "For Special Ad Category campaigns, 'isEligibleForSacCampaigns' must be set to true as required by Meta's enhanced compliance framework from January 2025."
           );
         }
 
@@ -183,6 +277,7 @@ export class MetaAdSetHandler {
           [MetaAdSetSDK.Fields.promoted_object]: params.promotedObject,
           [MetaAdSetSDK.Fields.attribution_spec]: params.attributionSpec,
           is_sac_cfca_terms_certified: params.isSacCfcaTermsCertified,
+          is_eligible_for_sac_campaigns: params.isEligibleForSacCampaigns,
         };
 
         removeUndefinedProperties(adSetData);
@@ -241,6 +336,13 @@ export class MetaAdSetHandler {
   ): Promise<UpdateAdSetResult> {
     logger.info('Executing update_adset', { userId: authPayload.userId, params });
 
+    // Validate budget requirements for updates using Zod schema
+    const validation = UpdateAdSetValidationSchema.safeParse(params);
+    if (!validation.success) {
+      const error = validation.error.errors[0];
+      throw new ValidationError(error.message);
+    }
+
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -293,10 +395,11 @@ export class MetaAdSetHandler {
   ): Promise<DeleteAdSetResult> {
     logger.info('Executing delete_ad_set', { userId: authPayload.userId, params });
 
-    if (params.confirmPermanentDelete !== true) {
-      throw new ValidationError(
-        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
-      );
+    // Validate confirmation using Zod schema
+    const validationResult = DeleteAdSetValidationSchema.safeParse(params);
+    if (!validationResult.success) {
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(

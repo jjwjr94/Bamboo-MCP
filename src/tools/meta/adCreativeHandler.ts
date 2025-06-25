@@ -2,12 +2,14 @@ import {
   AdAccount as MetaAdAccountSDK,
   AdCreative as MetaAdCreativeSDK,
 } from 'facebook-nodejs-business-sdk';
+import { z } from 'zod';
 import {
   MetaAdCreativeResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -24,6 +26,11 @@ import type {
   MetaAdCreative,
   UpdateAdCreativeResult,
 } from './types.js';
+
+// Define validation schema for ad creative deletion
+const DeleteAdCreativeValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
 
 export class MetaAdCreativeHandler {
   async getAdCreatives(
@@ -191,10 +198,11 @@ export class MetaAdCreativeHandler {
   ): Promise<DeleteAdCreativeResult> {
     logger.info('Executing delete_ad_creative', { userId: authPayload.userId, params });
 
-    if (params.confirmPermanentDelete !== true) {
-      throw new ValidationError(
-        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
-      );
+    // Validate deletion confirmation using Zod schema
+    const validationResult = DeleteAdCreativeValidationSchema.safeParse(params);
+    if (!validationResult.success) {
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { AdStatusSchema, MetaAdResponseSchema } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
-import { createMcpTool } from './registryHelper.js';
+import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Tool Registry
@@ -174,12 +174,13 @@ export class AdToolRegistry implements IToolRegistry {
       'delete_ad',
       {
         title: 'Delete Ad',
-        description: 'Permanently deletes an ad. This action cannot be undone.',
+        description:
+          'Permanently deletes an ad. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
         inputSchema: {
           adId: z.string().describe('The ID of the ad to delete.'),
-          confirmPermanentDelete: z
-            .boolean()
-            .describe('Confirmation that you want to permanently delete this ad.'),
+          confirmPermanentDelete: DeletionConfirmationSchema.describe(
+            'Must be set to true to confirm permanent deletion.'
+          ),
         },
         successDataSchema,
       },

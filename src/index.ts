@@ -23,6 +23,7 @@ import {
   renderServerErrorPage,
   renderUploadFailedPage,
   renderUploadFormPage,
+  renderUploadInProgressPage,
   renderUploadSessionNotFoundPage,
   renderUploadSuccessPage,
 } from './utils/uploadTemplates.js';
@@ -176,9 +177,13 @@ export async function build(opts = {}) {
   // Creative asset upload endpoints
 
   /**
-   * GET endpoint: Serves HTML upload form for creative assets
-   * This endpoint validates that the uploadId exists and is in 'pending' status
-   * but does not require authentication - security is provided by the unguessable UUID
+   * GET endpoint: Serves appropriate HTML pages based on upload session state
+   * This endpoint validates the uploadId and serves different pages based on status:
+   * - pending/failed: upload form (allows retry)
+   * - uploading: progress page with 409 status
+   * - completed: success page
+   * - expired/not found: 404 page
+   * Security is provided by the unguessable UUID
    */
   app.get('/v1/assets/upload/:uploadId', async (request, reply) => {
     const { uploadId } = request.params as { uploadId: string };
@@ -188,19 +193,47 @@ export async function build(opts = {}) {
         where: eq(creativeAssetUploads.id, uploadId),
       });
 
-      // Check if record exists, is pending, and has not expired
-      if (
-        !uploadRecord ||
-        uploadRecord.status !== 'pending' ||
-        new Date() > uploadRecord.expiresAt
-      ) {
+      // 1. Handle non-existent or expired sessions first (404)
+      if (!uploadRecord || new Date() > uploadRecord.expiresAt) {
+        logger.warn('Upload session not found or expired', { uploadId });
         return reply.status(404).type('text/html').send(renderUploadSessionNotFoundPage());
       }
 
-      // Serve upload form
-      return reply.type('text/html').send(renderUploadFormPage(uploadId));
+      // 2. Handle different states with a switch statement
+      switch (uploadRecord.status) {
+        case 'pending':
+        case 'failed':
+          // Show upload form for pending and failed states to allow retry
+          return reply.type('text/html').send(renderUploadFormPage(uploadId));
+
+        case 'uploading':
+          // Show a "blocked" page if an upload is in progress (409 Conflict)
+          return reply.status(409).type('text/html').send(renderUploadInProgressPage());
+
+        case 'completed':
+          // Show success page if already completed
+          if (!uploadRecord.metaAssetId || uploadRecord.assetType === 'pending') {
+            const errorMessage = `The upload record is in an inconsistent state. Please contact support and provide this ID: ${uploadId}.`;
+            logger.error('Inconsistent "completed" state for upload record', { uploadId });
+            return reply.status(500).type('text/html').send(renderServerErrorPage(errorMessage));
+          }
+          return reply.type('text/html').send(
+            renderUploadSuccessPage({
+              assetType: uploadRecord.assetType,
+              metaAssetId: uploadRecord.metaAssetId,
+            })
+          );
+
+        default:
+          // Fallback for any other unexpected status
+          logger.error('Unknown upload status encountered', {
+            uploadId,
+            status: uploadRecord.status,
+          });
+          return reply.status(404).type('text/html').send(renderUploadSessionNotFoundPage());
+      }
     } catch (error) {
-      logger.error('Failed to serve upload form', { uploadId, error });
+      logger.error('Failed to serve upload page', { uploadId, error });
       return reply.status(500).type('text/html').send(renderServerErrorPage());
     }
   });

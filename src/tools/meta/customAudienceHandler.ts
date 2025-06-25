@@ -2,12 +2,13 @@ import {
   AdAccount as MetaAdAccountSDK,
   CustomAudience as MetaCustomAudienceSDK,
 } from 'facebook-nodejs-business-sdk';
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
   MetaCreateSuccessResponseSchema,
   MetaCustomAudienceResponseSchema,
   MetaDeleteSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -21,6 +22,11 @@ import type {
   DeleteCustomAudienceResult,
   GetCustomAudiencesResult,
 } from './types.js';
+
+// Define validation schema for custom audience deletion
+const DeleteCustomAudienceValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
 
 // Module-level constants for better performance and readability
 const CUSTOM_AUDIENCE_FIELDS = [
@@ -174,10 +180,11 @@ export class MetaCustomAudienceHandler {
   ): Promise<DeleteCustomAudienceResult> {
     logger.info('Executing delete_custom_audience', { userId: authPayload.userId, params });
 
-    if (params.confirmPermanentDelete !== true) {
-      throw new ValidationError(
-        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
-      );
+    // Validate deletion confirmation using Zod schema
+    const validationResult = DeleteCustomAudienceValidationSchema.safeParse(params);
+    if (!validationResult.success) {
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(

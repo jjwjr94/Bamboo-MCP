@@ -253,7 +253,7 @@ describe('MetaCampaignHandler', () => {
       );
 
       await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        'Provide either dailyBudget or lifetimeBudget, but not both'
+        'A campaign must have either a dailyBudget or a lifetimeBudget, but not both'
       );
     });
 

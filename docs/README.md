@@ -37,8 +37,8 @@ This server is built with enterprise-grade standards to ensure security, reliabi
 -   **Business Context Handling**: Seamlessly manages both personal and business-managed ad accounts, automatically resolving and applying the correct business context for API calls.
 -   **Production Ready**:
     -   **Pagination Safety**: Automatic limits on all list operations prevent resource exhaustion from runaway queries.
-    -   **Delete Protection**: Destructive operations require explicit confirmation flags to prevent accidental data loss.
-    -   **Schema Validation**: Rigorous input/output validation using Zod for all 38 tools.
+    -   **Delete Protection**: Multi-layered deletion safety with mandatory user prompting, standardized confirmation schemas, and pre-API validation to prevent accidental data loss.
+    -   **Schema Validation**: Rigorous input/output validation using Zod for all 38 tools with shared validation patterns ensuring consistency.
 -   **Superior Developer Experience**:
     -   **Fully Type-Safe**: End-to-end type safety from database to API handlers.
     -   **Auto-Generated Schemas**: A script (`scripts/generateSchemas.js`) generates Zod schemas directly from the Meta SDK, ensuring our server stays in sync with API changes.

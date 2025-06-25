@@ -9,7 +9,7 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
-import { createMcpTool } from './registryHelper.js';
+import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
 /**
  * Handles registration of campaign-related MCP tools:
@@ -113,7 +113,7 @@ export class CampaignToolRegistry implements IToolRegistry {
             .positive()
             .optional()
             .describe(
-              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget.'
+              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
             ),
           lifetimeBudget: z
             .number()
@@ -121,7 +121,7 @@ export class CampaignToolRegistry implements IToolRegistry {
             .positive()
             .optional()
             .describe(
-              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget.'
+              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
             ),
           specialAdCategories: z
             .array(CampaignSpecialAdCategoriesSchema)
@@ -164,13 +164,17 @@ export class CampaignToolRegistry implements IToolRegistry {
             .int()
             .positive()
             .optional()
-            .describe('New daily budget in cents (e.g., 1000 = $10.00).'),
+            .describe(
+              'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
+            ),
           lifetimeBudget: z
             .number()
             .int()
             .positive()
             .optional()
-            .describe('New lifetime budget in cents (e.g., 10000 = $100.00).'),
+            .describe(
+              'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
+            ),
         },
         successDataSchema,
       },
@@ -190,12 +194,12 @@ export class CampaignToolRegistry implements IToolRegistry {
       {
         title: 'Delete Campaign',
         description:
-          'Permanently deletes a campaign by setting its status to DELETED. This action cannot be undone.',
+          'Permanently deletes a campaign by setting its status to DELETED. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to delete.'),
-          confirmPermanentDelete: z
-            .boolean()
-            .describe('Confirmation that you want to permanently delete this campaign.'),
+          confirmPermanentDelete: DeletionConfirmationSchema.describe(
+            'Must be set to true to confirm permanent deletion.'
+          ),
         },
         successDataSchema,
       },

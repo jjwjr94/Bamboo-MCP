@@ -164,3 +164,94 @@ A key goal is to make the server easy to maintain and extend.
 *   **Modular Tool Registries**: The tool registration logic in `src/mcp/registries/` is highly modular. Each Meta entity (Campaign, AdSet, etc.) has its own `*ToolRegistry.ts` file. This makes it trivial to add, remove, or modify tools related to a specific domain without affecting others. The `createMcpTool` helper (`src/mcp/registries/registryHelper.ts`) further abstracts away MCP boilerplate.
 
 This focus on tooling and abstraction ensures that developers can focus on implementing business logic, not wrestling with protocol details or API inconsistencies.
+
+### 4.7. Validation Patterns & Safety Mechanisms
+
+The server implements comprehensive validation at multiple layers to ensure data integrity, security, and operational safety.
+
+#### 4.7.1. Declarative Validation with Zod
+
+All tool input parameters and API responses are validated using **Zod schemas**, providing:
+
+*   **Type Safety**: Runtime validation ensures data matches TypeScript types
+*   **Clear Error Messages**: Invalid data produces actionable error messages
+*   **Fail-Fast Behavior**: Validation occurs before any business logic or API calls
+
+The validation architecture follows a layered approach:
+1.  **Registry Level**: Input schemas defined in tool registries validate incoming parameters
+2.  **Handler Level**: Business logic validation using dedicated Zod schemas for complex rules
+3.  **Response Level**: Auto-generated schemas validate outgoing data from Meta API
+
+#### 4.7.2. Common Validation Schemas (DRY Principle)
+
+To ensure consistency and maintainability, shared validation patterns are centralized in `src/mcp/registries/registryHelper.ts`:
+
+```typescript
+// Common deletion confirmation schema for all deletion tools
+export const DeletionConfirmationSchema = z.literal(true, {
+  errorMap: () => ({
+    message: 'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.',
+  }),
+});
+```
+
+This pattern provides:
+*   **Single Source of Truth**: One schema definition for deletion confirmation across all tools
+*   **Consistent Error Messages**: Uniform validation errors across the entire API
+*   **Type Safety**: Enforces `boolean literal true` instead of truthy values
+*   **Maintainability**: Changes to validation logic only need to be made in one place
+
+#### 4.7.3. Deletion Safety Architecture
+
+All destructive operations implement a multi-layered safety system:
+
+1.  **Client-Side Prompting**: Tool descriptions explicitly require user confirmation before calling
+2.  **Schema Validation**: `DeletionConfirmationSchema` ensures confirmation parameter is exactly `true`
+3.  **Handler Validation**: Additional validation schemas in each handler provide defense-in-depth:
+
+```typescript
+// Example from campaignHandler.ts
+const DeleteCampaignValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
+
+// Consistent validation pattern across all handlers
+const validationResult = DeleteCampaignValidationSchema.safeParse(params);
+if (!validationResult.success) {
+  const error = validationResult.error.errors[0];
+  throw new ValidationError(error.message);
+}
+```
+
+4.  **Pre-API Validation**: All validation occurs before Meta API calls, ensuring fast failure with no side effects
+
+This architecture prevents accidental data loss while maintaining a clean, consistent developer experience.
+
+#### 4.7.4. Complex Business Rule Validation
+
+For complex interdependent validation (e.g., ad set targeting rules), the system uses Zod's advanced features:
+
+*   **`.refine()`**: For simple cross-field validation (e.g., budget mutual exclusivity)
+*   **`.superRefine()`**: For complex multi-rule validation with custom error paths
+*   **Separation of Concerns**: Synchronous validation in schemas, asynchronous validation requiring API calls kept in handlers
+
+Example from ad set creation:
+```typescript
+const CreateAdSetValidationSchema = z.object({
+  // ... base fields
+}).superRefine((data, ctx) => {
+  // Budget XOR validation
+  if (data.dailyBudget && data.lifetimeBudget) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide either dailyBudget or lifetimeBudget, but not both.',
+      path: ['dailyBudget'],
+    });
+  }
+  // Geographic targeting validation
+  // Promoted object validation
+  // Billing event compatibility validation
+});
+```
+
+This approach provides comprehensive validation while maintaining clear error reporting and type safety.

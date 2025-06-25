@@ -7,7 +7,7 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
-import { createMcpTool } from './registryHelper.js';
+import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
 export class CustomAudienceToolRegistry implements IToolRegistry {
   private server: McpServer;
@@ -111,12 +111,12 @@ export class CustomAudienceToolRegistry implements IToolRegistry {
       {
         title: 'Delete Custom Audience',
         description:
-          'Permanently deletes a custom audience by its ID. This action cannot be undone.',
+          'Permanently deletes a custom audience by its ID. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
         inputSchema: {
           customAudienceId: z.string().describe('The ID of the custom audience to delete.'),
-          confirmPermanentDelete: z
-            .boolean()
-            .describe('Must be set to true to confirm permanent deletion of the custom audience.'),
+          confirmPermanentDelete: DeletionConfirmationSchema.describe(
+            'Must be set to true to confirm permanent deletion.'
+          ),
         },
         successDataSchema,
       },

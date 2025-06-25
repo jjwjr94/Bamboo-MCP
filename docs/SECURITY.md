@@ -123,6 +123,43 @@ The server implements a secure two-step workflow for uploading creative assets, 
 
 All incoming data from the Meta API and tool call inputs are rigorously validated using **Zod schemas**. The `scripts/generateSchemas.js` script automatically generates these schemas from the Meta SDK, ensuring our server's data models are always synchronized with the API and protected against malformed or unexpected data.
 
+### Deletion Safety and Data Loss Prevention
+
+The server implements comprehensive safety mechanisms to prevent accidental data loss from destructive operations:
+
+#### Multi-Layered Deletion Protection
+
+1.  **Client-Side Requirements**: All deletion tool descriptions explicitly require that users must be prompted for confirmation before the tool is called, establishing a required workflow pattern for all clients.
+
+2.  **Standardized Validation**: All deletion operations use a common `DeletionConfirmationSchema` (`src/mcp/registries/registryHelper.ts`) that enforces strict validation:
+    ```typescript
+    // Must be exactly boolean literal `true`, not truthy values
+    confirmPermanentDelete: z.literal(true)
+    ```
+
+3.  **Pre-API Validation**: Confirmation validation occurs **before** any Meta API calls, ensuring:
+    *   Fast failure with clear error messages
+    *   No unintended side effects from invalid requests
+    *   Consistent error responses across all deletion operations
+
+4.  **Defense in Depth**: Each handler implements additional validation schemas that include the common deletion confirmation, providing multiple validation layers:
+    ```typescript
+    // Example from deletion handlers
+    const DeleteValidationSchema = z.object({
+      confirmPermanentDelete: DeletionConfirmationSchema,
+      // ... other validations
+    });
+    ```
+
+#### Validation Security Benefits
+
+*   **Protection Against Automation Errors**: Prevents accidental bulk deletions from misconfigured automation scripts
+*   **Clear Error Messaging**: Standardized validation errors guide users to correct their requests
+*   **Audit Trail**: All deletion attempts (successful and failed) are logged for security analysis
+*   **Type Safety**: Runtime validation prevents type coercion attacks (e.g., passing `"true"` string instead of boolean `true`)
+
+This approach ensures that destructive operations require explicit, intentional user action while maintaining a consistent and secure developer experience.
+
 ### Rate Limiting and Resilience
 
 The server implements resilience patterns to protect against and gracefully handle external API failures.

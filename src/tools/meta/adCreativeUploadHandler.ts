@@ -222,55 +222,74 @@ export class AdCreativeUploadHandler {
    *
    * The asset type (image/video) is automatically determined from the uploaded file's MIME type,
    * and the file is streamed directly to the appropriate Meta API endpoint without local storage.
+   *
+   * Upload links are reusable until successful completion or expiration. Failed uploads can be retried.
+   * Race conditions are prevented by atomically claiming the upload session with 'uploading' state.
    */
   async handleCreativeAssetUpload(uploadId: string, fileData: MultipartFile) {
-    // Look up upload session to get user context
-    const initialUploadRecord = await db.query.creativeAssetUploads.findFirst({
-      where: eq(creativeAssetUploads.id, uploadId),
+    // Atomically claim the upload session by updating status to 'uploading'.
+    // This allows retries on 'failed' sessions and prevents concurrent uploads.
+    const uploadingRecord = await db.transaction(async (tx) => {
+      const updateResult = await tx
+        .update(creativeAssetUploads)
+        .set({
+          status: 'uploading',
+          updatedAt: new Date(),
+        })
+        .where(
+          sql`${creativeAssetUploads.id} = ${uploadId} AND 
+              (${creativeAssetUploads.status} = 'pending' OR ${creativeAssetUploads.status} = 'failed') AND
+              ${creativeAssetUploads.expiresAt} > NOW()`
+        )
+        .returning();
+
+      return updateResult[0];
     });
 
-    if (!initialUploadRecord) {
-      throw new NotFoundError(`Upload session not found: ${uploadId}`);
-    }
-
-    const userId = initialUploadRecord.userId;
-    logger.info('Executing handle_creative_asset_upload', { userId, uploadId });
-
-    try {
-      // Determine asset type from MIME type
-      const assetType = detectAssetTypeFromMimeType(fileData.mimetype);
-
-      // Atomically claim the upload session and set the determined asset type
-      const uploadRequest = await withUserContext(userId, async (tx) => {
-        const [updatedRecord] = await tx
-          .update(creativeAssetUploads)
-          .set({
-            status: 'uploading',
-            assetType,
-            updatedAt: new Date(),
-          })
-          .where(
-            sql`${creativeAssetUploads.id} = ${uploadId} AND ${creativeAssetUploads.status} = 'pending' AND ${creativeAssetUploads.expiresAt} > NOW()`
-          )
-          .returning();
-
-        return updatedRecord;
+    if (!uploadingRecord) {
+      // If the claim failed, inspect the current state to provide a specific error.
+      const currentRecord = await db.query.creativeAssetUploads.findFirst({
+        where: eq(creativeAssetUploads.id, uploadId),
       });
 
-      if (!uploadRequest) {
-        throw new ValidationError('Upload session is invalid, already used, or expired');
+      if (!currentRecord) {
+        throw new NotFoundError(`Upload session ${uploadId} not found.`);
       }
+      if (new Date() > currentRecord.expiresAt) {
+        throw new ValidationError('Upload session has expired. Please request a new upload link.');
+      }
+      if (currentRecord.status === 'uploading') {
+        throw new ValidationError(
+          'An upload is already in progress for this session. Please wait a moment.'
+        );
+      }
+      if (currentRecord.status === 'completed') {
+        throw new ValidationError('This upload has already been completed successfully.');
+      }
+      // Fallback for any other unexpected state
+      throw new ValidationError('Upload session is not in a valid state for upload.');
+    }
+
+    const userId = uploadingRecord.userId;
+    logger.info('Upload session claimed for processing', { userId, uploadId });
+
+    // Initialize asset type with a default value
+    let detectedAssetType: 'image' | 'video' | 'pending' = 'pending';
+
+    try {
+      // Determine asset type from MIME type after claiming the session
+      detectedAssetType = detectAssetTypeFromMimeType(fileData.mimetype);
 
       // Stream file to Meta API
       const result = await handleMetaApiCall(
         async () => {
           const accessToken = await fetchUserTokenString(userId);
-          const businessId = await getBusinessIdForAdAccount(userId, uploadRequest.adAccountId);
+          const businessId = await getBusinessIdForAdAccount(userId, uploadingRecord.adAccountId);
 
           logger.info('Streaming asset to Meta API', {
             userId,
             uploadId,
-            assetType,
+            assetType: detectedAssetType,
             filename: fileData.filename,
             hasBusinessContext: businessId !== null,
           });
@@ -282,12 +301,12 @@ export class AdCreativeUploadHandler {
           // Prepare upload request
           const form = this.createUploadFormData(
             fileData,
-            assetType,
+            detectedAssetType,
             fileData.filename,
             accessToken,
             businessId
           );
-          const uploadUrl = this.buildUploadUrl(assetType, uploadRequest.adAccountId);
+          const uploadUrl = this.buildUploadUrl(detectedAssetType, uploadingRecord.adAccountId);
 
           // Send to Meta API
           const { statusCode, responseText } = await this.sendToMetaAPI(
@@ -299,20 +318,26 @@ export class AdCreativeUploadHandler {
 
           // Process response
           const metaResponse = this.processMetaResponse(statusCode, responseText, userId, uploadId);
-          const metaAssetId = this.extractAssetId(metaResponse, assetType, fileData.filename);
+          const metaAssetId = this.extractAssetId(
+            metaResponse,
+            detectedAssetType,
+            fileData.filename
+          );
 
-          return { metaAssetId, assetType };
+          return { metaAssetId, assetType: detectedAssetType };
         },
         { toolName: 'handle_creative_asset_upload', userId }
       );
 
-      // Update DB with completion status
+      // SUCCESS: Update with Meta asset ID, final asset type, and set status to 'completed'.
       await withUserContext(userId, async (tx) => {
         await tx
           .update(creativeAssetUploads)
           .set({
             status: 'completed',
+            assetType: result.assetType,
             metaAssetId: result.metaAssetId,
+            errorMessage: null, // Clear any previous error message
             updatedAt: new Date(),
           })
           .where(eq(creativeAssetUploads.id, uploadId));
@@ -327,22 +352,29 @@ export class AdCreativeUploadHandler {
 
       return { success: true, metaAssetId: result.metaAssetId, assetType: result.assetType };
     } catch (error: unknown) {
-      // Update DB with failure status
+      // FAILURE: Update with error details and set status to 'failed'
       const errorMessage = error instanceof Error ? error.message : 'Unknown upload error';
-      logger.error('Creative asset upload failed', { userId, uploadId, error: errorMessage });
 
+      // FAILURE: Update with error details and set status to 'failed'.
       await withUserContext(userId, async (tx) => {
         await tx
           .update(creativeAssetUploads)
           .set({
             status: 'failed',
+            assetType: detectedAssetType, // Use the single detectedAssetType variable
             errorMessage,
+            metaAssetId: null, // Clear any stale asset ID from a previous attempt
             updatedAt: new Date(),
           })
           .where(eq(creativeAssetUploads.id, uploadId));
       });
 
-      throw error;
+      logger.error('Creative asset upload failed - marked for retry', {
+        userId,
+        uploadId,
+        error: errorMessage,
+      });
+      throw error; // Re-throw to ensure caller gets the failure context
     }
   }
 }

@@ -2,12 +2,14 @@ import {
   AdAccount as MetaAdAccountSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
+import { z } from 'zod';
 import {
   MetaCampaignResponseSchema,
   MetaCreateSuccessResponseSchema,
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -24,6 +26,55 @@ import type {
   MetaCampaign,
   UpdateCampaignResult,
 } from './types.js';
+
+// Define validation schemas for campaigns
+const BudgetXorValidationSchema = z
+  .object({
+    dailyBudget: z.number().optional(),
+    lifetimeBudget: z.number().optional(),
+  })
+  .refine(
+    (data) =>
+      (data.dailyBudget && !data.lifetimeBudget) || (!data.dailyBudget && data.lifetimeBudget),
+    {
+      message: 'A campaign must have either a dailyBudget or a lifetimeBudget, but not both.',
+      path: ['dailyBudget'],
+    }
+  );
+
+const SpecialAdCategoryValidationSchema = z
+  .object({
+    specialAdCategories: z.array(z.string()),
+    specialAdCategoryCountry: z.array(z.string()).optional(),
+  })
+  .refine(
+    (data) => {
+      const hasSpecialCategory = data.specialAdCategories.some((cat) => cat !== 'NONE');
+      return (
+        !hasSpecialCategory ||
+        (data.specialAdCategoryCountry && data.specialAdCategoryCountry.length > 0)
+      );
+    },
+    {
+      message:
+        "The 'specialAdCategoryCountry' parameter is required when 'specialAdCategories' contains values other than 'NONE'.",
+      path: ['specialAdCategoryCountry'],
+    }
+  );
+
+const UpdateBudgetValidationSchema = z
+  .object({
+    dailyBudget: z.number().optional(),
+    lifetimeBudget: z.number().optional(),
+  })
+  .refine((data) => !(data.dailyBudget && data.lifetimeBudget), {
+    message: 'Provide either dailyBudget or lifetimeBudget for an update, but not both.',
+    path: ['dailyBudget'],
+  });
+
+const DeleteCampaignValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
 
 export class MetaCampaignHandler {
   async getCampaigns(
@@ -107,23 +158,18 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
-    // Validate budget requirement: either dailyBudget OR lifetimeBudget must be provided
-    if (!params.dailyBudget && !params.lifetimeBudget) {
-      throw new ValidationError('A campaign must have either a dailyBudget or a lifetimeBudget.');
-    }
-    if (params.dailyBudget && params.lifetimeBudget) {
-      throw new ValidationError('Provide either dailyBudget or lifetimeBudget, but not both.');
+    // Validate budget requirement using Zod schema
+    const budgetValidation = BudgetXorValidationSchema.safeParse(params);
+    if (!budgetValidation.success) {
+      const error = budgetValidation.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
-    // Validate Special Ad Category requirements
-    const hasSpecialCategory = params.specialAdCategories.some((cat) => cat !== 'NONE');
-    if (
-      hasSpecialCategory &&
-      (!params.specialAdCategoryCountry || params.specialAdCategoryCountry.length === 0)
-    ) {
-      throw new ValidationError(
-        "The 'specialAdCategoryCountry' parameter is required when 'specialAdCategories' contains values other than 'NONE'."
-      );
+    // Validate Special Ad Category requirements using Zod schema
+    const sacValidation = SpecialAdCategoryValidationSchema.safeParse(params);
+    if (!sacValidation.success) {
+      const error = sacValidation.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(
@@ -197,6 +243,13 @@ export class MetaCampaignHandler {
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
+    // Validate budget requirement for updates using Zod schema
+    const budgetValidation = UpdateBudgetValidationSchema.safeParse(params);
+    if (!budgetValidation.success) {
+      const error = budgetValidation.error.errors[0];
+      throw new ValidationError(error.message);
+    }
+
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -245,10 +298,11 @@ export class MetaCampaignHandler {
   ): Promise<DeleteCampaignResult> {
     logger.info('Executing delete_campaign', { userId: authPayload.userId, params });
 
-    if (params.confirmPermanentDelete !== true) {
-      throw new ValidationError(
-        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
-      );
+    // Validate confirmation using Zod schema
+    const validationResult = DeleteCampaignValidationSchema.safeParse(params);
+    if (!validationResult.success) {
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(

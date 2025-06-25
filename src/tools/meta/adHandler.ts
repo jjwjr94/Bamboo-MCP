@@ -4,6 +4,7 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
+import { z } from 'zod';
 import {
   MetaAdResponseSchema,
   MetaCreateSuccessResponseSchema,
@@ -11,6 +12,7 @@ import {
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
 
+import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import type { CreateAdRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -27,6 +29,11 @@ import type {
   MetaAd,
   UpdateAdResult,
 } from './types.js';
+
+// Define validation schema for ad deletion
+const DeleteAdValidationSchema = z.object({
+  confirmPermanentDelete: DeletionConfirmationSchema,
+});
 
 export class MetaAdHandler {
   async getAds(
@@ -213,10 +220,11 @@ export class MetaAdHandler {
   ): Promise<DeleteAdResult> {
     logger.info('Executing delete_ad', { userId: authPayload.userId, params });
 
-    if (params.confirmPermanentDelete !== true) {
-      throw new ValidationError(
-        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
-      );
+    // Validate deletion confirmation using Zod schema
+    const validationResult = DeleteAdValidationSchema.safeParse(params);
+    if (!validationResult.success) {
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error.message);
     }
 
     return await handleMetaApiCall(

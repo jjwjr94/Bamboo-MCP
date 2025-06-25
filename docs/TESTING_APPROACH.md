@@ -213,6 +213,189 @@ describe('MetaCampaignHandler', () => {
 
 This example demonstrates the complete Arrange-Act-Assert pattern with proper setup, MSW mocking, and database seeding.
 
+## 9. Testing Deletion Confirmation and Validation Patterns
+
+Given the critical importance of deletion safety in our system, comprehensive testing of validation patterns is essential.
+
+### 9.1. Deletion Confirmation Testing Strategy
+
+All deletion tools must have thorough test coverage for their safety mechanisms:
+
+#### A. Validation Error Testing
+Every deletion tool should test the standardized validation behavior:
+
+```typescript
+describe('delete confirmation validation', () => {
+  it('should reject deletion when confirmPermanentDelete is missing', async () => {
+    const params = { campaignId: 'test_123' }; // Missing confirmPermanentDelete
+    
+    await expect(handler.deleteCampaign(mockAuthPayload, params))
+      .rejects
+      .toThrow('Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.');
+  });
+
+  it('should reject deletion when confirmPermanentDelete is false', async () => {
+    const params = { campaignId: 'test_123', confirmPermanentDelete: false };
+    
+    await expect(handler.deleteCampaign(mockAuthPayload, params))
+      .rejects
+      .toThrow('Permanent deletion was not confirmed');
+  });
+
+  it('should reject deletion when confirmPermanentDelete is truthy but not literal true', async () => {
+    const params = { campaignId: 'test_123', confirmPermanentDelete: 1 }; // Truthy but not boolean true
+    
+    await expect(handler.deleteCampaign(mockAuthPayload, params))
+      .rejects
+      .toThrow('Permanent deletion was not confirmed');
+  });
+
+  it('should succeed when confirmPermanentDelete is exactly true', async () => {
+    // Arrange: Mock successful deletion response
+    server.use(createSuccessHandler('delete', createMetaUrl('/test_123'), { success: true }));
+    
+    const params = { campaignId: 'test_123', confirmPermanentDelete: true };
+    
+    // Act & Assert: Should succeed without throwing
+    const result = await handler.deleteCampaign(mockAuthPayload, params);
+    expect(result.campaignId).toBe('test_123');
+  });
+});
+```
+
+#### B. Pre-API Validation Testing
+Ensure validation happens **before** any Meta API calls:
+
+```typescript
+it('should validate confirmation before making API calls', async () => {
+  // Arrange: Set up MSW to track if any requests are made
+  let apiCallMade = false;
+  server.use(
+    rest.delete(createMetaUrl('/test_123'), (req, res, ctx) => {
+      apiCallMade = true;
+      return res(ctx.json({ success: true }));
+    })
+  );
+
+  const params = { campaignId: 'test_123', confirmPermanentDelete: false };
+
+  // Act: Attempt deletion with invalid confirmation
+  try {
+    await handler.deleteCampaign(mockAuthPayload, params);
+    fail('Expected validation error');
+  } catch (error) {
+    // Assert: Validation should fail AND no API call should be made
+    expect(error.message).toContain('Permanent deletion was not confirmed');
+    expect(apiCallMade).toBe(false);
+  }
+});
+```
+
+### 9.2. Complex Validation Testing
+
+For tools with complex business rules (e.g., ad set creation), test validation patterns comprehensively:
+
+#### A. Cross-Field Validation Testing
+```typescript
+describe('budget validation', () => {
+  it('should reject when both dailyBudget and lifetimeBudget are provided', async () => {
+    const params = {
+      campaignId: 'test_123',
+      name: 'Test AdSet',
+      dailyBudget: 1000,
+      lifetimeBudget: 5000, // Invalid: both budgets provided
+      // ... other required fields
+    };
+
+    await expect(handler.createAdSet(mockAuthPayload, params))
+      .rejects
+      .toThrow('Provide either dailyBudget or lifetimeBudget, but not both');
+  });
+
+  it('should reject when neither budget is provided', async () => {
+    const params = {
+      campaignId: 'test_123',
+      name: 'Test AdSet',
+      // Missing: no budget provided
+      // ... other required fields
+    };
+
+    await expect(handler.createAdSet(mockAuthPayload, params))
+      .rejects
+      .toThrow('Either dailyBudget or lifetimeBudget is required');
+  });
+});
+```
+
+#### B. Geographic Targeting Validation
+```typescript
+describe('geographic targeting validation', () => {
+  it('should reject when no geographic targeting is provided', async () => {
+    const params = {
+      // ... other fields
+      targeting: {
+        geoLocations: {} // Empty: no countries, regions, or cities
+      }
+    };
+
+    await expect(handler.createAdSet(mockAuthPayload, params))
+      .rejects
+      .toThrow('At least one of countries, regions, or cities must be specified');
+  });
+});
+```
+
+### 9.3. Testing Best Practices for Validation
+
+#### A. Test Organization
+- Group validation tests in dedicated `describe` blocks
+- Test each validation rule independently
+- Include both positive and negative test cases
+
+#### B. Error Message Testing
+- Always test the exact error message to ensure consistency
+- Use `toThrow()` with specific message strings, not just error types
+- Verify error messages are actionable and clear
+
+#### C. Validation Timing
+- Test that validation occurs before API calls (fail-fast principle)
+- Use MSW request tracking to ensure no unintended API calls
+- Test that validation errors don't cause state changes
+
+#### D. Common Schema Testing
+When testing tools that use shared schemas (like `DeletionConfirmationSchema`):
+
+```typescript
+// Create reusable test helpers for common validation patterns
+const testDeletionConfirmation = (handlerMethod: Function, idField: string) => {
+  describe('standardized deletion confirmation', () => {
+    it('should use DeletionConfirmationSchema for validation', async () => {
+      const params = { [idField]: 'test_123', confirmPermanentDelete: 'true' }; // String instead of boolean
+      
+      await expect(handlerMethod(mockAuthPayload, params))
+        .rejects
+        .toThrow('Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.');
+    });
+  });
+};
+
+// Apply to all deletion tools
+testDeletionConfirmation(handler.deleteCampaign, 'campaignId');
+testDeletionConfirmation(handler.deleteAdSet, 'adSetId');
+// ... etc
+```
+
+### 9.4. Coverage Requirements for Validation
+
+Validation-related code should have **high coverage** due to its critical nature:
+
+- **95%+ line coverage** for validation schemas and logic
+- **100% branch coverage** for safety-critical deletion validation
+- **Test all error paths** for validation failures
+- **Test edge cases** like boundary values and type coercion attempts
+
+This comprehensive approach ensures that our safety mechanisms work correctly and provide clear, consistent error messages to clients.
+
 ## Relevant Files
 
 *   `vitest.config.ts` - Test configuration and setup

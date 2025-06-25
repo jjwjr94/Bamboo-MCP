@@ -85,8 +85,8 @@ export interface CreateAdSetRequest {
   status?: CampaignStatus;
   /**
    * Certifies compliance with Meta's California Consumer Privacy Act (CCPA) and related regulations.
-   * Required for Special Ad Category campaigns targeting California (US-CA) that use the CONVERSIONS
-   * optimization goal. Must be set to `true` when applicable.
+   * Required for Special Ad Category campaigns targeting California (US-CA) that use optimization
+   * goals like VALUE, LEAD_GENERATION, or CONVERSIONS. Must be set to `true` when applicable.
    *
    * This field was introduced in Meta Marketing API v22.0 to ensure advertisers acknowledge compliance
    * with California's privacy and advertising regulations for special ad categories.
@@ -94,6 +94,14 @@ export interface CreateAdSetRequest {
    * @see https://developers.facebook.com/docs/marketing-api/reference/ad-set/
    */
   isSacCfcaTermsCertified?: boolean;
+  /**
+   * Confirms the ad set is eligible for Special Ad Category campaigns.
+   * This field is required for all SAC campaigns starting January 2025 as part of
+   * Meta's enhanced compliance framework for special advertising categories.
+   *
+   * @see Meta Marketing API v22.0 documentation
+   */
+  isEligibleForSacCampaigns?: boolean;
   promotedObject?: unknown;
   attributionSpec?: MetaAttributionSpec[];
 }

@@ -7,7 +7,7 @@ import {
 } from '../../generated/schemas.js';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
-import { createMcpTool } from './registryHelper.js';
+import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
 /**
  * Ad Creative Tool Registry
@@ -198,12 +198,13 @@ export class AdCreativeToolRegistry implements IToolRegistry {
       'delete_ad_creative',
       {
         title: 'Delete Ad Creative',
-        description: 'Permanently deletes an ad creative. This action cannot be undone.',
+        description:
+          'Permanently deletes an ad creative. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
         inputSchema: {
           adCreativeId: z.string().describe('The ID of the ad creative to delete.'),
-          confirmPermanentDelete: z
-            .boolean()
-            .describe('Confirmation that you want to permanently delete this ad creative.'),
+          confirmPermanentDelete: DeletionConfirmationSchema.describe(
+            'Must be set to true to confirm permanent deletion.'
+          ),
         },
         successDataSchema,
       },
