@@ -22,63 +22,111 @@ const AI_COPY_STYLES = `
   }
   .ai-copy-container h3 {
     margin-top: 0;
+    margin-bottom: var(--bamboo-space-3);
     color: var(--bamboo-color-secondary);
     font-size: var(--bamboo-font-size-base);
   }
-  .ai-copy-text {
-    background-color: var(--bamboo-color-code-bg);
-    padding: var(--bamboo-space-3);
-    border-radius: var(--bamboo-border-radius);
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  .ai-copy-container p {
     font-size: var(--bamboo-font-size-sm);
-    margin: var(--bamboo-space-3) 0;
+    color: var(--bamboo-color-text-light);
+    margin-bottom: var(--bamboo-space-4);
+  }
+  .ai-message-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bamboo-space-3);
+    background-color: var(--bamboo-color-surface);
+    border: var(--bamboo-border-width) solid var(--bamboo-color-border);
+    border-radius: var(--bamboo-border-radius);
+    padding: var(--bamboo-space-4);
+    box-shadow: var(--bamboo-shadow);
+    transition: box-shadow 0.2s ease;
+  }
+  .ai-message-card:hover {
+    box-shadow: var(--bamboo-shadow-lg);
+  }
+  .ai-message-text {
+    flex-grow: 1;
+    font-family: var(--bamboo-font-family);
+    font-size: var(--bamboo-font-size-base);
+    line-height: 1.6;
+    color: var(--bamboo-color-text);
+    word-wrap: break-word;
+    margin-right: var(--bamboo-space-3);
   }
   .copy-btn {
-    margin-top: var(--bamboo-space-3);
+    flex-shrink: 0;
     padding: var(--bamboo-space-2) var(--bamboo-space-4);
     font-size: var(--bamboo-font-size-sm);
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+  }
+  .copy-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
   }
   .copy-btn.copied {
-    background-color: var(--bamboo-color-success);
+    background-color: var(--bamboo-color-success) !important;
+    color: var(--bamboo-color-background) !important;
+  }
+  .copy-status {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+  @media (max-width: 640px) {
+    .ai-message-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--bamboo-space-3);
+    }
+    .ai-message-text {
+      margin-right: 0;
+      margin-bottom: var(--bamboo-space-3);
+    }
+    .copy-btn {
+      align-self: center;
+      min-width: 120px;
+    }
   }
 `;
 
 // JavaScript functionality for copy-to-clipboard
 const AI_COPY_SCRIPT = `
-  const initializeAiCopy = () => {
-    const copyButton = document.querySelector('.copy-btn');
-    if (!copyButton) return;
+  const initializeMessageCopy = () => {
+    const copyButtons = document.querySelectorAll('.copy-btn');
+    if (copyButtons.length === 0) return;
 
-    const targetSelector = copyButton.dataset.copyTarget;
-    const textElement = document.querySelector(targetSelector);
-    if (!textElement) return;
+    // Create a single status element for all buttons
+    const statusElement = document.createElement('div');
+    statusElement.className = 'copy-status';
+    statusElement.setAttribute('role', 'status');
+    statusElement.setAttribute('aria-live', 'polite');
+    statusElement.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(statusElement);
 
-    copyButton.addEventListener('click', async () => {
-      const text = textElement.textContent.trim();
-      
-      // Try modern clipboard API first
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+    copyButtons.forEach(copyButton => {
+      const targetSelector = copyButton.dataset.copyTarget;
+      const textElement = document.querySelector(targetSelector);
+      if (!textElement) return;
+
+      copyButton.addEventListener('click', async () => {
+        const text = textElement.textContent.trim();
+        
         try {
-          await navigator.clipboard.writeText(text);
-          showCopyFeedback(copyButton, 'Copied!');
-          return;
+          // Try modern clipboard API first
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            fallbackCopyToClipboard(text);
+          }
+          showCopyFeedback(copyButton, statusElement, 'Copied!');
         } catch (err) {
-          console.warn('Modern clipboard API failed, trying fallback:', err);
+          console.error('Copy failed:', err);
+          showCopyFeedback(copyButton, statusElement, 'Copy failed', true);
         }
-      }
-      
-      // Fallback to legacy method
-      try {
-        fallbackCopyToClipboard(text);
-        showCopyFeedback(copyButton, 'Copied!');
-      } catch (err) {
-        console.error('All copy methods failed:', err);
-        showCopyFeedback(copyButton, 'Copy failed', true);
-        showToast('Copy failed. Please manually select and copy the text above.', true);
-      }
+      });
     });
   };
   
@@ -110,57 +158,33 @@ const AI_COPY_SCRIPT = `
     }
   }
   
-  function showCopyFeedback(button, message, isError = false) {
+  function showCopyFeedback(button, statusElement, message, isError = false) {
     const originalText = button.textContent;
+    const originalAriaLabel = button.getAttribute('aria-label');
+    
     button.textContent = message;
-    if (isError) {
-      button.style.backgroundColor = '#dc3545';
-    } else {
-      button.classList.add('copied');
-    }
+    button.setAttribute('aria-label', message);
+    button.classList.toggle('copied', !isError);
     button.disabled = true;
+    
+    // Update status for screen readers
+    statusElement.textContent = isError ? 'Copy failed. Please try again.' : 'Message copied to clipboard';
 
     setTimeout(() => {
       button.textContent = originalText;
+      button.setAttribute('aria-label', originalAriaLabel || 'Copy message');
       button.classList.remove('copied');
-      button.style.backgroundColor = '';
       button.disabled = false;
+      statusElement.textContent = '';
     }, 2000);
   }
   
-  function showToast(message, isError = false) {
-    const toast = document.createElement('div');
-    toast.textContent = message;
-    toast.style.cssText = \`
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 6px;
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      z-index: 10000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      background-color: \${isError ? '#dc3545' : '#28a745'};
-      transition: opacity 0.3s ease;
-      max-width: 300px;
-    \`;
-    
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.parentNode.removeChild(toast);
-        }
-      }, 300);
-    }, 4000);
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeMessageCopy);
+  } else {
+    initializeMessageCopy();
   }
-  
-  initializeAiCopy();
 `;
 
 // Troubleshooting blocks broken out to avoid inline cognitive overload
@@ -276,8 +300,10 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
       <div class="ai-copy-container">
         <h3>Communicate with AI Assistant</h3>
         <p>Copy the following message to your AI assistant to confirm the upload.</p>
-        <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
-        <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+        <div class="ai-message-card">
+          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
+          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy Message</button>
+        </div>
       </div>
 
       <p>Your file has been successfully uploaded to Meta. You can now close this window.</p>
@@ -400,8 +426,10 @@ export function renderUploadFailedPage(
       <div class="ai-copy-container">
         <h3>Request Assistance from AI</h3>
         <p>To get a new upload link, copy the message below and send it to your AI assistant.</p>
-        <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
-        <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+        <div class="ai-message-card">
+          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
+          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy Message</button>
+        </div>
       </div>
       
       ${troubleshootingSteps}
@@ -499,9 +527,11 @@ export function renderUploadSessionNotFoundPage(): string {
       
       <div class="ai-copy-container">
         <h3>Request New Upload Link</h3>
-                 <p>Copy the message below and send it to your AI assistant to get a new upload link.</p>
-         <pre id="ai-prompt" class="ai-copy-text">${escapeHtml(aiPrompt)}</pre>
-         <button class="copy-btn secondary" data-copy-target="#ai-prompt">Copy to AI</button>
+        <p>Copy the message below and send it to your AI assistant to get a new upload link.</p>
+        <div class="ai-message-card">
+          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
+          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to request new upload link">Copy Message</button>
+        </div>
       </div>
     </article>
   </main>
