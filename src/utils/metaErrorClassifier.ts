@@ -39,7 +39,7 @@ export function parseErrorDetails(error: unknown): MetaErrorDetails {
   const errorPayloadTyped = errorPayload as Record<string, unknown>;
   const code = (err.metaErrorCode || errorPayloadTyped?.code)?.toString();
   const subcode = (err.metaErrorSubcode || errorPayloadTyped?.error_subcode)?.toString();
-  const type = errorPayloadTyped?.type as string | undefined;
+  const type = (err.metaErrorType || errorPayloadTyped?.type) as string | undefined;
   const message = (err.message || errorPayloadTyped?.message) as string | undefined;
   const isTransient = errorPayloadTyped?.is_transient as boolean | undefined;
   const statusCode =

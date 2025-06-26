@@ -89,7 +89,7 @@ A typical `tools/call` request flows through the system as follows:
 6.  **Resilient API Call**: The handler uses `handleMetaApiCall` (`src/tools/meta/api.ts`) to wrap the Meta SDK call. This wrapper applies a **request-scoped resilience policy** (`src/utils/resiliencePolicy.ts`), providing circuit breaker and retry capabilities for this call only.
 7.  **Response Handling**:
     *   On success, the response from the Meta API is validated against an auto-generated Zod schema. `createMcpSuccessResult` (`src/mcp/responseHelper.ts`) formats the response, sanitizing it by redacting sensitive fields and removing internal SDK properties.
-    *   On failure, `createMcpErrorResult` (`src/mcp/errorHandler.ts`) catches the error, classifies it, and generates a standardized, actionable error response for the client.
+    *   On failure, `createMcpErrorResult` (`src/mcp/errorHandler.ts`) catches the error, classifies it, extracts enhanced Meta API error details (including `fbtrace_id`, user-friendly messages, and error codes), and generates a standardized, actionable error response for the client.
 8.  **Cleanup**: Upon request completion or disconnection, the per-request `BambooMCPServer` instance and its resources are automatically cleaned up.
 
 ### 4.2. Authentication Flow (OAuth 2.1 + PKCE)

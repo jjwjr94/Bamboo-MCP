@@ -550,7 +550,27 @@ The server returns structured errors to provide clear guidance for clients. All 
 }
 ```
 
-**Error Categories**:
+### 5.1. Enhanced Meta API Error Information
+
+When Meta Graph API errors occur, the server captures and provides enhanced error details for improved debugging and user experience:
+
+**Enhanced Error Fields**:
+- **User-Friendly Messages**: When available, Meta's `error_user_title` and `error_user_msg` fields are used to provide clearer, more actionable error messages to end users
+- **Debug Tracing**: Meta's `fbtrace_id` is automatically logged and can be provided to Meta support for detailed error investigation
+- **Error Classification**: Meta's `error.type` field is captured to enable more precise error handling and categorization
+- **Error Codes**: Both `error.code` and `error_subcode` from Meta responses are preserved for detailed error analysis
+
+**Internal Logging**:
+```
+[ERROR] Meta API Error: Campaign budget must be at least $1.00 USD
+  fbtrace_id: ABC123XYZ789 (provide to Meta support)
+  error_type: OAuthException
+  error_code: 100, error_subcode: 1487
+```
+
+The server automatically extracts these fields from Meta Graph API error responses and incorporates them into both user-facing error messages and internal debugging logs, significantly improving the troubleshooting experience for both developers and Meta support teams.
+
+### 5.2. Error Categories
 
 | Category | Description | Retryable? |
 | :--- | :--- | :--- |

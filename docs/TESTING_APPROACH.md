@@ -130,7 +130,7 @@ This test suite validates one of the most complex features of the server: the au
 1.  **Isolate the Failure**: Run the failing test file by itself: `pnpm test path/to/your/test.file.ts`.
 2.  **Check Mock API Handlers**: The most common source of failure is a mismatch between the URL the application is trying to call and the URL mocked by MSW. MSW will print an "unhandled request" error to the console with the exact URL that was called. Ensure your MSW handler in the test matches it.
 3.  **Inspect Database State**: If you suspect a database issue, you can add `console.log` statements within your `withUserContext` blocks to inspect the state of the database during the test execution.
-4.  **Review Error Messages**: Our `MetaApiError` class and test fixtures are designed to provide detailed error messages. Read the assertion failure message carefully; it often points directly to the problem.
+4.  **Review Error Messages**: Our `MetaApiError` class and test fixtures are designed to provide detailed error messages with enhanced Meta API error details (including `fbtrace_id`, user-friendly messages, and error codes). Read the assertion failure message carefully; it often points directly to the problem.
 5.  **Check Timeouts**: Our integration tests have a generous 30-second timeout (`vitest.config.ts`). If a test is timing out, it may indicate a deadlock or an unhandled promise that is preventing the test from completing.
 
 By adhering to this strategy, we maintain a robust, reliable, and secure server while enabling developers to contribute with confidence.
