@@ -14,8 +14,8 @@ export type UploadSuccessResult = {
 // JavaScript functionality for copy-to-clipboard
 // !! IMPORTANT !!
 // This script is embedded in other scripts (SUCCESS_SESSION_NOT_FOUND_SCRIPT and FAILED_PAGE_SCRIPT).
-// Changing this string will invalidate multiple CSP hashes in src/index.ts.
-// After any modification, run `pnpm csp:hashes` to regenerate the hashes.
+// After any modification to this or other script constants in this file,
+// run `pnpm prebuild:csp` to regenerate the required CSP hashes.
 const AI_COPY_SCRIPT = `
   const initializeMessageCopy = () => {
     const copyButtons = document.querySelectorAll('.copy-btn');

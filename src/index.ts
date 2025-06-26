@@ -11,6 +11,12 @@ import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
+import {
+  FAILED_PAGE_SCRIPT_HASH,
+  SERVER_ERROR_SCRIPT_HASH,
+  SUCCESS_SESSION_NOT_FOUND_SCRIPT_HASH,
+  UPLOAD_FORM_SCRIPT_HASH,
+} from './generated/cspHashes.js';
 import { CoreServices } from './mcp/coreServices.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
 import { MetaToolsHandler } from './tools/meta/toolsHandler.js';
@@ -63,10 +69,10 @@ export async function build(opts = {}) {
         // Allow scripts from self plus specific, trusted inline scripts via hashes.
         scriptSrc: [
           "'self'",
-          "'sha256-xcGlEQQ4y0TJrXOLP8BlF6ZKVfVsevBoA/nIFI7YxSc='", // Hash for upload form script
-          "'sha256-RIH6U8KRg2Q9nFvp5LJ2NXagiEQmN52r0C34K1bOtQY='", // Hash for failed page script (with window.close fallback)
-          "'sha256-7MoLratD/P5eyK5II/XxfIsdPsaluSIyx78S9mJmvJU='", // Hash for success & session-not-found scripts (with window.close fallback)
-          "'sha256-a3IpyWcauTWt+4TlEafHXGhJ9ffA7S4sB1iWj0QwN8c='", // Hash for server error script (with window.close fallback)
+          UPLOAD_FORM_SCRIPT_HASH, // Hash for upload form script
+          FAILED_PAGE_SCRIPT_HASH, // Hash for failed page script (with window.close fallback)
+          SUCCESS_SESSION_NOT_FOUND_SCRIPT_HASH, // Hash for success & session-not-found scripts (with window.close fallback)
+          SERVER_ERROR_SCRIPT_HASH, // Hash for server error script (with window.close fallback)
         ],
         imgSrc: ["'self'", 'data:', 'https:'],
         // Explicitly prevent object/plugin execution for defense-in-depth
