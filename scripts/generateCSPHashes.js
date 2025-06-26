@@ -33,7 +33,7 @@ const SCRIPT_CONSTANTS = [
  */
 function calculateHash(scriptContent) {
   const hash = crypto.createHash('sha256').update(scriptContent.trim()).digest('base64');
-  return `sha256-${hash}`;
+  return `'sha256-${hash}'`;
 }
 
 /**
@@ -79,7 +79,7 @@ function generateFileContent(hashes) {
 `;
 
   const exports = Object.entries(hashes)
-    .map(([key, value]) => `export const ${key} = '${value}';`)
+    .map(([key, value]) => `export const ${key} = ${value};`)
     .join('\n');
 
   return `${header}\n${exports}\n`;
@@ -122,5 +122,8 @@ async function main() {
 
 // Only run if this script is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
+  main().catch((error) => {
+    console.error('❌ CSP hash generation failed:', error);
+    process.exit(1); // Ensure non-zero exit code on error
+  });
 }
