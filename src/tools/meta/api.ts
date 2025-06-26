@@ -186,7 +186,6 @@ export async function createMetaApiErrorFromResponse(response: Response): Promis
   // Use the existing enhanced parser to extract all known fields
   const parsedError = parseMetaApiError(errorPayload);
 
-  // Return a new MetaApiError with all available information
   return new MetaApiError(
     parsedError.message,
     parsedError.metaErrorCode,

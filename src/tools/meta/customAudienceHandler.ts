@@ -180,7 +180,6 @@ export class MetaCustomAudienceHandler {
   ): Promise<DeleteCustomAudienceResult> {
     logger.info('Executing delete_custom_audience', { userId: authPayload.userId, params });
 
-    // Validate deletion confirmation using Zod schema
     const validationResult = DeleteCustomAudienceValidationSchema.safeParse(params);
     if (!validationResult.success) {
       const error = validationResult.error.errors[0];

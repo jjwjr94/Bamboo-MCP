@@ -34,7 +34,7 @@ export default defineConfig({
         'src/mcp/**/*.ts',
       ],
       exclude: ['src/**/*.d.ts', 'src/generated/**/*', 'src/**/*.test.ts'],
-      // Staff+ engineering: Focus on critical paths
+      // Focus on critical paths
       thresholds: {
         'src/auth/': { branches: 85, functions: 90, lines: 85 },
         'src/tools/meta/adAccountHandler.ts': { branches: 80, functions: 85, lines: 80 },

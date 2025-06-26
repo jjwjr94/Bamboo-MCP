@@ -17,7 +17,6 @@ export class PromptRegistry {
     const systemPromptContent = promptContentCache.getSystemPromptContent();
     const bestPracticesPromptContent = promptContentCache.getBestPracticesPromptContent();
 
-    // Validate that cache is properly initialized
     if (!systemPromptContent || !bestPracticesPromptContent) {
       throw new Error('Prompt content cache is not properly initialized');
     }

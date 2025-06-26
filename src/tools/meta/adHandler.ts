@@ -220,7 +220,6 @@ export class MetaAdHandler {
   ): Promise<DeleteAdResult> {
     logger.info('Executing delete_ad', { userId: authPayload.userId, params });
 
-    // Validate deletion confirmation using Zod schema
     const validationResult = DeleteAdValidationSchema.safeParse(params);
     if (!validationResult.success) {
       const error = validationResult.error.errors[0];

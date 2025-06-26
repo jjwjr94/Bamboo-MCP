@@ -11,21 +11,6 @@ import { redactSensitiveData } from '../utils/securityUtils.js';
 import { promptContentCache } from './promptContent.js';
 
 /**
- * Creates a success CallToolResult with both content and structuredContent fields.
- * This function automatically sanitizes the response data using a multi-layer approach
- * for defense in depth:
- *
- * 1.  **Redaction Layer**: Recursively finds and redacts sensitive data fields
- *     (e.g., `access_token`, `password`, `*_secret`) to prevent leakage.
- * 2.  **Sanitization Layer**: Recursively removes any properties starting with an
- *     underscore (`_`) to prevent leaking internal SDK properties.
- *
- * @param data - The successful result payload as an object
- * @param description - Optional description for the response's metadata
- * @returns A sanitized CallToolResult object with type-safe structured content
- */
-
-/**
  * Options for configuring the behavior of createMcpSuccessResult.
  */
 export interface CreateMcpSuccessResultOptions {
@@ -47,10 +32,6 @@ export interface McpStructuredSuccess<T> {
   [key: string]: unknown;
 }
 
-/**
- * Creates embedded resources for system prompts that are included in tool call results.
- * This ensures Claude gets the prompt content with every successful tool call response.
- */
 function createPromptEmbeddedResources(): EmbeddedResource[] {
   const resources: EmbeddedResource[] = [];
 

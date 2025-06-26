@@ -20,19 +20,16 @@ import { shouldRetryMetaError } from './metaErrorClassifier.js';
  * @returns A composite Cockatiel policy object.
  */
 export function createMetaResiliencePolicy() {
-  // Create exponential backoff strategy
   const exponentialBackoff = new ExponentialBackoff({
     initialDelay: env.RETRY_BASE_DELAY,
     maxDelay: env.RETRY_MAX_DELAY,
   });
 
-  // Create retry policy with custom error handling and exponential backoff
   const retryPolicy = retry(handleWhen(shouldRetryMetaError), {
     maxAttempts: env.RETRY_MAX_ATTEMPTS,
     backoff: exponentialBackoff,
   });
 
-  // Create circuit breaker policy with custom error handling
   const circuitBreakerPolicy = circuitBreaker(handleWhen(shouldRetryMetaError), {
     halfOpenAfter: env.CIRCUIT_BREAKER_RESET_TIMEOUT,
     breaker: new ConsecutiveBreaker(env.CIRCUIT_BREAKER_FAILURE_THRESHOLD),

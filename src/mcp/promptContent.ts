@@ -30,7 +30,6 @@ class PromptContentCache {
         readFile(path.join(promptsDir, 'best_practices.md'), 'utf-8'),
       ]);
 
-      // Validate that prompt files are not empty
       if (!this.systemPromptContent || this.systemPromptContent.trim().length === 0) {
         throw new ValidationError('System prompt file is empty or contains only whitespace');
       }
@@ -42,7 +41,6 @@ class PromptContentCache {
       }
 
       this.initialized = true;
-      logger.info('Prompt content cache initialized');
     } catch (error) {
       logger.error('Failed to initialize global prompt content cache', { error });
       throw error;

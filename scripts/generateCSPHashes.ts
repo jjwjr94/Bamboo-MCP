@@ -6,7 +6,7 @@
  * This utility automatically calculates SHA-256 hashes for inline scripts
  * from src/utils/uploadTemplates.ts and writes them to src/generated/cspHashes.ts.
  *
- * Follows 2025 staff+ engineering best practices:
+ * Engineering principles:
  * - Auto-discovers all *_SCRIPT constants (zero manual maintenance)
  * - Generates aggregate array for dynamic CSP configuration
  * - TypeScript for build tooling consistency
@@ -81,7 +81,7 @@ function generateFileContent(hashes: Record<string, string>): string {
   const hashEntries = Object.entries(hashes);
   const exports = hashEntries.map(([key, value]) => `export const ${key} = ${value};`).join('\n');
 
-  // Staff+ Enhancement: Export an array of all hashes for dynamic CSP configuration
+  // Export an array of all hashes for dynamic CSP configuration
   const allHashesArray = `\n/**
  * Array containing all script hashes for dynamic CSP configuration.
  * Eliminates the need to manually maintain the scriptSrc array.

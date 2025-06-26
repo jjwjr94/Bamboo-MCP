@@ -16,7 +16,7 @@ import type {
  * Handler for Meta Ads Archive (Ad Library) API operations.
  *
  * Since the facebook-nodejs-business-sdk doesn't support Ad Library endpoints,
- * this handler uses direct Graph API calls following 2025 best practices.
+ * this handler uses direct Graph API calls.
  */
 export class MetaAdsArchiveHandler {
   /**

@@ -158,14 +158,12 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
-    // Validate budget requirement using Zod schema
     const budgetValidation = BudgetXorValidationSchema.safeParse(params);
     if (!budgetValidation.success) {
       const error = budgetValidation.error.errors[0];
       throw new ValidationError(error.message);
     }
 
-    // Validate Special Ad Category requirements using Zod schema
     const sacValidation = SpecialAdCategoryValidationSchema.safeParse(params);
     if (!sacValidation.success) {
       const error = sacValidation.error.errors[0];
@@ -243,7 +241,6 @@ export class MetaCampaignHandler {
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
-    // Validate budget requirement for updates using Zod schema
     const budgetValidation = UpdateBudgetValidationSchema.safeParse(params);
     if (!budgetValidation.success) {
       const error = budgetValidation.error.errors[0];
@@ -298,7 +295,6 @@ export class MetaCampaignHandler {
   ): Promise<DeleteCampaignResult> {
     logger.info('Executing delete_campaign', { userId: authPayload.userId, params });
 
-    // Validate confirmation using Zod schema
     const validationResult = DeleteCampaignValidationSchema.safeParse(params);
     if (!validationResult.success) {
       const error = validationResult.error.errors[0];

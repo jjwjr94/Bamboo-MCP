@@ -40,7 +40,7 @@ export interface MetaServerAuthProviderDependencies {
  * Key features:
  * - Constructor dependency injection for testability
  * - Database-backed client registration via oauth_clients table
- * - Secure session management following 2025 OAuth best practices
+ * - Secure session management following OAuth 2.1 specifications
  * - Integration with existing Meta OAuth business logic
  * - JWT-based internal token system
  */
@@ -82,8 +82,6 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
       },
       15 * 60 * 1000 // 15 minutes
     );
-
-    logger.info('MetaServerAuthProvider initialized with dependency injection');
   }
 
   public destroy(): void {

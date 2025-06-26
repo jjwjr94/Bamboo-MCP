@@ -23,10 +23,6 @@ type OAuthToken = typeof oauthTokens.$inferSelect;
  * the authentication provider.
  */
 export class OAuthDatabaseService {
-  public constructor() {
-    logger.info('OAuthDatabaseService initialized');
-  }
-
   // Client Management
   public async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
     logger.debug('Getting OAuth client from database', { clientId });

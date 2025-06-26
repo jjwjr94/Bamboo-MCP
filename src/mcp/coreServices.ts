@@ -45,7 +45,6 @@ export class CoreServices {
     try {
       await promptContentCache.initialize();
       CoreServices.instance = new CoreServices();
-      logger.info('CoreServices initialized');
       return CoreServices.instance;
     } catch (error) {
       logger.error('CoreServices initialization failed', {

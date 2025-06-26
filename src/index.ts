@@ -98,7 +98,6 @@ export async function build(opts = {}) {
     },
   });
 
-  // Validate that ALLOWED_ORIGINS is set in production.
   if (env.NODE_ENV === 'production' && env.ALLOWED_ORIGINS.length === 0) {
     logger.error(
       'CRITICAL: ALLOWED_ORIGINS environment variable is not defined for production. Server is shutting down.'
@@ -166,7 +165,6 @@ export async function build(opts = {}) {
 
   // Initialize CoreServices once at startup
   const coreServices = await CoreServices.initialize();
-  logger.info('CoreServices initialized for HTTP transport');
 
   // Initialize the MetaToolsHandler for upload processing
   const metaToolsHandler = new MetaToolsHandler();
@@ -264,7 +262,6 @@ export async function build(opts = {}) {
         // Set extended timeout for uploads
         request.raw.setTimeout(env.FASTIFY_UPLOAD_REQUEST_TIMEOUT);
 
-        // Validate uploaded file
         const data = await request.file();
         if (!data) {
           throw new ValidationError('No file uploaded');
@@ -279,7 +276,6 @@ export async function build(opts = {}) {
           metaAssetId: result.metaAssetId,
         });
 
-        // Return success page
         return reply.type('text/html').send(
           renderUploadSuccessPage({
             uploadId,

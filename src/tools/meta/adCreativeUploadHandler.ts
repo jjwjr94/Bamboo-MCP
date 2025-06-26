@@ -27,7 +27,6 @@ export class AdCreativeUploadHandler {
           params.adAccountId ||
           (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
 
-        // Create upload record in database - asset type will be determined at upload time
         const newUploadRequest = await withUserContext(authPayload.userId, async (tx) => {
           const [result] = await tx
             .insert(creativeAssetUploads)
@@ -86,9 +85,6 @@ export class AdCreativeUploadHandler {
     );
   }
 
-  /**
-   * Creates a FormData object for the Meta API upload request
-   */
   private createUploadFormData(
     fileData: MultipartFile,
     assetType: string,
@@ -143,9 +139,6 @@ export class AdCreativeUploadHandler {
     return metaAssetId;
   }
 
-  /**
-   * Handles the HTTP request to Meta API
-   */
   private async sendToMetaAPI(
     uploadUrl: string,
     form: FormData,
@@ -177,9 +170,6 @@ export class AdCreativeUploadHandler {
     }
   }
 
-  /**
-   * Processes Meta API response and handles errors
-   */
   private processMetaResponse(
     statusCode: number,
     responseText: string,

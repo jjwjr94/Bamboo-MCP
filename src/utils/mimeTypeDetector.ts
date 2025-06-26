@@ -1,7 +1,7 @@
 import { ValidationError } from './errors.js';
 
 // Curated list of MIME types supported by Meta Marketing API for ad creatives
-// Based on official Meta API documentation (2025)
+// Based on official Meta API documentation
 const SUPPORTED_IMAGE_MIMES = new Set([
   'image/jpeg',
   'image/jpg', // Some browsers use this variant

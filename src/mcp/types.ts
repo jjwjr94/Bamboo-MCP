@@ -76,9 +76,7 @@ export function createMcpOutputSchema<T extends z.ZodTypeAny>(successDataSchema:
     })
     .passthrough();
 
-  // Create the discriminated union schema
   const discriminatedUnion = z.discriminatedUnion('type', [successSchema, mcpErrorSchema]);
 
-  // Return the raw shape (ZodRawShape) required by the MCP SDK's registerTool function
   return z.object({ result: discriminatedUnion }).shape;
 }

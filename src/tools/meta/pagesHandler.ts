@@ -50,7 +50,6 @@ export class MetaPagesHandler {
           userId: authPayload.userId,
         });
 
-        // Validate and transform the response using auto-generated schema
         const validatedPages: z.infer<typeof MetaPageResponseSchema>[] = [];
         for (const page of allRawPages) {
           const result = MetaPageResponseSchema.safeParse(page);

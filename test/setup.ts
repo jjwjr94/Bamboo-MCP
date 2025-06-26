@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-// Global container instance attached to globalThis for 2025 best practices
+// Global container instance attached to globalThis
 declare global {
   var __TEST_CONTAINER__: StartedPostgreSqlContainer | undefined;
   var __TEST_DB_URL__: string | undefined;
@@ -12,7 +12,7 @@ declare global {
 
 /**
  * Global setup function called once before all tests
- * Follows 2025 best practices for testcontainers with vitest
+ * Setup function for testcontainers with vitest
  */
 export async function setup() {
   console.info('🚀 Starting PostgreSQL test container...');

@@ -46,7 +46,6 @@ export async function fetchAllPaginatedData<T>({
 }: PaginatedFetchOptions<T>): Promise<T[]> {
   const allRawItems: unknown[] = [];
 
-  // Handle single object responses
   if (cursor && !Array.isArray(cursor)) {
     logger.warn(`Meta API returned a single object for ${entityName}, expected an array.`, {
       userId,

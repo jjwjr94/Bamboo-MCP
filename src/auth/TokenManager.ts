@@ -26,7 +26,6 @@ export class TokenManager {
 
   constructor(dbService: OAuthDatabaseService) {
     this.dbService = dbService;
-    logger.info('TokenManager initialized');
   }
 
   /**

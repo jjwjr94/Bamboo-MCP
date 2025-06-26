@@ -29,7 +29,7 @@ import type {
   UpdateAdSetResult,
 } from './types.js';
 
-// Define comprehensive validation schemas for ad sets following 2025 best practices
+// Define comprehensive validation schemas for ad sets
 const CreateAdSetValidationSchema = z
   .object({
     dailyBudget: z.number().optional(),
@@ -210,7 +210,6 @@ export class MetaAdSetHandler {
   ): Promise<CreateAdSetResult> {
     logger.info('Executing create_adset', { userId: authPayload.userId, params });
 
-    // Validate all synchronous rules using comprehensive Zod schema
     const validation = CreateAdSetValidationSchema.safeParse(params);
     if (!validation.success) {
       // Extract the first validation error for clear error messaging
@@ -336,7 +335,6 @@ export class MetaAdSetHandler {
   ): Promise<UpdateAdSetResult> {
     logger.info('Executing update_adset', { userId: authPayload.userId, params });
 
-    // Validate budget requirements for updates using Zod schema
     const validation = UpdateAdSetValidationSchema.safeParse(params);
     if (!validation.success) {
       const error = validation.error.errors[0];
@@ -395,7 +393,6 @@ export class MetaAdSetHandler {
   ): Promise<DeleteAdSetResult> {
     logger.info('Executing delete_ad_set', { userId: authPayload.userId, params });
 
-    // Validate confirmation using Zod schema
     const validationResult = DeleteAdSetValidationSchema.safeParse(params);
     if (!validationResult.success) {
       const error = validationResult.error.errors[0];

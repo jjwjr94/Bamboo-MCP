@@ -1,7 +1,7 @@
 import { env } from './env.js';
 import { logger } from './logger.js';
 
-// 2025-ready: Using a WeakSet for efficient circular reference tracking.
+// Using a WeakSet for efficient circular reference tracking.
 const REDACTION_PLACEHOLDER = '[REDACTED]';
 
 /**
@@ -105,7 +105,7 @@ const DANGEROUS_CHARS_REGEX = /[&<>"'/]/g;
  * This function prevents XSS by replacing characters that have special
  * meaning in HTML with their corresponding entities.
  *
- * Following 2025 security best practices for output encoding.
+ * Prevents XSS by escaping special characters for HTML output.
  *
  * @param str The input string to escape. Can be null or undefined.
  * @returns The escaped string, or an empty string if the input is falsy.

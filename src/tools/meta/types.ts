@@ -4,7 +4,7 @@
  * and represent the data structure that handlers should return before being
  * wrapped in a `CallToolResult`.
  *
- * Following 2025 TypeScript clean architecture best practices:
+ * Clean architecture principles:
  * - Pure domain types without framework dependencies
  * - Explicit modeling using TypeScript interfaces
  * - Types inferred from validated Zod schemas for consistency

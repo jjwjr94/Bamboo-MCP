@@ -237,7 +237,6 @@ export class MetaApiService {
         return true;
       }
 
-      // Create a standardized error to check the type
       const apiError = await createMetaApiErrorFromResponse(response);
 
       // For token validation, certain errors (like expired token) are expected "failures"

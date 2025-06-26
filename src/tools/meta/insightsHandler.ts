@@ -92,8 +92,6 @@ export class MetaInsightsHandler {
           userId: authPayload.userId,
           apiContext: params,
         });
-
-        // Validate and transform the response using auto-generated schema
         const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
         for (const insight of allRawInsights) {
           const result = MetaAdsInsightsResponseSchema.safeParse(insight);
@@ -173,8 +171,6 @@ export class MetaInsightsHandler {
           userId: authPayload.userId,
           apiContext: { adAccountId },
         });
-
-        // Validate and transform the response using auto-generated schema
         const validatedInsights: z.infer<typeof MetaAdsInsightsResponseSchema>[] = [];
         for (const insight of allRawInsights) {
           const result = MetaAdsInsightsResponseSchema.safeParse(insight);

@@ -12,10 +12,6 @@ import { logger } from '../utils/logger.js';
  * by storing state in the database. This implementation is stateless.
  */
 export class SessionManager {
-  constructor() {
-    logger.info('Stateless SessionManager initialized');
-  }
-
   /**
    * Stores session data against a unique state key in the database.
    * @param state The unique state identifier.
