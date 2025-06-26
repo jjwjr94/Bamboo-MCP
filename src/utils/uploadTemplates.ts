@@ -20,6 +20,13 @@ const AI_COPY_STYLES = `
     border: var(--bamboo-border-width) solid var(--bamboo-color-border);
     border-radius: var(--bamboo-border-radius);
   }
+  .ai-copy-container h2 {
+    margin-top: 0;
+    margin-bottom: var(--bamboo-space-3);
+    color: var(--bamboo-color-primary);
+    font-size: var(--bamboo-font-size-lg);
+    font-weight: var(--bamboo-font-weight-semibold);
+  }
   .ai-copy-container h3 {
     margin-top: 0;
     margin-bottom: var(--bamboo-space-3);
@@ -133,6 +140,7 @@ const AI_COPY_SCRIPT = `
   function fallbackCopyToClipboard(text) {
     const textArea = document.createElement('textarea');
     textArea.value = text;
+    textArea.setAttribute('aria-hidden', 'true');
     textArea.style.position = 'fixed';
     textArea.style.top = '0';
     textArea.style.left = '0';
@@ -293,23 +301,49 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
 <body>
   <main class="container">
     <article>
-      <h1>✅ Upload Complete!</h1>
-      <p><strong>Asset Type:</strong> ${escapeHtml(assetType)}</p>
-      <p><strong>Meta Asset ID:</strong> ${escapeHtml(metaAssetId)}</p>
-      
+      <div class="status-header">
+        <div class="status-icon status-icon--success" aria-hidden="true">&#10003;</div>
+        <h1>Upload Complete</h1>
+        <p class="subtitle">Your creative asset has been successfully uploaded to Meta.</p>
+      </div>
+
+      <div class="asset-info-card">
+        <dl>
+          <dt>Asset Type</dt>
+          <dd>${escapeHtml(assetType)}</dd>
+          <dt>Meta Asset ID</dt>
+          <dd><code>${escapeHtml(metaAssetId)}</code></dd>
+        </dl>
+      </div>
+
       <div class="ai-copy-container">
-        <h3>Communicate with AI Assistant</h3>
-        <p>Copy the following message to your AI assistant to confirm the upload.</p>
+        <h2>Next Step: Validate with AI</h2>
+        <p>Copy the message below and send it to your AI assistant to confirm the upload and continue your workflow.</p>
         <div class="ai-message-card">
           <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy Message</button>
+          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy for AI</button>
         </div>
       </div>
 
-      <p>Your file has been successfully uploaded to Meta. You can now close this window.</p>
+      <div class="actions">
+        <button id="closeBtn" class="secondary">Close Window</button>
+      </div>
+      
+      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
+        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
+      </div>
     </article>
   </main>
-  <script>${AI_COPY_SCRIPT}</script>
+  <script>
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+    ${AI_COPY_SCRIPT}
+  </script>
 </body>
 </html>`;
 }
@@ -416,40 +450,57 @@ export function renderUploadFailedPage(
 <body>
   <main class="container">
     <article>
-      <h1>❌ Upload Failed</h1>
-      <h2>${escapeHtml(errorCategory)}</h2>
-      <div class="error-details">
-        <p><strong>Error Details:</strong></p>
-        <code>${escapeHtml(errorMessage)}</code>
+      <div class="status-header">
+        <div class="status-icon status-icon--error" aria-hidden="true">&times;</div>
+        <h1>Upload Failed</h1>
+        <p class="subtitle">${escapeHtml(errorCategory)}</p>
+      </div>
+
+      <div class="asset-info-card">
+        <h3>Error Details</h3>
+        <p><code>${escapeHtml(errorMessage)}</code></p>
       </div>
 
       <div class="ai-copy-container">
-        <h3>Request Assistance from AI</h3>
+        <h2>Request Assistance from AI</h2>
         <p>To get a new upload link, copy the message below and send it to your AI assistant.</p>
         <div class="ai-message-card">
           <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy Message</button>
+          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy for AI</button>
         </div>
       </div>
       
       ${troubleshootingSteps}
-      <div>
-        <p><strong>Need Help?</strong> If you continue to experience issues, please:</p>
+      
+      <div class="asset-info-card">
+        <h3>Need Additional Help?</h3>
+        <p>If you continue to experience issues, please:</p>
         <ul>
           <li>Copy the error details above</li>
           <li>Note the time when the error occurred</li>
           <li>Contact your system administrator or support team</li>
         </ul>
       </div>
+
       <div class="actions">
         <button id="tryAgainBtn">Try Again</button>
         <button id="closeBtn" class="secondary">Close Window</button>
+      </div>
+      
+      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
+        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
       </div>
     </article>
   </main>
   <script>
     document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
-    document.getElementById('closeBtn')?.addEventListener('click', () => window.close());
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
     ${AI_COPY_SCRIPT}
   </script>
 </body>
@@ -468,36 +519,20 @@ export function renderUploadInProgressPage(): string {
   <meta http-equiv="refresh" content="10">
   <title>Upload In Progress | Bamboo</title>
   <link rel="stylesheet" href="/bamboo-ui.css">
-  <style>
-    .container {
-      text-align: center;
-    }
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border-left-color: var(--bamboo-color-primary);
-      animation: spin 1s ease infinite;
-      margin: 20px auto;
-    }
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-  </style>
 </head>
 <body>
   <main class="container">
     <article>
-      <h1>⏳ Upload In Progress</h1>
-      <div class="spinner"></div>
-      <p>This asset is currently being uploaded. This page will automatically refresh every 10 seconds to check the status.</p>
-      <p>You can also close this window. The process will continue in the background.</p>
+      <div class="status-header">
+        <div class="status-icon status-icon--progress"><div class="spinner"></div></div>
+        <h1>Upload in Progress</h1>
+        <p class="subtitle">Your file is being uploaded to Meta. This may take a few moments.</p>
+      </div>
+      
+      <div class="asset-info-card">
+        <p style="text-align: center;">This page will automatically refresh every 10 seconds to check the status.</p>
+        <p style="text-align: center;">You can safely close this window; the process will continue in the background.</p>
+      </div>
     </article>
   </main>
 </body>
@@ -522,20 +557,40 @@ export function renderUploadSessionNotFoundPage(): string {
 <body>
   <main class="container">
     <article>
-      <h1>Upload Session Not Found</h1>
-      <p>This upload session is invalid, expired, or has already been used.</p>
+      <div class="status-header">
+        <div class="status-icon status-icon--error" aria-hidden="true">!</div>
+        <h1>Session Not Found</h1>
+        <p class="subtitle">This upload link is invalid, expired, or has already been used.</p>
+      </div>
       
       <div class="ai-copy-container">
-        <h3>Request New Upload Link</h3>
+        <h2>Request a New Link</h2>
         <p>Copy the message below and send it to your AI assistant to get a new upload link.</p>
         <div class="ai-message-card">
           <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn secondary" data-copy-target="#ai-prompt" aria-label="Copy message to request new upload link">Copy Message</button>
+          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to request new upload link">Copy for AI</button>
         </div>
+      </div>
+
+      <div class="actions">
+        <button id="closeBtn" class="secondary">Close Window</button>
+      </div>
+      
+      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
+        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
       </div>
     </article>
   </main>
-  <script>${AI_COPY_SCRIPT}</script>
+  <script>
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+    ${AI_COPY_SCRIPT}
+  </script>
 </body>
 </html>`;
 }
@@ -556,15 +611,24 @@ export function renderUploadFormPage(uploadId: string): string {
 <body>
   <main class="container">
     <article>
-      <h1>Upload Creative Asset</h1>
-      <p>The file type (image or video) will be automatically detected.</p>
-      <p><small>Supported formats: JPEG, PNG, GIF, WebP, MP4, MOV</small></p>
+      <div class="status-header">
+        <div class="status-icon status-icon--info" aria-hidden="true">&#8593;</div>
+        <h1>Upload Creative Asset</h1>
+        <p class="subtitle">Select a file to upload. The asset type will be automatically detected.</p>
+      </div>
+
       <form id="uploadForm" action="/v1/assets/upload/${escapeHtml(uploadId)}" method="post" enctype="multipart/form-data">
-        <label for="file">
-          Select file to upload:
-          <input type="file" id="file" name="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mov,video/quicktime" required>
-        </label>
-        <button id="submitBtn" type="submit">Upload File</button>
+        <div class="file-input-wrapper">
+          <label for="file" class="file-input-label">
+            <span class="label-text" id="file-label-text">Click to browse or drag file here</span>
+            <span class="label-instructions">Supported: JPG, PNG, GIF, WebP, MP4, MOV</span>
+          </label>
+          <input type="file" id="file" name="file" class="visually-hidden" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mov,video/quicktime" required>
+        </div>
+        
+        <div class="actions">
+          <button id="submitBtn" type="submit" disabled>Upload File</button>
+        </div>
       </form>
     </article>
   </main>
@@ -572,11 +636,22 @@ export function renderUploadFormPage(uploadId: string): string {
     const form = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
     const fileInput = document.getElementById('file');
+    const fileLabelText = document.getElementById('file-label-text');
+    
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        fileLabelText.textContent = fileInput.files[0].name;
+        submitBtn.disabled = false;
+      } else {
+        fileLabelText.textContent = 'Click to browse or drag file here';
+        submitBtn.disabled = true;
+      }
+    });
+
     form.addEventListener('submit', () => {
       if (fileInput.files.length > 0) {
         submitBtn.setAttribute('aria-busy', 'true');
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Uploading...';
       }
     });
   </script>
@@ -591,7 +666,7 @@ export function renderUploadFormPage(uploadId: string): string {
 export function renderServerErrorPage(customMessage?: string): string {
   const displayMessage = customMessage
     ? escapeHtml(customMessage)
-    : 'An unexpected error occurred. We have been notified and are looking into it.';
+    : 'An unexpected error occurred. Our team has been notified and is looking into it.';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -604,13 +679,36 @@ export function renderServerErrorPage(customMessage?: string): string {
 <body>
   <main class="container">
     <article>
-      <h1>Server Error</h1>
-      <p>${displayMessage}</p>
+      <div class="status-header">
+        <div class="status-icon status-icon--error" aria-hidden="true">&times;</div>
+        <h1>Server Error</h1>
+        <p class="subtitle">We've encountered a problem.</p>
+      </div>
+      
+      <div class="asset-info-card">
+        <p style="text-align: center;">${displayMessage}</p>
+      </div>
+      
       <div class="actions">
-        <button onclick="window.location.reload()" class="secondary">Try Again</button>
+        <button id="reloadBtn">Try Again</button>
+        <button id="closeBtn" class="secondary">Close Window</button>
+      </div>
+      
+      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
+        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
       </div>
     </article>
   </main>
+  <script>
+    document.getElementById('reloadBtn')?.addEventListener('click', () => window.location.reload());
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+  </script>
 </body>
 </html>`;
 }

@@ -63,10 +63,14 @@ export async function build(opts = {}) {
         // Allow scripts from self plus specific, trusted inline scripts via hashes.
         scriptSrc: [
           "'self'",
-          "'sha256-A40REw02TMNUgLngo/AHwyI0JYfT/WJkYhjTGB725ec='", // Hash for upload form script
-          "'sha256-2mtpGNqfVsBgxnI38W6i6CpnoCU7onmd5xFhbSS8lfY='", // Hash for failed page script
+          "'sha256-xcGlEQQ4y0TJrXOLP8BlF6ZKVfVsevBoA/nIFI7YxSc='", // Hash for upload form script
+          "'sha256-RIH6U8KRg2Q9nFvp5LJ2NXagiEQmN52r0C34K1bOtQY='", // Hash for failed page script (with window.close fallback)
+          "'sha256-7MoLratD/P5eyK5II/XxfIsdPsaluSIyx78S9mJmvJU='", // Hash for success & session-not-found scripts (with window.close fallback)
+          "'sha256-a3IpyWcauTWt+4TlEafHXGhJ9ffA7S4sB1iWj0QwN8c='", // Hash for server error script (with window.close fallback)
         ],
         imgSrc: ["'self'", 'data:', 'https:'],
+        // Explicitly prevent object/plugin execution for defense-in-depth
+        objectSrc: ["'none'"],
         // Prevent clickjacking by disallowing the page to be framed.
         frameAncestors: ["'none'"],
         // Ensure forms can only be submitted to our own origin.
