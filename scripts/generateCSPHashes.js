@@ -22,6 +22,7 @@ const outputPath = path.resolve(__dirname, '../src/generated/cspHashes.ts');
 
 // Script constants to extract from uploadTemplates.ts
 const SCRIPT_CONSTANTS = [
+  'AI_COPY_SCRIPT',
   'UPLOAD_FORM_SCRIPT',
   'SUCCESS_SESSION_NOT_FOUND_SCRIPT',
   'FAILED_PAGE_SCRIPT',
@@ -53,14 +54,14 @@ async function loadScripts() {
         // Check for the captured group
         scripts[scriptName] = match[1].trim();
       } else {
-        console.warn(`⚠️  Could not find ${scriptName} in source file`);
+        console.warn(` ! Could not find ${scriptName} in source file`);
         scripts[scriptName] = '';
       }
     }
 
     return scripts;
   } catch (error) {
-    console.error('❌ Error reading TypeScript source file:', error.message);
+    console.error('! Error reading TypeScript source file:', error.message);
     process.exit(1);
   }
 }
@@ -105,7 +106,7 @@ async function main() {
   }
 
   if (Object.keys(hashes).length === 0) {
-    console.warn('⚠️  No script hashes were generated. Output file will not be created.');
+    console.warn(' ! No script hashes were generated. Output file will not be created.');
     return;
   }
 
@@ -116,14 +117,14 @@ async function main() {
   await fs.writeFile(outputPath, fileContent, 'utf8');
 
   // 5. Log results
-  console.info(`✅ CSP hashes generated successfully at: ${outputPath}`);
+  console.info(`CSP hashes generated successfully at: ${outputPath}`);
   console.info(`   Generated ${Object.keys(hashes).length} hashes.`);
 }
 
 // Only run if this script is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
-    console.error('❌ CSP hash generation failed:', error);
+    console.error('! CSP hash generation failed:', error);
     process.exit(1); // Ensure non-zero exit code on error
   });
 }

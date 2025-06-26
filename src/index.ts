@@ -66,6 +66,8 @@ export async function build(opts = {}) {
         defaultSrc: ["'self'"],
         // Allow stylesheets from self only. External CSS moved to self-hosted Bamboo UI.
         styleSrc: ["'self'"],
+        // Allow inline style attributes for dynamic styling and template styles
+        styleSrcAttr: ["'unsafe-inline'"],
         // Allow scripts from self plus specific, trusted inline scripts via hashes.
         scriptSrc: [
           "'self'",
