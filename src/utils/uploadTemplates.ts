@@ -328,7 +328,11 @@ export const TROUBLESHOOTING_TEMPLATES = {
 /**
  * Generates the HTML markup for a successful upload response.
  */
-export function renderUploadSuccessPage({ assetType, metaAssetId, uploadId }: UploadSuccessResult): string {
+export function renderUploadSuccessPage({
+  assetType,
+  metaAssetId,
+  uploadId,
+}: UploadSuccessResult): string {
   const aiPrompt = `I successfully uploaded creative asset with upload ID ${uploadId}, please verify it.`;
   return renderPageLayout({
     title: 'Upload Complete | Bamboo',

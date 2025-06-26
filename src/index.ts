@@ -233,6 +233,7 @@ export async function build(opts = {}) {
           }
           return reply.type('text/html').send(
             renderUploadSuccessPage({
+              uploadId,
               assetType: uploadRecord.assetType,
               metaAssetId: uploadRecord.metaAssetId,
             })
@@ -291,6 +292,7 @@ export async function build(opts = {}) {
         // Return success page
         return reply.type('text/html').send(
           renderUploadSuccessPage({
+            uploadId,
             assetType: result.assetType,
             metaAssetId: result.metaAssetId,
           })
