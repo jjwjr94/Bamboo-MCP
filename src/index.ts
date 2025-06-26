@@ -11,13 +11,7 @@ import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
-import {
-  AI_COPY_SCRIPT_HASH,
-  CLOSE_BUTTON_SCRIPT_HASH,
-  RELOAD_BUTTON_SCRIPT_HASH,
-  TRY_AGAIN_BUTTON_SCRIPT_HASH,
-  UPLOAD_FORM_SCRIPT_HASH,
-} from './generated/cspHashes.js';
+import { ALL_SCRIPT_HASHES } from './generated/cspHashes.js';
 import { CoreServices } from './mcp/coreServices.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
 import { MetaToolsHandler } from './tools/meta/toolsHandler.js';
@@ -69,14 +63,10 @@ export async function build(opts = {}) {
         styleSrc: ["'self'"],
         // Allow inline style attributes for dynamic styling and template styles
         styleSrcAttr: ["'unsafe-inline'"],
-        // Allow scripts from self plus specific, trusted inline scripts via hashes.
+        // Allow scripts from self plus auto-discovered inline scripts via hashes.
         scriptSrc: [
           "'self'",
-          UPLOAD_FORM_SCRIPT_HASH, // Hash for upload form script
-          AI_COPY_SCRIPT_HASH, // Hash for AI copy functionality
-          CLOSE_BUTTON_SCRIPT_HASH, // Hash for close button script
-          TRY_AGAIN_BUTTON_SCRIPT_HASH, // Hash for try again button script
-          RELOAD_BUTTON_SCRIPT_HASH, // Hash for reload button script
+          ...ALL_SCRIPT_HASHES, // Auto-discovered script hashes (zero-touch maintenance)
         ],
         imgSrc: ["'self'", 'data:', 'https:'],
         // Explicitly prevent object/plugin execution for defense-in-depth

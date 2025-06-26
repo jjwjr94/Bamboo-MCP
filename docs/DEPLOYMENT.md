@@ -161,7 +161,8 @@ pnpm build
 ```
 
 This process will:
-1.  Generate Zod schemas from the Meta SDK (`scripts/generateSchemas.js`).
+1.  Generate Zod schemas from the Meta SDK (`scripts/generateSchemas.ts`).
+2.  Auto-discover inline scripts and generate CSP hashes (`scripts/generateCSPHashes.ts`).
 2.  Compile all TypeScript source from `src/` into JavaScript in the `dist/` directory.
 3.  Copy necessary assets (like prompt `.md` files and `public/` assets) into `dist/`.
 
