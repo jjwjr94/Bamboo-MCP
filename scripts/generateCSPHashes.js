@@ -33,7 +33,7 @@ const SCRIPT_CONSTANTS = [
  */
 function calculateHash(scriptContent) {
   const hash = crypto.createHash('sha256').update(scriptContent.trim()).digest('base64');
-  return `'sha256-${hash}'`;
+  return `"'sha256-${hash}'"`;
 }
 
 /**
