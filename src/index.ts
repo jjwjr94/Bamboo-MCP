@@ -11,7 +11,6 @@ import Fastify from 'fastify';
 import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
-import { ALL_SCRIPT_HASHES } from './generated/cspHashes.js';
 import { CoreServices } from './mcp/coreServices.js';
 import { setupMCPHttpTransport } from './mcp/http.js';
 import { MetaToolsHandler } from './tools/meta/toolsHandler.js';
@@ -63,11 +62,8 @@ export async function build(opts = {}) {
         styleSrc: ["'self'"],
         // Allow inline style attributes for dynamic styling and template styles
         styleSrcAttr: ["'unsafe-inline'"],
-        // Allow scripts from self plus auto-discovered inline scripts via hashes.
-        scriptSrc: [
-          "'self'",
-          ...ALL_SCRIPT_HASHES, // Auto-discovered script hashes (zero-touch maintenance)
-        ],
+        // Allow scripts from self only. All scripts are now external files for CSP compliance.
+        scriptSrc: ["'self'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         // Explicitly prevent object/plugin execution for defense-in-depth
         objectSrc: ["'none'"],

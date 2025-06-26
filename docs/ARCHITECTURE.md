@@ -161,11 +161,6 @@ A key goal is to make the server easy to maintain and extend.
     *   **End-to-end type safety**.
     *   **Automated runtime validation** of all incoming data from the Meta API.
     *   **Effortless updates**: When the Meta SDK is updated, running this script automatically updates our server's data models to match.
-*   **Automated CSP Hash Management**: The `scripts/generateCSPHashes.ts` script implements a zero-touch Content Security Policy management system. It auto-discovers all inline scripts matching the `*_SCRIPT` pattern, generates SHA-256 hashes, and exports both individual hash constants and an aggregate array for dynamic CSP configuration. This provides:
-    *   **Zero manual maintenance**: Adding new scripts requires no CSP configuration changes.
-    *   **Enhanced security**: Strict hash-based CSP prevents XSS with surgical precision.
-    *   **Build-time automation**: All processing happens at build-time with zero runtime performance impact.
-    *   **Type safety**: Full TypeScript integration throughout the build tooling.
 *   **Modular Tool Registries**: The tool registration logic in `src/mcp/registries/` is highly modular. Each Meta entity (Campaign, AdSet, etc.) has its own `*ToolRegistry.ts` file. This makes it trivial to add, remove, or modify tools related to a specific domain without affecting others. The `createMcpTool` helper (`src/mcp/registries/registryHelper.ts`) further abstracts away MCP boilerplate.
 
 This focus on tooling and abstraction ensures that developers can focus on implementing business logic, not wrestling with protocol details or API inconsistencies.

@@ -105,7 +105,7 @@ All communication between clients, the server, and the Meta API is secured using
 | **Broken Object Level Authorization (BOLA/IDOR)** | **Row-Level Security (RLS)** provides the primary defense, ensuring users can only access database rows they own. This prevents enumeration or direct reference attacks at the data layer.                                                                                      |
 | **Multi-Tenant Data Leakage**              | RLS provides a hard guarantee of data isolation between users. The `withUserContext` wrapper ensures every query is correctly scoped.                                                                                                                                                |
 | **Sensitive Data Exposure**                | The `redactSensitiveData` utility (`src/utils/securityUtils.ts`) proactively scrubs sensitive keys (`token`, `secret`, `password`, etc.) from logs and API responses. The `removeUnderscoreProperties` utility prevents internal SDK objects from leaking.                               |
-| **Cross-Site Scripting (XSS)**             | All dynamic HTML content (e.g., asset upload pages) is sanitized using the `escapeHtml` utility. A strict **Content Security Policy (CSP)** is enforced via the `helmet` middleware (`src/index.ts`) using automated hash-based script allowlisting. The `scripts/generateCSPHashes.ts` build script auto-discovers all inline scripts and generates SHA-256 hashes, eliminating manual CSP maintenance and ensuring zero-touch security updates. |
+| **Cross-Site Scripting (XSS)**             | A strict **Content Security Policy (CSP)** with `script-src 'self'` is enforced, disallowing inline scripts. All client-side logic is in external files, and dynamic data is sanitized via `escapeHtml` as a defense-in-depth control. |
 | **Cross-Site Request Forgery (CSRF)**      | The use of JWTs in the `Authorization` header is the primary defense against CSRF for API calls. The OAuth 2.1 flow is protected by the mandatory `state` parameter, which is validated on the server.                                                                                |
 | **Insecure File Uploads**                  | A secure, two-step upload flow is used. A unique, unguessable, and short-lived UUID is generated for each upload session. File types are validated on the backend against a strict allow-list of MIME types (`src/utils/mimeTypeDetector.ts`). Files are streamed directly to Meta's API. |
 | **Dependency Vulnerabilities**             | The project uses `pnpm` for dependency management. Regular audits using `pnpm audit` are recommended to identify and patch vulnerable dependencies.                                                                                                                                     |
@@ -122,6 +122,20 @@ The server implements a secure two-step workflow for uploading creative assets, 
 ### Input Validation
 
 All incoming data from the Meta API and tool call inputs are rigorously validated using **Zod schemas**. The `scripts/generateSchemas.ts` script automatically generates these schemas from the Meta SDK, ensuring our server's data models are always synchronized with the API and protected against malformed or unexpected data.
+
+### Content Security Policy (CSP) and XSS Mitigation
+
+The server employs a multi-layered strategy to prevent Cross-Site Scripting (XSS) attacks, with a strict Content Security Policy (CSP) as the primary enforcement mechanism.
+
+1.  **Strict Script Sourcing**: All client-side logic has been migrated from inline event handlers and scripts to a single, external file (`public/js/upload-scripts.js`). The CSP enforces this with the `script-src 'self'` directive, which instructs the browser to only execute JavaScript files served from the same origin. This completely eliminates the attack surface for inline XSS.
+
+2.  **Policy Enforcement**: The CSP is configured in `src/index.ts` using the `@fastify/helmet` middleware. Key security directives include:
+    *   `script-src 'self'`: Prevents inline scripts and loading scripts from any external domains.
+    *   `object-src 'none'`: Disables plugins like Flash, removing a potential vector for attacks.
+    *   `frame-ancestors 'none'`: Prevents the application from being embedded in an `<iframe>`, mitigating clickjacking attacks.
+    *   `form-action 'self'`: Ensures that HTML forms can only submit data to the application's own origin.
+
+3.  **Defense in Depth**: In addition to the strict CSP, all dynamic data rendered in HTML templates is sanitized using the `escapeHtml` utility (`src/utils/securityUtils.ts`). This provides a secondary layer of protection against XSS in the event the CSP were ever misconfigured.
 
 ### Deletion Safety and Data Loss Prevention
 

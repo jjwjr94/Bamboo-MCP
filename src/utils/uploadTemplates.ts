@@ -12,150 +12,7 @@ export type UploadSuccessResult = {
   uploadId: string;
 };
 
-// JavaScript functionality for copy-to-clipboard
-// !! IMPORTANT !!
-// This script is embedded in other scripts (SUCCESS_SESSION_NOT_FOUND_SCRIPT and FAILED_PAGE_SCRIPT).
-// After any modification to this or other script constants in this file,
-// run `pnpm prebuild:csp` to regenerate the required CSP hashes.
-const AI_COPY_SCRIPT = `
-  const initializeMessageCopy = () => {
-    const copyButtons = document.querySelectorAll('.copy-btn');
-    if (copyButtons.length === 0) return;
-
-    // Create a single status element for all buttons
-    const statusElement = document.createElement('div');
-    statusElement.className = 'copy-status';
-    statusElement.setAttribute('role', 'status');
-    statusElement.setAttribute('aria-live', 'polite');
-    statusElement.setAttribute('aria-atomic', 'true');
-    document.body.appendChild(statusElement);
-
-    copyButtons.forEach(copyButton => {
-      const targetSelector = copyButton.dataset.copyTarget;
-      const textElement = document.querySelector(targetSelector);
-      if (!textElement) return;
-
-      copyButton.addEventListener('click', async () => {
-        const text = textElement.textContent.trim();
-        
-        try {
-          // Try modern clipboard API first
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-          } else {
-            fallbackCopyToClipboard(text);
-          }
-          showCopyFeedback(copyButton, statusElement, 'Copied!');
-        } catch (err) {
-          console.error('Copy failed:', err);
-          showCopyFeedback(copyButton, statusElement, 'Copy failed', true);
-        }
-      });
-    });
-  };
-  
-  function fallbackCopyToClipboard(text) {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.setAttribute('aria-hidden', 'true');
-    textArea.style.position = 'fixed';
-    textArea.style.top = '0';
-    textArea.style.left = '0';
-    textArea.style.width = '2em';
-    textArea.style.height = '2em';
-    textArea.style.padding = '0';
-    textArea.style.border = 'none';
-    textArea.style.outline = 'none';
-    textArea.style.boxShadow = 'none';
-    textArea.style.background = 'transparent';
-    textArea.style.opacity = '0';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-      const successful = document.execCommand('copy');
-      if (!successful) {
-        throw new Error('execCommand returned false');
-      }
-    } finally {
-      document.body.removeChild(textArea);
-    }
-  }
-  
-  function showCopyFeedback(button, statusElement, message, isError = false) {
-    const originalText = button.textContent;
-    const originalAriaLabel = button.getAttribute('aria-label');
-    
-    button.textContent = message;
-    button.setAttribute('aria-label', message);
-    button.classList.toggle('copied', !isError);
-    button.disabled = true;
-    
-    // Update status for screen readers
-    statusElement.textContent = isError ? 'Copy failed. Please try again.' : 'Message copied to clipboard';
-
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.setAttribute('aria-label', originalAriaLabel || 'Copy message');
-      button.classList.remove('copied');
-      button.disabled = false;
-      statusElement.textContent = '';
-    }, 2000);
-  }
-  
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeMessageCopy);
-  } else {
-    initializeMessageCopy();
-  }
-`;
-
-// Isolated inline scripts to maintain CSP hash compatibility
-// Script for upload form page (matches existing CSP hash)
-const UPLOAD_FORM_SCRIPT = `
-    const form = document.getElementById('uploadForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const fileInput = document.getElementById('file');
-    const fileLabelText = document.getElementById('file-label-text');
-    
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files.length > 0) {
-        fileLabelText.textContent = fileInput.files[0].name;
-        submitBtn.disabled = false;
-      } else {
-        fileLabelText.textContent = 'Click to browse or drag file here';
-        submitBtn.disabled = true;
-      }
-    });
-
-    form.addEventListener('submit', () => {
-      if (fileInput.files.length > 0) {
-        submitBtn.setAttribute('aria-busy', 'true');
-        submitBtn.disabled = true;
-      }
-    });
-  `;
-
-// Individual script components for clean CSP hash management
-const CLOSE_BUTTON_SCRIPT = `
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-  `;
-
-const TRY_AGAIN_BUTTON_SCRIPT = `
-    document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
-  `;
-
-const RELOAD_BUTTON_SCRIPT = `
-    document.getElementById('reloadBtn')?.addEventListener('click', () => window.location.reload());
-  `;
+// All JavaScript functionality has been moved to /js/upload-scripts.js for CSP compliance
 
 // Reusable HTML components for common page elements
 const CLOSE_FALLBACK_HTML = `
@@ -205,17 +62,9 @@ interface PageLayoutProps {
   title: string;
   headExtra?: string;
   bodyContent: string;
-  scripts?: string[];
 }
 
-function renderPageLayout({
-  title,
-  headExtra = '',
-  bodyContent,
-  scripts = [],
-}: PageLayoutProps): string {
-  const scriptTags = scripts.map((script) => `<script>${script}</script>`).join('\n  ');
-
+function renderPageLayout({ title, headExtra = '', bodyContent }: PageLayoutProps): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,7 +80,7 @@ function renderPageLayout({
       ${bodyContent}
     </article>
   </main>
-  ${scriptTags}
+  <script src="/js/upload-scripts.js" defer></script>
 </body>
 </html>`;
 }
@@ -357,7 +206,6 @@ export function renderUploadSuccessPage({
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    scripts: [CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -481,7 +329,6 @@ export function renderUploadFailedPage(
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    scripts: [TRY_AGAIN_BUTTON_SCRIPT, CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -521,7 +368,6 @@ export function renderUploadSessionNotFoundPage(): string {
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    scripts: [CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -549,7 +395,6 @@ export function renderUploadFormPage(uploadId: string): string {
         </div>
       </form>
     `,
-    scripts: [UPLOAD_FORM_SCRIPT],
   });
 }
 
@@ -577,6 +422,5 @@ export function renderServerErrorPage(customMessage?: string): string {
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    scripts: [RELOAD_BUTTON_SCRIPT, CLOSE_BUTTON_SCRIPT],
   });
 }
