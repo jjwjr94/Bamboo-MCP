@@ -31,8 +31,8 @@ export class AdCreativeToolRegistry implements IToolRegistry {
       this.registerCreateAdCreative.bind(this),
       this.registerUpdateAdCreative.bind(this),
       this.registerDeleteAdCreative.bind(this),
-      this.registerRequestCreativeUpload.bind(this),
-      this.registerCheckUploadStatus.bind(this),
+      this.registerInitiateAssetUpload.bind(this),
+      this.registerGetAssetUploadStatus.bind(this),
     ];
   }
 
@@ -213,7 +213,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerRequestCreativeUpload(): void {
+  private registerInitiateAssetUpload(): void {
     const successDataSchema = z.object({
       uploadId: z.string().describe('The unique ID for this upload operation.'),
       uploadUrl: z
@@ -224,11 +224,11 @@ export class AdCreativeToolRegistry implements IToolRegistry {
 
     createMcpTool(
       this.server,
-      'request_creative_upload',
+      'initiate_asset_upload',
       {
-        title: 'Request Creative Asset Upload',
+        title: 'Initiate Asset Upload',
         description:
-          'Initiates a file upload process for creative assets. Returns a URL for the user to upload files via web interface, since MCP clients cannot directly transfer large files. The filename will be automatically derived from the uploaded file.',
+          'Initiates a file upload process for an ad asset (image or video). Returns a unique upload ID and a secure URL for the user to upload the file. This is the first step in the two-step asset upload workflow.',
         inputSchema: {
           adAccountId: z
             .string()
@@ -239,12 +239,12 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         },
         successDataSchema,
       },
-      (authPayload, params) => this.toolsHandler.requestCreativeUpload(authPayload, params),
-      'Successfully initiated creative upload.'
+      (authPayload, params) => this.toolsHandler.initiateAssetUpload(authPayload, params),
+      'Successfully initiated asset upload.'
     );
   }
 
-  private registerCheckUploadStatus(): void {
+  private registerGetAssetUploadStatus(): void {
     const successDataSchema = z.object({
       status: z
         .enum(['pending', 'uploading', 'completed', 'failed'])
@@ -260,18 +260,18 @@ export class AdCreativeToolRegistry implements IToolRegistry {
 
     createMcpTool(
       this.server,
-      'check_upload_status',
+      'get_asset_upload_status',
       {
-        title: 'Check Creative Asset Upload Status',
+        title: 'Get Asset Upload Status',
         description:
-          'Checks the status of a file upload initiated by `request_creative_upload`. If completed, it returns the `metaAssetId` required to create an ad creative.',
+          'Checks the status of a file upload initiated by `initiate_asset_upload`. If completed, it returns the `metaAssetId` required to create an ad creative.',
         inputSchema: {
-          uploadId: z.string().describe('The unique ID returned by `request_creative_upload`.'),
+          uploadId: z.string().describe('The unique ID returned by `initiate_asset_upload`.'),
         },
         successDataSchema,
       },
-      (authPayload, params) => this.toolsHandler.checkUploadStatus(authPayload, params),
-      'Successfully retrieved upload status.'
+      (authPayload, params) => this.toolsHandler.getAssetUploadStatus(authPayload, params),
+      'Successfully retrieved asset upload status.'
     );
   }
 }

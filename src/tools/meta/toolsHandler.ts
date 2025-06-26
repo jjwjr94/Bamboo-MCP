@@ -129,12 +129,12 @@ export class MetaToolsHandler {
     return this.adCreativeHandler.deleteAdCreative(authPayload, params);
   }
 
-  async requestCreativeUpload(authPayload: JWTPayload, params: { adAccountId?: string }) {
-    return this.adCreativeUploadHandler.requestCreativeUpload(authPayload, params);
+  async initiateAssetUpload(authPayload: JWTPayload, params: { adAccountId?: string }) {
+    return this.adCreativeUploadHandler.initiateAssetUpload(authPayload, params);
   }
 
-  async checkUploadStatus(authPayload: JWTPayload, params: { uploadId: string }) {
-    return this.adCreativeUploadHandler.checkUploadStatus(authPayload, params);
+  async getAssetUploadStatus(authPayload: JWTPayload, params: { uploadId: string }) {
+    return this.adCreativeUploadHandler.getAssetUploadStatus(authPayload, params);
   }
 
   async handleCreativeAssetUpload(

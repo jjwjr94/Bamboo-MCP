@@ -1,0 +1,18 @@
+{
+  "status": {
+    "pending": {
+      "status": "pending"
+    },
+    "uploading": {
+      "status": "uploading"
+    },
+    "completed": {
+      "status": "completed",
+      "metaAssetId": "meta_image_hash_abcdef123456"
+    },
+    "failed": {
+      "status": "failed",
+      "errorMessage": "Upload failed due to an unexpected error."
+    }
+  }
+}

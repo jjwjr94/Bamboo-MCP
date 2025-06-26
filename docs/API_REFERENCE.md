@@ -224,10 +224,10 @@ Updates an existing ad set.
 This category includes a secure, two-step workflow for uploading creative assets (images/videos) because the MCP protocol does not support direct file transfers.
 
 **Workflow**:
-1.  Call `request_creative_upload` to get a unique, single-use URL.
+1.  Call `initiate_asset_upload` to get a unique, single-use URL.
 2.  Provide this URL to the end-user, who uploads the file via a standard web form.
-3.  Periodically call `check_upload_status` with the `uploadId` until the status is `completed`.
-4.  Use the `metaAssetId` returned by `check_upload_status` in the `create_ad_creative` tool.
+3.  Periodically call `get_asset_upload_status` with the `uploadId` until the status is `completed`.
+4.  Use the `metaAssetId` returned by `get_asset_upload_status` in the `create_ad_creative` tool.
 
 #### `get_ad_creatives`
 Retrieves all ad creatives for an ad account.
@@ -237,7 +237,7 @@ Retrieves all ad creatives for an ad account.
 *   **Successful Output**:
     *   `adCreatives`: An array of ad creative objects from the Meta API.
 
-#### `request_creative_upload`
+#### `initiate_asset_upload`
 Initiates the secure file upload process.
 
 *   **Input Parameters**:
@@ -246,11 +246,11 @@ Initiates the secure file upload process.
     *   `uploadId` (string): A unique UUID for this upload session. Use this ID to check the status.
     *   `uploadUrl` (string): A secure, single-use URL to provide to the end-user for uploading the file.
 
-#### `check_upload_status`
+#### `get_asset_upload_status`
 Checks the status of a file upload.
 
 *   **Input Parameters**:
-    *   `uploadId` (string, **required**): The ID returned from `request_creative_upload`.
+    *   `uploadId` (string, **required**): The ID returned from `initiate_asset_upload`.
 *   **Successful Output**:
     *   `status` (enum): The current status: `pending`, `uploading`, `completed`, or `failed`.
     *   `metaAssetId` (string, optional): The Meta asset ID (image hash or video ID). Available only when status is `completed`.

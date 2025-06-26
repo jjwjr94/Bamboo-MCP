@@ -131,12 +131,12 @@ export interface UpdateAdCreativeResult {
 
 export type DeleteAdCreativeResult = DeleteResult<'adCreativeId'>;
 
-export interface RequestCreativeUploadResult {
+export interface InitiateAssetUploadResult {
   uploadId: string;
   uploadUrl: string;
 }
 
-export interface CheckUploadStatusResult {
+export interface GetAssetUploadStatusResult {
   status: string;
   metaAssetId?: string;
   errorMessage?: string;

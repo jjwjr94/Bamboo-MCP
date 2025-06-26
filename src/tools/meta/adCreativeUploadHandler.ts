@@ -12,14 +12,14 @@ import { MetaApiError, NotFoundError, ValidationError } from '../../utils/errors
 import { logger } from '../../utils/logger.js';
 import { detectAssetTypeFromMimeType } from '../../utils/mimeTypeDetector.js';
 import { fetchUserTokenString, handleMetaApiCall } from './api.js';
-import type { CheckUploadStatusResult, RequestCreativeUploadResult } from './types.js';
+import type { GetAssetUploadStatusResult, InitiateAssetUploadResult } from './types.js';
 
 export class AdCreativeUploadHandler {
-  async requestCreativeUpload(
+  async initiateAssetUpload(
     authPayload: JWTPayload,
     params: { adAccountId?: string }
-  ): Promise<RequestCreativeUploadResult> {
-    logger.info('Executing request_creative_upload', { userId: authPayload.userId, params });
+  ): Promise<InitiateAssetUploadResult> {
+    logger.info('Executing initiate_asset_upload', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
       async () => {
@@ -43,18 +43,18 @@ export class AdCreativeUploadHandler {
         const uploadId = newUploadRequest.id;
         const uploadUrl = `${env.BASE_URL}/v1/assets/upload/${uploadId}`;
 
-        const result: RequestCreativeUploadResult = { uploadId, uploadUrl };
+        const result: InitiateAssetUploadResult = { uploadId, uploadUrl };
         return result;
       },
-      { toolName: 'request_creative_upload', userId: authPayload.userId }
+      { toolName: 'initiate_asset_upload', userId: authPayload.userId }
     );
   }
 
-  async checkUploadStatus(
+  async getAssetUploadStatus(
     authPayload: JWTPayload,
     params: { uploadId: string }
-  ): Promise<CheckUploadStatusResult> {
-    logger.info('Executing check_upload_status', { userId: authPayload.userId, params });
+  ): Promise<GetAssetUploadStatusResult> {
+    logger.info('Executing get_asset_upload_status', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
       async () => {
@@ -68,7 +68,7 @@ export class AdCreativeUploadHandler {
           throw new NotFoundError(`Upload request with ID ${params.uploadId}`);
         }
 
-        const result: CheckUploadStatusResult = {
+        const result: GetAssetUploadStatusResult = {
           status: uploadRecord.status,
         };
 
@@ -82,7 +82,7 @@ export class AdCreativeUploadHandler {
 
         return result;
       },
-      { toolName: 'check_upload_status', userId: authPayload.userId }
+      { toolName: 'get_asset_upload_status', userId: authPayload.userId }
     );
   }
 
@@ -216,9 +216,9 @@ export class AdCreativeUploadHandler {
    *
    * This method exists because MCP clients (like Claude) cannot directly send large files
    * to the server due to protocol limitations. Instead, we use a two-step process:
-   * 1. MCP client calls request_creative_upload to get an upload URL
+   * 1. MCP client calls initiate_asset_upload to get an upload URL
    * 2. User uploads file via web interface to this endpoint
-   * 3. MCP client polls check_upload_status to get the Meta asset ID
+   * 3. MCP client polls get_asset_upload_status to get the Meta asset ID
    *
    * The asset type (image/video) is automatically determined from the uploaded file's MIME type,
    * and the file is streamed directly to the appropriate Meta API endpoint without local storage.

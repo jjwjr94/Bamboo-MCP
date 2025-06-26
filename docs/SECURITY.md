@@ -114,10 +114,10 @@ All communication between clients, the server, and the Meta API is secured using
 
 The server implements a secure two-step workflow for uploading creative assets, designed to work around the protocol limitations of AI agents that cannot send file data directly.
 
-1.  **Request**: The `request_creative_upload` tool is called. It generates a unique, unguessable UUID and stores it in the `creative_asset_uploads` table, associated with the user and an expiry timestamp.
+1.  **Request**: The `initiate_asset_upload` tool is called. It generates a unique, unguessable UUID and stores it in the `creative_asset_uploads` table, associated with the user and an expiry timestamp.
 2.  **Upload**: A secure, single-use URL containing this UUID is returned. The user uploads the file to this URL. The endpoint does not require a JWT; its security relies on the unguessable and ephemeral nature of the UUID.
 3.  **Processing**: The backend validates the upload session, then streams the file directly to Meta's API after validating its MIME type.
-4.  **Status Check**: The client polls the `check_upload_status` tool with the `uploadId` to get the final `metaAssetId`.
+4.  **Status Check**: The client polls the `get_asset_upload_status` tool with the `uploadId` to get the final `metaAssetId`.
 
 ### Input Validation
 
