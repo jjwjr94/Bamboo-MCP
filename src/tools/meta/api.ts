@@ -70,15 +70,41 @@ function parseMetaApiError(error: unknown): {
   statusCode: number;
   metaErrorCode?: string;
   errorSubcode?: string;
+  metaErrorType?: string;
+  fbtrace_id?: string;
+  userTitle?: string;
+  userMessage?: string;
 } {
   if (isMetaApiErrorResponse(error)) {
-    const errorResponse = error.response || error;
+    // The Meta API error can be in a few places. We check in order of specificity.
+    const details =
+      error.response?.data?.error || // 1. Deeply nested in axios-like response
+      error.response || // 2. Directly on the response object
+      error; // 3. Directly on the top-level error object
+
+    const safeDetails =
+      typeof details === 'object' && details !== null
+        ? (details as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
 
     return {
-      message: errorResponse?.message || error.message || 'Meta API request failed',
-      statusCode: error.status || 400,
-      metaErrorCode: errorResponse?.code?.toString() || error.code?.toString(),
-      errorSubcode: errorResponse?.error_subcode?.toString() || error.error_subcode?.toString(),
+      message:
+        (typeof safeDetails.message === 'string'
+          ? (safeDetails.message as string)
+          : error.message) || 'Meta API request failed',
+      statusCode: error.status || error.response?.status || 400,
+      metaErrorCode: (() => {
+        const val = safeDetails.code;
+        return typeof val === 'string' || typeof val === 'number' ? String(val) : undefined;
+      })(),
+      errorSubcode: (() => {
+        const val = safeDetails.error_subcode;
+        return typeof val === 'string' || typeof val === 'number' ? String(val) : undefined;
+      })(),
+      metaErrorType: (safeDetails.type as string) ?? undefined,
+      fbtrace_id: (safeDetails.fbtrace_id as string) ?? undefined,
+      userTitle: (safeDetails.error_user_title as string) ?? undefined,
+      userMessage: (safeDetails.error_user_msg as string) ?? undefined,
     };
   }
 
@@ -92,14 +118,32 @@ interface MetaApiErrorResponse {
   message?: string;
   status?: number;
   response?: {
-    data?: { error?: unknown };
+    data?: {
+      error?: {
+        message?: string;
+        type?: string;
+        code?: number;
+        error_subcode?: number;
+        error_user_title?: string;
+        error_user_msg?: string;
+        fbtrace_id?: string;
+      };
+    };
     status?: number;
     message?: string;
     code?: number | string;
     error_subcode?: number | string;
+    type?: string;
+    fbtrace_id?: string;
+    error_user_title?: string;
+    error_user_msg?: string;
   };
   code?: number | string;
   error_subcode?: number | string;
+  type?: string;
+  fbtrace_id?: string;
+  error_user_title?: string;
+  error_user_msg?: string;
 }
 
 function isMetaApiErrorResponse(error: unknown): error is MetaApiErrorResponse {
@@ -107,6 +151,51 @@ function isMetaApiErrorResponse(error: unknown): error is MetaApiErrorResponse {
     typeof error === 'object' &&
     error !== null &&
     ('status' in error || 'response' in error || 'message' in error)
+  );
+}
+
+/**
+ * Parses a failed fetch Response from the Meta API and creates a standardized MetaApiError.
+ * @param response The failed Response object from a fetch call.
+ * @returns A promise that resolves to a fully populated MetaApiError instance.
+ */
+export async function createMetaApiErrorFromResponse(response: Response): Promise<MetaApiError> {
+  let errorPayload: unknown;
+  try {
+    // Attempt to parse the body as JSON, which contains the detailed error object
+    const json: unknown = await response.json();
+    if (
+      typeof json === 'object' &&
+      json !== null &&
+      'error' in json &&
+      // Ensure the error property is not from Object.prototype
+      Object.prototype.hasOwnProperty.call(json, 'error')
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- runtime check above guarantees safety
+      errorPayload = (json as { error: unknown }).error;
+    } else {
+      errorPayload = json;
+    }
+  } catch (_e) {
+    // If the body is not JSON or parsing fails, create a fallback payload
+    errorPayload = {
+      message: `API request failed with status ${response.status}: ${response.statusText}`,
+    };
+  }
+
+  // Use the existing enhanced parser to extract all known fields
+  const parsedError = parseMetaApiError(errorPayload);
+
+  // Return a new MetaApiError with all available information
+  return new MetaApiError(
+    parsedError.message,
+    parsedError.metaErrorCode,
+    parsedError.errorSubcode,
+    response.status, // Use the actual HTTP status code from the response
+    parsedError.metaErrorType,
+    parsedError.fbtrace_id,
+    parsedError.userTitle,
+    parsedError.userMessage
   );
 }
 
@@ -121,18 +210,24 @@ export async function handleMetaApiCall<T>(
     const requestScopedPolicy = createMetaResiliencePolicy();
     return await requestScopedPolicy.execute(apiCall);
   } catch (error: unknown) {
+    const parsedError = parseMetaApiError(error);
+
     logger.error('Meta API call failed', {
       toolName: context?.toolName,
       userId: context?.userId,
-      error: (error as Error).message,
+      error: parsedError.message,
+      fbtrace_id: parsedError.fbtrace_id,
     });
 
-    const parsedError = parseMetaApiError(error);
     throw new MetaApiError(
       parsedError.message,
       parsedError.metaErrorCode,
       parsedError.errorSubcode,
-      parsedError.statusCode
+      parsedError.statusCode,
+      parsedError.metaErrorType,
+      parsedError.fbtrace_id,
+      parsedError.userTitle,
+      parsedError.userMessage
     );
   }
 }

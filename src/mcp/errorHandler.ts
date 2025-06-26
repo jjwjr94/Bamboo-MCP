@@ -91,6 +91,24 @@ export function deriveMetaApiErrorDetails(error: MetaApiError): {
     };
   }
 
+  // Log fbtrace_id for debugging when available
+  if (error.fbtrace_id) {
+    logger.warn('Meta API Error Trace', {
+      fbtrace_id: error.fbtrace_id,
+      metaErrorCode: error.metaErrorCode,
+      metaErrorSubcode: error.metaErrorSubcode,
+      message: error.message,
+    });
+  }
+
+  // Construct a user-friendly message using userTitle and userMessage when available
+  let displayMessage = error.userMessage;
+  if (error.userTitle && displayMessage) {
+    displayMessage = `${error.userTitle}: ${displayMessage}`;
+  }
+  // Fallback to the generic error.message if user-friendly details are absent
+  const finalMessage = displayMessage || `Meta API error: ${error.message}`;
+
   const isRetryable = shouldRetryMetaError(error);
   const metadata: McpErrorMetadata = {
     retryable: isRetryable,
@@ -103,7 +121,7 @@ export function deriveMetaApiErrorDetails(error: MetaApiError): {
   }
 
   return {
-    message: `Meta API error: ${error.message}`,
+    message: finalMessage,
     metadata,
   };
 }

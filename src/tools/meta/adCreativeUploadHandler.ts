@@ -169,9 +169,10 @@ export class AdCreativeUploadHandler {
       // Use MetaApiError to wrap network failures, indicating a potential gateway timeout or service unavailability.
       throw new MetaApiError(
         `Network error uploading asset: ${errMsg}`,
-        'NETWORK_ERROR',
-        undefined,
-        504
+        'NETWORK_ERROR', // metaErrorCode
+        undefined, // metaErrorSubcode
+        504, // statusCode
+        'NetworkError' // metaErrorType
       );
     }
   }
@@ -186,17 +187,36 @@ export class AdCreativeUploadHandler {
     uploadId: string
   ): { hash?: string; id?: string; images?: { [key: string]: { hash: string } } } {
     if (statusCode < 200 || statusCode >= 300) {
-      let errorBody: { error?: { message?: string; code?: number; error_subcode?: number } } = {};
+      let errorDetails:
+        | {
+            message?: string;
+            type?: string;
+            code?: number | string;
+            error_subcode?: number | string;
+            fbtrace_id?: string;
+            error_user_title?: string;
+            error_user_msg?: string;
+          }
+        | undefined;
+
       try {
-        errorBody = JSON.parse(responseText);
+        const parsedBody = JSON.parse(responseText);
+        if (parsedBody && typeof parsedBody.error === 'object' && parsedBody.error !== null) {
+          errorDetails = parsedBody.error;
+        }
       } catch {
-        // Non-JSON error response, the raw response text is still useful.
+        // Response was not valid JSON, no structured error details available.
       }
+
       const errorMessage =
-        errorBody.error?.message ||
+        errorDetails?.message ||
         `Meta API upload failed with status ${statusCode}: ${responseText}`;
-      const metaErrorCode = errorBody.error?.code?.toString();
-      const metaErrorSubcode = errorBody.error?.error_subcode?.toString();
+      const metaErrorCode = errorDetails?.code?.toString();
+      const metaErrorSubcode = errorDetails?.error_subcode?.toString();
+      const metaErrorType = errorDetails?.type;
+      const fbtrace_id = errorDetails?.fbtrace_id;
+      const userTitle = errorDetails?.error_user_title;
+      const userMessage = errorDetails?.error_user_msg;
 
       logger.error('Meta API upload error', {
         userId,
@@ -205,8 +225,22 @@ export class AdCreativeUploadHandler {
         errorMessage,
         metaErrorCode,
         metaErrorSubcode,
+        metaErrorType,
+        fbtrace_id,
+        userTitle,
+        userMessage,
       });
-      throw new MetaApiError(errorMessage, metaErrorCode, metaErrorSubcode, statusCode);
+
+      throw new MetaApiError(
+        errorMessage,
+        metaErrorCode,
+        metaErrorSubcode,
+        statusCode,
+        metaErrorType,
+        fbtrace_id,
+        userTitle,
+        userMessage
+      );
     }
     return JSON.parse(responseText);
   }

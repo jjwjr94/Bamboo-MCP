@@ -159,7 +159,7 @@ describe('metaBatchHelper', () => {
 
       await expect(executeBatchRequests(requests, mockAccessToken)).rejects.toThrow(MetaApiError);
       await expect(executeBatchRequests(requests, mockAccessToken)).rejects.toThrow(
-        'Batch request failed: 400 Bad Request'
+        'API request failed with status 400: Bad Request'
       );
     });
 

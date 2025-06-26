@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
-import { MetaApiError, ValidationError } from '../../utils/errors.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiErrorFromResponse, createMetaApiInstance, handleMetaApiCall } from './api.js';
 import type {
   SearchBehaviorsResult,
   SearchInterestsResult,
@@ -82,25 +82,7 @@ export class MetaTargetingSearchHandler {
       });
 
       if (!response.ok) {
-        try {
-          const errorBody = (await response.json()) as {
-            error?: { message?: string; code?: number; error_subcode?: number };
-          };
-          const errorData = errorBody.error;
-          throw new MetaApiError(
-            errorData?.message || `Pagination request failed with status: ${response.status}`,
-            errorData?.code?.toString(),
-            errorData?.error_subcode?.toString(),
-            response.status
-          );
-        } catch (_e) {
-          throw new MetaApiError(
-            `Pagination request failed: ${response.statusText}`,
-            undefined,
-            undefined,
-            response.status
-          );
-        }
+        throw await createMetaApiErrorFromResponse(response);
       }
 
       const page: MetaSearchResponse<T> = (await response.json()) as MetaSearchResponse<T>;
@@ -380,26 +362,7 @@ export class MetaTargetingSearchHandler {
         });
 
         if (!response.ok) {
-          try {
-            const errorBody = (await response.json()) as {
-              error?: { message?: string; code?: number; error_subcode?: number };
-            };
-            const errorData = errorBody.error;
-            throw new MetaApiError(
-              errorData?.message || `Validation request failed with status: ${response.status}`,
-              errorData?.code?.toString(),
-              errorData?.error_subcode?.toString(),
-              response.status
-            );
-          } catch (_e) {
-            if (_e instanceof MetaApiError) throw _e;
-            throw new MetaApiError(
-              `Validation request failed: ${response.statusText}`,
-              undefined,
-              undefined,
-              response.status
-            );
-          }
+          throw await createMetaApiErrorFromResponse(response);
         }
 
         const data: MetaSearchResponse<MetaTargetingValidation> =

@@ -572,4 +572,104 @@ input[type="file"].visually-hidden {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ===== AI COPY-TO-CLIPBOARD COMPONENTS ===== */
+
+.ai-copy-container {
+  margin: var(--bamboo-space-6) 0;
+  padding: var(--bamboo-space-4);
+  background-color: var(--bamboo-color-background);
+  border: var(--bamboo-border-width) solid var(--bamboo-color-border);
+  border-radius: var(--bamboo-border-radius);
+}
+
+.ai-copy-container h2 {
+  margin-top: 0;
+  margin-bottom: var(--bamboo-space-3);
+  color: var(--bamboo-color-primary);
+  font-size: var(--bamboo-font-size-lg);
+  font-weight: var(--bamboo-font-weight-semibold);
+}
+
+.ai-copy-container h3 {
+  margin-top: 0;
+  margin-bottom: var(--bamboo-space-3);
+  color: var(--bamboo-color-secondary);
+  font-size: var(--bamboo-font-size-base);
+}
+
+.ai-copy-container p {
+  font-size: var(--bamboo-font-size-sm);
+  color: var(--bamboo-color-text-light);
+  margin-bottom: var(--bamboo-space-4);
+}
+
+.ai-message-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bamboo-space-3);
+  background-color: var(--bamboo-color-surface);
+  border: var(--bamboo-border-width) solid var(--bamboo-color-border);
+  border-radius: var(--bamboo-border-radius);
+  padding: var(--bamboo-space-4);
+  box-shadow: var(--bamboo-shadow);
+  transition: box-shadow 0.2s ease;
+}
+
+.ai-message-card:hover {
+  box-shadow: var(--bamboo-shadow-lg);
+}
+
+.ai-message-text {
+  flex-grow: 1;
+  font-family: var(--bamboo-font-family);
+  font-size: var(--bamboo-font-size-base);
+  line-height: 1.6;
+  color: var(--bamboo-color-text);
+  word-wrap: break-word;
+  margin-right: var(--bamboo-space-3);
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  padding: var(--bamboo-space-2) var(--bamboo-space-4);
+  font-size: var(--bamboo-font-size-sm);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.copy-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.copy-btn.copied {
+  background-color: var(--bamboo-color-success) !important;
+  color: var(--bamboo-color-background) !important;
+}
+
+.copy-status {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .ai-message-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--bamboo-space-3);
+  }
+  
+  .ai-message-text {
+    margin-right: 0;
+    margin-bottom: var(--bamboo-space-3);
+  }
+  
+  .copy-btn {
+    align-self: center;
+    min-width: 120px;
+  }
 } 

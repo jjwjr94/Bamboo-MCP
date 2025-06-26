@@ -2,7 +2,6 @@ import { sql } from 'drizzle-orm';
 import { withUserContext } from '../../db/client.js';
 import { adAccounts } from '../../db/schema.js';
 import type {
-  MetaGraphApiError,
   MetaOAuthAdAccountsResponse,
   MetaOAuthTokenResponse,
   MetaOAuthUserInfoResponse,
@@ -10,7 +9,7 @@ import type {
 import { env } from '../../utils/env.js';
 import { MetaApiError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { handleMetaApiCall } from './api.js';
+import { createMetaApiErrorFromResponse, handleMetaApiCall } from './api.js';
 import { MetaPermissionHandler } from './permissionHandler.js';
 
 /**
@@ -48,19 +47,21 @@ export class MetaApiService {
       );
 
       if (!tokenResponse.ok) {
-        const errorData = (await tokenResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        throw new MetaApiError(
-          errorData.error?.message ||
-            `Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}`,
-          errorData.error?.code?.toString(),
-          errorData.error?.error_subcode?.toString(),
-          tokenResponse.status
-        );
+        throw await createMetaApiErrorFromResponse(tokenResponse);
       }
 
       const tokenData = (await tokenResponse.json()) as MetaOAuthTokenResponse;
       if (!tokenData.access_token) {
-        throw new MetaApiError('Failed to obtain Meta access token');
+        throw new MetaApiError(
+          'Failed to obtain Meta access token: response missing access_token field.', // Internal message
+          'TOKEN_EXCHANGE_FAILED', // metaErrorCode
+          undefined, // metaErrorSubcode
+          500, // statusCode
+          'InternalError', // metaErrorType
+          undefined, // fbtrace_id
+          'Token Exchange Failed', // userTitle
+          'We were unable to complete the connection to Meta. Please try again.' // userMessage
+        );
       }
 
       return { accessToken: tokenData.access_token, expiresIn: tokenData.expires_in };
@@ -84,14 +85,7 @@ export class MetaApiService {
       );
 
       if (!userResponse.ok) {
-        const errorData = (await userResponse.json().catch(() => ({}))) as MetaGraphApiError;
-        throw new MetaApiError(
-          errorData.error?.message ||
-            `Failed to get user info: ${userResponse.status} ${userResponse.statusText}`,
-          errorData.error?.code?.toString(),
-          errorData.error?.error_subcode?.toString(),
-          userResponse.status
-        );
+        throw await createMetaApiErrorFromResponse(userResponse);
       }
 
       const userData = (await userResponse.json()) as MetaOAuthUserInfoResponse;
@@ -139,13 +133,12 @@ export class MetaApiService {
         });
 
         if (!adAccountsResponse.ok) {
-          const errorData = (await adAccountsResponse
-            .json()
-            .catch(() => ({}))) as MetaGraphApiError;
+          const apiError = await createMetaApiErrorFromResponse(adAccountsResponse);
           logger.warn('Failed to fetch ad accounts page', {
             userId,
-            status: adAccountsResponse.status,
-            error: errorData.error?.message,
+            status: apiError.statusCode,
+            error: apiError.message,
+            fbtrace_id: apiError.fbtrace_id, // Now logging enhanced fields
           });
           return; // Stop sync on page failure
         }
@@ -244,23 +237,20 @@ export class MetaApiService {
         return true;
       }
 
-      const errorData = (await response.json().catch(() => ({}))) as MetaGraphApiError;
+      // Create a standardized error to check the type
+      const apiError = await createMetaApiErrorFromResponse(response);
+
       // For token validation, certain errors (like expired token) are expected "failures"
-      if (errorData.error?.type === 'OAuthException') {
+      if (apiError.metaErrorType === 'OAuthException') {
         logger.info('Meta token validation failed as expected for an invalid token', {
-          code: errorData.error.code,
+          code: apiError.metaErrorCode,
+          fbtrace_id: apiError.fbtrace_id,
         });
         return false;
       }
 
       // For other errors (network, etc.), throw so it can be handled as a server issue
-      throw new MetaApiError(
-        errorData.error?.message ||
-          `Token validation failed: ${response.status} ${response.statusText}`,
-        errorData.error?.code?.toString(),
-        errorData.error?.error_subcode?.toString(),
-        response.status
-      );
+      throw apiError;
     });
   }
 }

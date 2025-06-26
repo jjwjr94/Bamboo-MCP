@@ -1,5 +1,6 @@
+import { createMetaApiErrorFromResponse } from '../tools/meta/api.js';
 import { env } from './env.js';
-import { MetaApiError, ValidationError } from './errors.js';
+import { ValidationError } from './errors.js';
 import { logger } from './logger.js';
 
 /**
@@ -69,12 +70,7 @@ export async function executeBatchRequests(
     });
 
     if (!response.ok) {
-      throw new MetaApiError(
-        `Batch request failed: ${response.status} ${response.statusText}`,
-        response.status.toString(),
-        undefined,
-        response.status
-      );
+      throw await createMetaApiErrorFromResponse(response);
     }
 
     const rawResponses = (await response.json()) as Array<{

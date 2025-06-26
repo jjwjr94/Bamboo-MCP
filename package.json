@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "prebuild": "node scripts/generateSchemas.js",
+    "prebuild:schemas": "node scripts/generateSchemas.js",
+    "prebuild:csp": "node scripts/generateCSPHashes.js",
+    "prebuild": "pnpm prebuild:schemas && pnpm prebuild:csp",
     "dev": "pnpm prebuild && tsx watch src/index.ts",
     "build": "pnpm prebuild && tsc && copyfiles -u 1 'src/**/*.md' dist && cp -r public dist/",
     "start": "node dist/index.js",

@@ -11,95 +11,11 @@ export type UploadSuccessResult = {
   metaAssetId: string;
 };
 
-// CSS styles for the Copy-to-AI functionality
-const AI_COPY_STYLES = `
-  .ai-copy-container {
-    margin: var(--bamboo-space-6) 0;
-    padding: var(--bamboo-space-4);
-    background-color: var(--bamboo-color-background);
-    border: var(--bamboo-border-width) solid var(--bamboo-color-border);
-    border-radius: var(--bamboo-border-radius);
-  }
-  .ai-copy-container h2 {
-    margin-top: 0;
-    margin-bottom: var(--bamboo-space-3);
-    color: var(--bamboo-color-primary);
-    font-size: var(--bamboo-font-size-lg);
-    font-weight: var(--bamboo-font-weight-semibold);
-  }
-  .ai-copy-container h3 {
-    margin-top: 0;
-    margin-bottom: var(--bamboo-space-3);
-    color: var(--bamboo-color-secondary);
-    font-size: var(--bamboo-font-size-base);
-  }
-  .ai-copy-container p {
-    font-size: var(--bamboo-font-size-sm);
-    color: var(--bamboo-color-text-light);
-    margin-bottom: var(--bamboo-space-4);
-  }
-  .ai-message-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--bamboo-space-3);
-    background-color: var(--bamboo-color-surface);
-    border: var(--bamboo-border-width) solid var(--bamboo-color-border);
-    border-radius: var(--bamboo-border-radius);
-    padding: var(--bamboo-space-4);
-    box-shadow: var(--bamboo-shadow);
-    transition: box-shadow 0.2s ease;
-  }
-  .ai-message-card:hover {
-    box-shadow: var(--bamboo-shadow-lg);
-  }
-  .ai-message-text {
-    flex-grow: 1;
-    font-family: var(--bamboo-font-family);
-    font-size: var(--bamboo-font-size-base);
-    line-height: 1.6;
-    color: var(--bamboo-color-text);
-    word-wrap: break-word;
-    margin-right: var(--bamboo-space-3);
-  }
-  .copy-btn {
-    flex-shrink: 0;
-    padding: var(--bamboo-space-2) var(--bamboo-space-4);
-    font-size: var(--bamboo-font-size-sm);
-    transition: background-color 0.2s ease, transform 0.2s ease;
-  }
-  .copy-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-  }
-  .copy-btn.copied {
-    background-color: var(--bamboo-color-success) !important;
-    color: var(--bamboo-color-background) !important;
-  }
-  .copy-status {
-    position: absolute;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-  }
-  @media (max-width: 640px) {
-    .ai-message-card {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--bamboo-space-3);
-    }
-    .ai-message-text {
-      margin-right: 0;
-      margin-bottom: var(--bamboo-space-3);
-    }
-    .copy-btn {
-      align-self: center;
-      min-width: 120px;
-    }
-  }
-`;
-
 // JavaScript functionality for copy-to-clipboard
+// !! IMPORTANT !!
+// This script is embedded in other scripts (SUCCESS_SESSION_NOT_FOUND_SCRIPT and FAILED_PAGE_SCRIPT).
+// Changing this string will invalidate multiple CSP hashes in src/index.ts.
+// After any modification, run `pnpm csp:hashes` to regenerate the hashes.
 const AI_COPY_SCRIPT = `
   const initializeMessageCopy = () => {
     const copyButtons = document.querySelectorAll('.copy-btn');
@@ -195,6 +111,146 @@ const AI_COPY_SCRIPT = `
   }
 `;
 
+// Isolated inline scripts to maintain CSP hash compatibility
+// Script for upload form page (matches existing CSP hash)
+const UPLOAD_FORM_SCRIPT = `
+    const form = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const fileInput = document.getElementById('file');
+    const fileLabelText = document.getElementById('file-label-text');
+    
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        fileLabelText.textContent = fileInput.files[0].name;
+        submitBtn.disabled = false;
+      } else {
+        fileLabelText.textContent = 'Click to browse or drag file here';
+        submitBtn.disabled = true;
+      }
+    });
+
+    form.addEventListener('submit', () => {
+      if (fileInput.files.length > 0) {
+        submitBtn.setAttribute('aria-busy', 'true');
+        submitBtn.disabled = true;
+      }
+    });
+  `;
+
+// Script for success and session-not-found pages (matches existing CSP hash)
+const SUCCESS_SESSION_NOT_FOUND_SCRIPT = `
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+    ${AI_COPY_SCRIPT}
+  `;
+
+// Script for failed upload page (matches existing CSP hash)
+const FAILED_PAGE_SCRIPT = `
+    document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+    ${AI_COPY_SCRIPT}
+  `;
+
+// Script for server error page (matches existing CSP hash)
+const SERVER_ERROR_SCRIPT = `
+    document.getElementById('reloadBtn')?.addEventListener('click', () => window.location.reload());
+    document.getElementById('closeBtn')?.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        const fallback = document.getElementById('close-fallback');
+        if (fallback) fallback.style.display = 'block';
+      }, 500);
+    });
+  `;
+
+// Reusable HTML components for common page elements
+const CLOSE_FALLBACK_HTML = `
+  <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
+    <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
+  </div>
+`;
+
+/**
+ * Renders the status header component with icon, title and subtitle
+ */
+function renderStatusHeader(
+  iconClass: string,
+  icon: string,
+  title: string,
+  subtitle: string
+): string {
+  return `
+    <div class="status-header">
+      <div class="status-icon ${iconClass}" aria-hidden="true">${icon}</div>
+      <h1>${escapeHtml(title)}</h1>
+      <p class="subtitle">${escapeHtml(subtitle)}</p>
+    </div>
+  `;
+}
+
+/**
+ * Renders the AI copy section component
+ */
+function renderAICopySection(title: string, instructions: string, promptText: string): string {
+  return `
+    <div class="ai-copy-container">
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(instructions)}</p>
+      <div class="ai-message-card">
+        <div id="ai-prompt" class="ai-message-text">${escapeHtml(promptText)}</div>
+        <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy for AI</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Main page layout component that assembles the final HTML document
+ */
+interface PageLayoutProps {
+  title: string;
+  headExtra?: string;
+  bodyContent: string;
+  script?: string;
+}
+
+function renderPageLayout({
+  title,
+  headExtra = '',
+  bodyContent,
+  script = '',
+}: PageLayoutProps): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <link rel="stylesheet" href="/bamboo-ui.css">
+  ${headExtra}
+</head>
+<body>
+  <main class="container">
+    <article>
+      ${bodyContent}
+    </article>
+  </main>
+  ${script ? `<script>${script}</script>` : ''}
+</body>
+</html>`;
+}
+
 // Troubleshooting blocks broken out to avoid inline cognitive overload
 export const TROUBLESHOOTING_TEMPLATES = {
   // NEW: Template for Meta App Development Mode issues
@@ -289,23 +345,10 @@ export const TROUBLESHOOTING_TEMPLATES = {
  */
 export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSuccessResult): string {
   const aiPrompt = `I successfully uploaded creative asset ${metaAssetId}, please verify it.`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Complete | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-  <style>${AI_COPY_STYLES}</style>
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--success" aria-hidden="true">&#10003;</div>
-        <h1>Upload Complete</h1>
-        <p class="subtitle">Your creative asset has been successfully uploaded to Meta.</p>
-      </div>
+  return renderPageLayout({
+    title: 'Upload Complete | Bamboo',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--success', '&#10003;', 'Upload Complete', 'Your creative asset has been successfully uploaded to Meta.')}
 
       <div class="asset-info-card">
         <dl>
@@ -316,36 +359,15 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
         </dl>
       </div>
 
-      <div class="ai-copy-container">
-        <h2>Next Step: Validate with AI</h2>
-        <p>Copy the message below and send it to your AI assistant to confirm the upload and continue your workflow.</p>
-        <div class="ai-message-card">
-          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy for AI</button>
-        </div>
-      </div>
+      ${renderAICopySection('Next Step: Validate with AI', 'Copy the message below and send it to your AI assistant to confirm the upload and continue your workflow.', aiPrompt)}
 
       <div class="actions">
         <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      
-      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
-        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
-      </div>
-    </article>
-  </main>
-  <script>
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-    ${AI_COPY_SCRIPT}
-  </script>
-</body>
-</html>`;
+      ${CLOSE_FALLBACK_HTML}
+    `,
+    script: SUCCESS_SESSION_NOT_FOUND_SCRIPT,
+  });
 }
 
 /**
@@ -438,37 +460,17 @@ export function renderUploadFailedPage(
   troubleshootingSteps: string
 ): string {
   const aiPrompt = `My attempt to upload a creative asset failed with the error: "${errorMessage}". Could you please provide a new upload link?`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Failed | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-  <style>${AI_COPY_STYLES}</style>
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--error" aria-hidden="true">&times;</div>
-        <h1>Upload Failed</h1>
-        <p class="subtitle">${escapeHtml(errorCategory)}</p>
-      </div>
+  return renderPageLayout({
+    title: 'Upload Failed | Bamboo',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--error', '&times;', 'Upload Failed', errorCategory)}
 
       <div class="asset-info-card">
         <h3>Error Details</h3>
         <p><code>${escapeHtml(errorMessage)}</code></p>
       </div>
 
-      <div class="ai-copy-container">
-        <h2>Request Assistance from AI</h2>
-        <p>To get a new upload link, copy the message below and send it to your AI assistant.</p>
-        <div class="ai-message-card">
-          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to AI assistant">Copy for AI</button>
-        </div>
-      </div>
+      ${renderAICopySection('Request Assistance from AI', 'To get a new upload link, copy the message below and send it to your AI assistant.', aiPrompt)}
       
       ${troubleshootingSteps}
       
@@ -486,57 +488,28 @@ export function renderUploadFailedPage(
         <button id="tryAgainBtn">Try Again</button>
         <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      
-      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
-        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
-      </div>
-    </article>
-  </main>
-  <script>
-    document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-    ${AI_COPY_SCRIPT}
-  </script>
-</body>
-</html>`;
+      ${CLOSE_FALLBACK_HTML}
+    `,
+    script: FAILED_PAGE_SCRIPT,
+  });
 }
 
 /**
  * Generates the HTML markup for the "Upload In Progress" (409) page.
  */
 export function renderUploadInProgressPage(): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="10">
-  <title>Upload In Progress | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--progress"><div class="spinner"></div></div>
-        <h1>Upload in Progress</h1>
-        <p class="subtitle">Your file is being uploaded to Meta. This may take a few moments.</p>
-      </div>
+  return renderPageLayout({
+    title: 'Upload In Progress | Bamboo',
+    headExtra: '<meta http-equiv="refresh" content="10">',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--progress', '<div class="spinner"></div>', 'Upload in Progress', 'Your file is being uploaded to Meta. This may take a few moments.')}
       
       <div class="asset-info-card">
         <p style="text-align: center;">This page will automatically refresh every 10 seconds to check the status.</p>
         <p style="text-align: center;">You can safely close this window; the process will continue in the background.</p>
       </div>
-    </article>
-  </main>
-</body>
-</html>`;
+    `,
+  });
 }
 
 /**
@@ -545,54 +518,20 @@ export function renderUploadInProgressPage(): string {
 export function renderUploadSessionNotFoundPage(): string {
   const aiPrompt =
     'My upload link is invalid, expired, or has already been used. Could you please provide a new upload link?';
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Session Not Found | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-  <style>${AI_COPY_STYLES}</style>
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--error" aria-hidden="true">!</div>
-        <h1>Session Not Found</h1>
-        <p class="subtitle">This upload link is invalid, expired, or has already been used.</p>
-      </div>
+  return renderPageLayout({
+    title: 'Upload Session Not Found | Bamboo',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--error', '!', 'Session Not Found', 'This upload link is invalid, expired, or has already been used.')}
       
-      <div class="ai-copy-container">
-        <h2>Request a New Link</h2>
-        <p>Copy the message below and send it to your AI assistant to get a new upload link.</p>
-        <div class="ai-message-card">
-          <div id="ai-prompt" class="ai-message-text">${escapeHtml(aiPrompt)}</div>
-          <button class="copy-btn" data-copy-target="#ai-prompt" aria-label="Copy message to request new upload link">Copy for AI</button>
-        </div>
-      </div>
+      ${renderAICopySection('Request a New Link', 'Copy the message below and send it to your AI assistant to get a new upload link.', aiPrompt)}
 
       <div class="actions">
         <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      
-      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
-        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
-      </div>
-    </article>
-  </main>
-  <script>
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-    ${AI_COPY_SCRIPT}
-  </script>
-</body>
-</html>`;
+      ${CLOSE_FALLBACK_HTML}
+    `,
+    script: SUCCESS_SESSION_NOT_FOUND_SCRIPT,
+  });
 }
 
 /**
@@ -600,22 +539,10 @@ export function renderUploadSessionNotFoundPage(): string {
  * @param uploadId The UUID for the upload session.
  */
 export function renderUploadFormPage(uploadId: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upload Creative Asset | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--info" aria-hidden="true">&#8593;</div>
-        <h1>Upload Creative Asset</h1>
-        <p class="subtitle">Select a file to upload. The asset type will be automatically detected.</p>
-      </div>
+  return renderPageLayout({
+    title: 'Upload Creative Asset | Bamboo',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--info', '&#8593;', 'Upload Creative Asset', 'Select a file to upload. The asset type will be automatically detected.')}
 
       <form id="uploadForm" action="/v1/assets/upload/${escapeHtml(uploadId)}" method="post" enctype="multipart/form-data">
         <div class="file-input-wrapper">
@@ -630,33 +557,9 @@ export function renderUploadFormPage(uploadId: string): string {
           <button id="submitBtn" type="submit" disabled>Upload File</button>
         </div>
       </form>
-    </article>
-  </main>
-  <script>
-    const form = document.getElementById('uploadForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const fileInput = document.getElementById('file');
-    const fileLabelText = document.getElementById('file-label-text');
-    
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files.length > 0) {
-        fileLabelText.textContent = fileInput.files[0].name;
-        submitBtn.disabled = false;
-      } else {
-        fileLabelText.textContent = 'Click to browse or drag file here';
-        submitBtn.disabled = true;
-      }
-    });
-
-    form.addEventListener('submit', () => {
-      if (fileInput.files.length > 0) {
-        submitBtn.setAttribute('aria-busy', 'true');
-        submitBtn.disabled = true;
-      }
-    });
-  </script>
-</body>
-</html>`;
+    `,
+    script: UPLOAD_FORM_SCRIPT,
+  });
 }
 
 /**
@@ -668,22 +571,10 @@ export function renderServerErrorPage(customMessage?: string): string {
     ? escapeHtml(customMessage)
     : 'An unexpected error occurred. Our team has been notified and is looking into it.';
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Server Error | Bamboo</title>
-  <link rel="stylesheet" href="/bamboo-ui.css">
-</head>
-<body>
-  <main class="container">
-    <article>
-      <div class="status-header">
-        <div class="status-icon status-icon--error" aria-hidden="true">&times;</div>
-        <h1>Server Error</h1>
-        <p class="subtitle">We've encountered a problem.</p>
-      </div>
+  return renderPageLayout({
+    title: 'Server Error | Bamboo',
+    bodyContent: `
+      ${renderStatusHeader('status-icon--error', '&times;', 'Server Error', 'We have encountered a problem.')}
       
       <div class="asset-info-card">
         <p style="text-align: center;">${displayMessage}</p>
@@ -693,22 +584,8 @@ export function renderServerErrorPage(customMessage?: string): string {
         <button id="reloadBtn">Try Again</button>
         <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      
-      <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
-        <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
-      </div>
-    </article>
-  </main>
-  <script>
-    document.getElementById('reloadBtn')?.addEventListener('click', () => window.location.reload());
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-  </script>
-</body>
-</html>`;
+      ${CLOSE_FALLBACK_HTML}
+    `,
+    script: SERVER_ERROR_SCRIPT,
+  });
 }

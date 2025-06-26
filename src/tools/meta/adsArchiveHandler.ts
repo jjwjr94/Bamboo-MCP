@@ -2,9 +2,9 @@ import type { z } from 'zod';
 import { MetaAdsArchiveResponseSchema } from '../../generated/schemas.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
-import { MetaApiError, ValidationError } from '../../utils/errors.js';
+import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { fetchUserTokenString, handleMetaApiCall } from './api.js';
+import { createMetaApiErrorFromResponse, fetchUserTokenString, handleMetaApiCall } from './api.js';
 import type {
   GetAdsArchiveInsightsResult,
   GetPageArchiveAdsResult,
@@ -101,13 +101,7 @@ export class MetaAdsArchiveHandler {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Failed to read error response');
-        throw new MetaApiError(
-          `Ads Archive API request failed: ${response.status} ${response.statusText} - ${errorText}`,
-          response.status.toString(),
-          undefined,
-          response.status
-        );
+        throw await createMetaApiErrorFromResponse(response);
       }
 
       const data = (await response.json()) as {

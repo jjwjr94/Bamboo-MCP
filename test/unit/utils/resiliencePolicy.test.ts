@@ -45,8 +45,10 @@ describe('Resilience Policy', () => {
       const nonRetryableError = new MetaApiError(
         'Invalid OAuth access token',
         '190',
-        undefined,
-        401
+        '463',
+        401,
+        'OAuthException',
+        'A4TBZM5Q6P6h1HQZaQZfKy7'
       );
       const mockApiCall = vi.fn().mockRejectedValue(nonRetryableError);
 
@@ -107,7 +109,14 @@ describe('Resilience Policy', () => {
   describe('Error Classification', () => {
     it('should classify OAuth errors as non-retryable', async () => {
       const policy = createMetaResiliencePolicy();
-      const oAuthError = new MetaApiError('Invalid OAuth access token', '190', '463', 401);
+      const oAuthError = new MetaApiError(
+        'Invalid OAuth access token',
+        '190',
+        '463',
+        401,
+        'OAuthException',
+        'A4TBZM5Q6P6h1HQZaQZfKy7'
+      );
       const mockApiCall = vi.fn().mockRejectedValue(oAuthError);
 
       await expect(policy.execute(mockApiCall)).rejects.toThrow(oAuthError);
@@ -116,7 +125,14 @@ describe('Resilience Policy', () => {
 
     it('should classify validation errors as non-retryable', async () => {
       const policy = createMetaResiliencePolicy();
-      const validationError = new MetaApiError('Campaign name is required', '100', '1887634', 400);
+      const validationError = new MetaApiError(
+        'Campaign name is required',
+        '100',
+        '1885634',
+        400,
+        'FacebookApiException',
+        'RF7-GH8qMkL'
+      );
       const mockApiCall = vi.fn().mockRejectedValue(validationError);
 
       await expect(policy.execute(mockApiCall)).rejects.toThrow(validationError);
@@ -125,7 +141,14 @@ describe('Resilience Policy', () => {
 
     it('should handle business logic errors appropriately', async () => {
       const policy = createMetaResiliencePolicy();
-      const businessError = new MetaApiError('Campaign not found', '100', '1487742', 404);
+      const businessError = new MetaApiError(
+        'Campaign not found',
+        '100',
+        '1487742',
+        404,
+        'OAuthException',
+        'QT6fQr-5nAR'
+      );
       const mockApiCall = vi.fn().mockRejectedValue(businessError);
 
       await expect(policy.execute(mockApiCall)).rejects.toThrow(businessError);

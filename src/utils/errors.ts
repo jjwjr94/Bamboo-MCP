@@ -62,16 +62,28 @@ export class TimeoutError extends BambooError {
 export class MetaApiError extends BambooError {
   public readonly metaErrorCode?: string;
   public readonly metaErrorSubcode?: string;
+  public readonly metaErrorType?: string;
+  public readonly fbtrace_id?: string;
+  public readonly userTitle?: string;
+  public readonly userMessage?: string;
 
   constructor(
     message: string,
     metaErrorCode?: string,
     metaErrorSubcode?: string,
-    statusCode = 400
+    statusCode = 400,
+    metaErrorType?: string,
+    fbtrace_id?: string,
+    userTitle?: string,
+    userMessage?: string
   ) {
     super(message, 'META_API_ERROR', statusCode);
     this.metaErrorCode = metaErrorCode;
     this.metaErrorSubcode = metaErrorSubcode;
+    this.metaErrorType = metaErrorType;
+    this.fbtrace_id = fbtrace_id;
+    this.userTitle = userTitle;
+    this.userMessage = userMessage;
   }
 }
 
