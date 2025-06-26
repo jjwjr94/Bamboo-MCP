@@ -24,9 +24,9 @@ const outputPath = path.resolve(__dirname, '../src/generated/cspHashes.ts');
 const SCRIPT_CONSTANTS = [
   'AI_COPY_SCRIPT',
   'UPLOAD_FORM_SCRIPT',
-  'SUCCESS_SESSION_NOT_FOUND_SCRIPT',
-  'FAILED_PAGE_SCRIPT',
-  'SERVER_ERROR_SCRIPT',
+  'CLOSE_BUTTON_SCRIPT',
+  'TRY_AGAIN_BUTTON_SCRIPT',
+  'RELOAD_BUTTON_SCRIPT',
 ];
 
 /**
@@ -45,7 +45,6 @@ async function loadScripts() {
     const sourceCode = await fs.readFile(sourcePath, 'utf8');
     const scripts = {};
 
-    // First pass: extract all script constants
     for (const scriptName of SCRIPT_CONSTANTS) {
       // Match: const SCRIPT_NAME = `...`; and capture group 1
       const regex = new RegExp(`const ${scriptName} = \`([\\s\\S]*?)\`;`); // No 'g' flag
@@ -58,20 +57,6 @@ async function loadScripts() {
         console.warn(` ! Could not find ${scriptName} in source file`);
         scripts[scriptName] = '';
       }
-    }
-
-    // Second pass: expand template literals (${AI_COPY_SCRIPT}, etc.)
-    for (const scriptName of SCRIPT_CONSTANTS) {
-      let script = scripts[scriptName];
-      
-      // Replace template literal references with actual content
-      for (const refScriptName of SCRIPT_CONSTANTS) {
-        const templateRef = `\\$\\{${refScriptName}\\}`;
-        const regex = new RegExp(templateRef, 'g');
-        script = script.replace(regex, scripts[refScriptName]);
-      }
-      
-      scripts[scriptName] = script;
     }
 
     return scripts;

@@ -9,6 +9,7 @@ import { escapeHtml } from './securityUtils.js';
 export type UploadSuccessResult = {
   assetType: string;
   metaAssetId: string;
+  uploadId: string;
 };
 
 // JavaScript functionality for copy-to-clipboard
@@ -137,8 +138,8 @@ const UPLOAD_FORM_SCRIPT = `
     });
   `;
 
-// Script for success and session-not-found pages (matches existing CSP hash)
-const SUCCESS_SESSION_NOT_FOUND_SCRIPT = `
+// Individual script components for clean CSP hash management
+const CLOSE_BUTTON_SCRIPT = `
     document.getElementById('closeBtn')?.addEventListener('click', () => {
       window.close();
       setTimeout(() => {
@@ -146,32 +147,14 @@ const SUCCESS_SESSION_NOT_FOUND_SCRIPT = `
         if (fallback) fallback.style.display = 'block';
       }, 500);
     });
-    ${AI_COPY_SCRIPT}
   `;
 
-// Script for failed upload page (matches existing CSP hash)
-const FAILED_PAGE_SCRIPT = `
+const TRY_AGAIN_BUTTON_SCRIPT = `
     document.getElementById('tryAgainBtn')?.addEventListener('click', () => window.location.reload());
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
-    ${AI_COPY_SCRIPT}
   `;
 
-// Script for server error page (matches existing CSP hash)
-const SERVER_ERROR_SCRIPT = `
+const RELOAD_BUTTON_SCRIPT = `
     document.getElementById('reloadBtn')?.addEventListener('click', () => window.location.reload());
-    document.getElementById('closeBtn')?.addEventListener('click', () => {
-      window.close();
-      setTimeout(() => {
-        const fallback = document.getElementById('close-fallback');
-        if (fallback) fallback.style.display = 'block';
-      }, 500);
-    });
   `;
 
 // Reusable HTML components for common page elements
@@ -222,15 +205,17 @@ interface PageLayoutProps {
   title: string;
   headExtra?: string;
   bodyContent: string;
-  script?: string;
+  scripts?: string[];
 }
 
 function renderPageLayout({
   title,
   headExtra = '',
   bodyContent,
-  script = '',
+  scripts = [],
 }: PageLayoutProps): string {
+  const scriptTags = scripts.map((script) => `<script>${script}</script>`).join('\n  ');
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -246,7 +231,7 @@ function renderPageLayout({
       ${bodyContent}
     </article>
   </main>
-  ${script ? `<script>${script}</script>` : ''}
+  ${scriptTags}
 </body>
 </html>`;
 }
@@ -343,8 +328,8 @@ export const TROUBLESHOOTING_TEMPLATES = {
 /**
  * Generates the HTML markup for a successful upload response.
  */
-export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSuccessResult): string {
-  const aiPrompt = `I successfully uploaded creative asset ${metaAssetId}, please verify it.`;
+export function renderUploadSuccessPage({ assetType, metaAssetId, uploadId }: UploadSuccessResult): string {
+  const aiPrompt = `I successfully uploaded creative asset with upload ID ${uploadId}, please verify it.`;
   return renderPageLayout({
     title: 'Upload Complete | Bamboo',
     bodyContent: `
@@ -356,6 +341,8 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
           <dd>${escapeHtml(assetType)}</dd>
           <dt>Meta Asset ID</dt>
           <dd><code>${escapeHtml(metaAssetId)}</code></dd>
+          <dt>Upload ID</dt>
+          <dd><code>${escapeHtml(uploadId)}</code></dd>
         </dl>
       </div>
 
@@ -366,7 +353,7 @@ export function renderUploadSuccessPage({ assetType, metaAssetId }: UploadSucces
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    script: SUCCESS_SESSION_NOT_FOUND_SCRIPT,
+    scripts: [CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -490,7 +477,7 @@ export function renderUploadFailedPage(
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    script: FAILED_PAGE_SCRIPT,
+    scripts: [TRY_AGAIN_BUTTON_SCRIPT, CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -530,7 +517,7 @@ export function renderUploadSessionNotFoundPage(): string {
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    script: SUCCESS_SESSION_NOT_FOUND_SCRIPT,
+    scripts: [CLOSE_BUTTON_SCRIPT, AI_COPY_SCRIPT],
   });
 }
 
@@ -558,7 +545,7 @@ export function renderUploadFormPage(uploadId: string): string {
         </div>
       </form>
     `,
-    script: UPLOAD_FORM_SCRIPT,
+    scripts: [UPLOAD_FORM_SCRIPT],
   });
 }
 
@@ -586,6 +573,6 @@ export function renderServerErrorPage(customMessage?: string): string {
       </div>
       ${CLOSE_FALLBACK_HTML}
     `,
-    script: SERVER_ERROR_SCRIPT,
+    scripts: [RELOAD_BUTTON_SCRIPT, CLOSE_BUTTON_SCRIPT],
   });
 }

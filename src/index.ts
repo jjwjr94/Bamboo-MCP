@@ -12,9 +12,10 @@ import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetu
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
 import {
-  FAILED_PAGE_SCRIPT_HASH,
-  SERVER_ERROR_SCRIPT_HASH,
-  SUCCESS_SESSION_NOT_FOUND_SCRIPT_HASH,
+  AI_COPY_SCRIPT_HASH,
+  CLOSE_BUTTON_SCRIPT_HASH,
+  RELOAD_BUTTON_SCRIPT_HASH,
+  TRY_AGAIN_BUTTON_SCRIPT_HASH,
   UPLOAD_FORM_SCRIPT_HASH,
 } from './generated/cspHashes.js';
 import { CoreServices } from './mcp/coreServices.js';
@@ -72,9 +73,10 @@ export async function build(opts = {}) {
         scriptSrc: [
           "'self'",
           UPLOAD_FORM_SCRIPT_HASH, // Hash for upload form script
-          FAILED_PAGE_SCRIPT_HASH, // Hash for failed page script (with window.close fallback)
-          SUCCESS_SESSION_NOT_FOUND_SCRIPT_HASH, // Hash for success & session-not-found scripts (with window.close fallback)
-          SERVER_ERROR_SCRIPT_HASH, // Hash for server error script (with window.close fallback)
+          AI_COPY_SCRIPT_HASH, // Hash for AI copy functionality
+          CLOSE_BUTTON_SCRIPT_HASH, // Hash for close button script
+          TRY_AGAIN_BUTTON_SCRIPT_HASH, // Hash for try again button script
+          RELOAD_BUTTON_SCRIPT_HASH, // Hash for reload button script
         ],
         imgSrc: ["'self'", 'data:', 'https:'],
         // Explicitly prevent object/plugin execution for defense-in-depth
