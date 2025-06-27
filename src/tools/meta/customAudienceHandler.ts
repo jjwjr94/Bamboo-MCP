@@ -8,6 +8,7 @@ import {
   MetaCustomAudienceResponseSchema,
   MetaDeleteSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import type { CreateCustomAudienceRequest } from '../../mcp/registries/CustomAudienceToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -110,12 +111,7 @@ export class MetaCustomAudienceHandler {
    */
   async createCustomAudience(
     authPayload: JWTPayload,
-    params: {
-      adAccountId?: string;
-      name: string;
-      description?: string;
-      subtype: 'CUSTOM';
-    }
+    params: CreateCustomAudienceRequest
   ): Promise<CreateCustomAudienceResult> {
     logger.info('Executing create_custom_audience', { userId: authPayload.userId, params });
 

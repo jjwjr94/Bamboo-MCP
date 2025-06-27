@@ -9,9 +9,10 @@ import { mcpErrorSchema } from './errorHandler.js';
  */
 export interface IToolRegistry {
   /**
-   * Register all MCP tools for this registry
+   * Register all MCP tools for this registry and return their names.
+   * @returns Array of tool names that were registered.
    */
-  register(): void;
+  register(): string[];
 
   /**
    * Get the number of tools this registry provides

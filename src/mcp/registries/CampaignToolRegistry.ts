@@ -11,6 +11,80 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
+// CreateCampaign schema - single source of truth for campaign creation
+export const CreateCampaignSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
+    ),
+  name: z.string().describe('The name of the campaign.'),
+  objective: CampaignObjectiveSchema.describe('The campaign objective.'),
+  buying_type: z
+    .enum(['AUCTION', 'RESERVED'])
+    .default('AUCTION')
+    .describe(
+      "The buying type for the campaign. Defaults to 'AUCTION'. RESERVED is for guaranteed delivery campaigns."
+    ),
+  status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
+  dailyBudget: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
+    ),
+  lifetimeBudget: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
+    ),
+  specialAdCategories: z
+    .array(CampaignSpecialAdCategoriesSchema)
+    .default(['NONE'])
+    .describe(
+      "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
+    ),
+  specialAdCategoryCountry: z
+    .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
+    .optional()
+    .describe(
+      "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when specialAdCategories is not ['NONE']."
+    ),
+});
+
+// UpdateCampaign schema - single source of truth for campaign updates
+export const UpdateCampaignSchema = z.object({
+  campaignId: z.string().describe('The ID of the campaign to update.'),
+  name: z.string().optional().describe('New name for the campaign.'),
+  status: CampaignStatusSchema.optional().describe('New status for the campaign.'),
+  dailyBudget: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
+    ),
+  lifetimeBudget: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
+    ),
+});
+
+// Export inferred types - single source of truth for TypeScript types
+export type CreateCampaignRequest = z.infer<typeof CreateCampaignSchema>;
+export type UpdateCampaignRequest = z.infer<typeof UpdateCampaignSchema>;
+
 /**
  * Handles registration of campaign-related MCP tools:
  * - get_campaigns: Retrieve campaigns for an ad account
@@ -21,7 +95,7 @@ import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 export class CampaignToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -42,20 +116,22 @@ export class CampaignToolRegistry implements IToolRegistry {
     return 'Campaign';
   }
 
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
-  private registerGetCampaigns(): void {
+  private registerGetCampaigns(): string {
     const successDataSchema = z.object({
       campaigns: z
         .array(MetaCampaignResponseSchema)
         .describe('A list of campaigns with all available Meta API fields.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_campaigns',
       {
@@ -77,7 +153,7 @@ export class CampaignToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerCreateCampaign(): void {
+  private registerCreateCampaign(): string {
     const successDataSchema = z.object({
       campaignId: z.string(),
       name: z.string(),
@@ -85,57 +161,13 @@ export class CampaignToolRegistry implements IToolRegistry {
       status: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'create_campaign',
       {
         title: 'Create Campaign',
         description: 'Creates a new advertising campaign.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-          name: z.string().describe('The name of the campaign.'),
-          objective: CampaignObjectiveSchema.describe('The campaign objective.'),
-          buying_type: z
-            .enum(['AUCTION', 'RESERVED'])
-            .default('AUCTION')
-            .describe(
-              "The buying type for the campaign. Defaults to 'AUCTION'. RESERVED is for guaranteed delivery campaigns."
-            ),
-          status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
-            ),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
-            ),
-          specialAdCategories: z
-            .array(CampaignSpecialAdCategoriesSchema)
-            .default(['NONE'])
-            .describe(
-              "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
-            ),
-          specialAdCategoryCountry: z
-            .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
-            .optional()
-            .describe(
-              "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when specialAdCategories is not ['NONE']."
-            ),
-        },
+        inputSchema: CreateCampaignSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createCampaign(authPayload, params),
@@ -143,39 +175,19 @@ export class CampaignToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerUpdateCampaign(): void {
+  private registerUpdateCampaign(): string {
     const successDataSchema = z.object({
       campaignId: z.string(),
       updatedFields: z.array(z.string()),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'update_campaign',
       {
         title: 'Update Campaign',
         description: 'Updates an existing campaign.',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to update.'),
-          name: z.string().optional().describe('New name for the campaign.'),
-          status: CampaignStatusSchema.optional().describe('New status for the campaign.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
-            ),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
-            ),
-        },
+        inputSchema: UpdateCampaignSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateCampaign(authPayload, params),
@@ -183,12 +195,12 @@ export class CampaignToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerDeleteCampaign(): void {
+  private registerDeleteCampaign(): string {
     const successDataSchema = z.object({
       campaignId: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'delete_campaign',
       {

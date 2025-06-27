@@ -41,6 +41,38 @@ export class ToolRegistry {
   }
 
   public register() {
+    // Step 1: Register all sub-registries and collect their tool names
+    const subRegistryToolNames: string[] = [];
+    logger.info('Registering tool registries and collecting tool names...');
+    let totalToolsRegistered = 0;
+
+    for (const registry of this.registries) {
+      const registryName = registry.getRegistryName();
+      try {
+        logger.info(
+          `Attempting to register ${registryName} registry (${registry.getToolCount()} tools)`
+        );
+        const registeredNames = registry.register();
+        subRegistryToolNames.push(...registeredNames);
+        totalToolsRegistered += registry.getToolCount();
+      } catch (error) {
+        logger.error(`Failed to register tool registry: ${registryName}`, {
+          registry: registryName,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    }
+
+    logger.info(
+      `Registry registration complete. Total sub-tools registered: ${totalToolsRegistered}`
+    );
+
+    // Step 2: Define main tool names and create complete tool list
+    const mainToolNames = ['get_ad_accounts', 'select_ad_account'];
+    const allToolNames = [...mainToolNames, ...subRegistryToolNames];
+
+    // Step 3: Register main tools with complete tool list
     const getAdAccountsSuccessDataSchema = z.object({
       adAccounts: z
         .array(
@@ -74,32 +106,7 @@ export class ToolRegistry {
       },
       (authPayload, params) => this.toolsHandler.getAdAccounts(authPayload, params),
       'Successfully retrieved ad accounts with permissions and context.',
-      { attachPrompts: true }
-    );
-
-    // Register all tool registries using loop-based approach
-    logger.info('Registering tool registries...');
-    let totalToolsRegistered = 0;
-
-    for (const registry of this.registries) {
-      const registryName = registry.getRegistryName();
-      try {
-        logger.info(
-          `Attempting to register ${registryName} registry (${registry.getToolCount()} tools)`
-        );
-        registry.register();
-        totalToolsRegistered += registry.getToolCount();
-      } catch (error) {
-        logger.error(`Failed to register tool registry: ${registryName}`, {
-          registry: registryName,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      }
-    }
-
-    logger.info(
-      `Registry registration complete. Total tools successfully registered: ${totalToolsRegistered}`
+      { attachPrompts: true, toolNames: allToolNames }
     );
 
     const selectAdAccountSuccessDataSchema = z.object({

@@ -20,6 +20,12 @@ export interface CreateMcpSuccessResultOptions {
    * Defaults to false to conserve context window space on subsequent calls.
    */
   attachPrompts?: boolean;
+
+  /**
+   * Optional array of tool names to include in the response when attachPrompts is true.
+   * This provides the MCP client with a complete manifest of available tools to prevent hallucination.
+   */
+  toolNames?: string[];
 }
 
 /**
@@ -87,7 +93,7 @@ export async function createMcpSuccessResult<T>(
     data: sanitizedData,
   };
 
-  const { attachPrompts = false } = options;
+  const { attachPrompts = false, toolNames = [] } = options;
   const finalStructuredContent = { result: successContent };
 
   const textHumanReadableContent: TextContent | undefined = description
@@ -113,6 +119,16 @@ export async function createMcpSuccessResult<T>(
 
   content.push(textStructuredContent);
   content.push(...embeddedResources);
+
+  // Add tool names as TextContent when attachPrompts is true and toolNames are provided
+  if (attachPrompts && toolNames.length > 0) {
+    const sortedToolNames = toolNames.sort();
+    const toolManifestContent: TextContent = {
+      type: 'text',
+      text: `Available MCP Tools: ${JSON.stringify(sortedToolNames, null, 2)}`,
+    };
+    content.push(toolManifestContent);
+  }
 
   const result: CallToolResult = {
     content,

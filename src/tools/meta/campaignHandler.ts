@@ -9,9 +9,12 @@ import {
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import type {
+  CreateCampaignRequest,
+  UpdateCampaignRequest,
+} from '../../mcp/registries/CampaignToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { CreateCampaignRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
@@ -234,13 +237,7 @@ export class MetaCampaignHandler {
 
   async updateCampaign(
     authPayload: JWTPayload,
-    params: {
-      campaignId: string;
-      name?: string;
-      status?: string;
-      dailyBudget?: number;
-      lifetimeBudget?: number;
-    }
+    params: UpdateCampaignRequest
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 

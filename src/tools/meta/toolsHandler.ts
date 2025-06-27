@@ -1,23 +1,28 @@
 import type {
+  CreateAdCreativeRequest,
+  UpdateAdCreativeRequest,
+} from '../../mcp/registries/AdCreativeToolRegistry.js';
+import type {
+  CreateAdSetRequest,
+  UpdateAdSetRequest,
+} from '../../mcp/registries/AdSetToolRegistry.js';
+import type { CreateAdRequest, UpdateAdRequest } from '../../mcp/registries/AdToolRegistry.js';
+import type {
   GetAdsArchiveInsightsInput,
   GetPageArchiveAdsInput,
   GetPoliticalAdsInput,
   SearchAdsArchiveInput,
 } from '../../mcp/registries/AdsArchiveToolRegistry.js';
 import type {
+  CreateCampaignRequest,
+  UpdateCampaignRequest,
+} from '../../mcp/registries/CampaignToolRegistry.js';
+import type { CreateCustomAudienceRequest } from '../../mcp/registries/CustomAudienceToolRegistry.js';
+import type {
   GetAdAccountInsightsInput,
   GetAdInsightsInput,
 } from '../../mcp/registries/InsightsToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type {
-  CampaignStatus,
-  CreateAdCreativeRequest,
-  CreateAdRequest,
-  CreateAdSetRequest,
-  CreateCampaignRequest,
-  CustomAudienceRequest,
-  UpdateAdSetRequest,
-} from '../../types/meta.js';
 import { MetaAdAccountHandler } from './adAccountHandler.js';
 import { MetaAdCreativeHandler } from './adCreativeHandler.js';
 import { AdCreativeUploadHandler } from './adCreativeUploadHandler.js';
@@ -59,16 +64,7 @@ export class MetaToolsHandler {
     return this.campaignHandler.createCampaign(authPayload, params);
   }
 
-  async updateCampaign(
-    authPayload: JWTPayload,
-    params: {
-      campaignId: string;
-      name?: string;
-      status?: CampaignStatus;
-      dailyBudget?: number;
-      lifetimeBudget?: number;
-    }
-  ) {
+  async updateCampaign(authPayload: JWTPayload, params: UpdateCampaignRequest) {
     return this.campaignHandler.updateCampaign(authPayload, params);
   }
 
@@ -98,14 +94,11 @@ export class MetaToolsHandler {
     return this.adCreativeHandler.getAdCreatives(authPayload, params);
   }
 
-  async createAdCreative(
-    authPayload: JWTPayload,
-    params: CreateAdCreativeRequest & { adAccountId?: string }
-  ) {
+  async createAdCreative(authPayload: JWTPayload, params: CreateAdCreativeRequest) {
     return this.adCreativeHandler.createAdCreative(authPayload, params);
   }
 
-  async updateAdCreative(authPayload: JWTPayload, params: { adCreativeId: string; name: string }) {
+  async updateAdCreative(authPayload: JWTPayload, params: UpdateAdCreativeRequest) {
     return this.adCreativeHandler.updateAdCreative(authPayload, params);
   }
 
@@ -139,19 +132,11 @@ export class MetaToolsHandler {
     return this.adHandler.getAds(authPayload, params);
   }
 
-  async createAd(authPayload: JWTPayload, params: CreateAdRequest & { adAccountId?: string }) {
+  async createAd(authPayload: JWTPayload, params: CreateAdRequest) {
     return this.adHandler.createAd(authPayload, params);
   }
 
-  async updateAd(
-    authPayload: JWTPayload,
-    params: {
-      adId: string;
-      name?: string;
-      status?: string;
-      creativeId?: string;
-    }
-  ) {
+  async updateAd(authPayload: JWTPayload, params: UpdateAdRequest) {
     return this.adHandler.updateAd(authPayload, params);
   }
 
@@ -176,16 +161,8 @@ export class MetaToolsHandler {
     return this.customAudienceHandler.getCustomAudiences(authPayload, params);
   }
 
-  async createCustomAudience(
-    authPayload: JWTPayload,
-    params: CustomAudienceRequest & { adAccountId?: string }
-  ) {
-    // Ensure subtype is 'CUSTOM' as required by the handler
-    const customParams = {
-      ...params,
-      subtype: 'CUSTOM' as const,
-    };
-    return this.customAudienceHandler.createCustomAudience(authPayload, customParams);
+  async createCustomAudience(authPayload: JWTPayload, params: CreateCustomAudienceRequest) {
+    return this.customAudienceHandler.createCustomAudience(authPayload, params);
   }
 
   async deleteCustomAudience(

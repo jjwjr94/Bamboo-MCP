@@ -6,6 +6,48 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
+// CreateAd schema - single source of truth for ad creation
+export const CreateAdSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
+    ),
+  adsetId: z.string().describe('The ID of the ad set to create the ad in.'),
+  name: z.string().describe('The name of the ad.'),
+  creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
+  status: AdStatusSchema.default('PAUSED').describe('The status of the ad.'),
+  creativeFeaturesSpec: z
+    .object({
+      standardEnhancements: z
+        .object({
+          enrollStatus: z
+            .enum(['OPT_IN', 'OPT_OUT'])
+            .optional()
+            .describe('Enrollment status for standard enhancements.'),
+        })
+        .optional()
+        .describe('Standard enhancement settings for Advantage+ Creative features.'),
+    })
+    .optional()
+    .describe(
+      'Specification for Advantage+ creative features. Required in Meta API v22 if using any Advantage+ features. Individual features must be explicitly opted into.'
+    ),
+});
+
+// UpdateAd schema - single source of truth for ad updates
+export const UpdateAdSchema = z.object({
+  adId: z.string().describe('The ID of the ad to update.'),
+  name: z.string().optional().describe('New name for the ad.'),
+  status: AdStatusSchema.optional().describe('New status for the ad.'),
+  creativeId: z.string().optional().describe('New creative ID for the ad.'),
+});
+
+// Export inferred types - single source of truth for TypeScript types
+export type CreateAdRequest = z.infer<typeof CreateAdSchema>;
+export type UpdateAdRequest = z.infer<typeof UpdateAdSchema>;
+
 /**
  * Ad Tool Registry
  *
@@ -18,7 +60,7 @@ import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 export class AdToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -39,29 +81,25 @@ export class AdToolRegistry implements IToolRegistry {
     return 'Ad';
   }
 
-  /**
-   * Register all ad-related MCP tools
-   */
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
-  private registerGetAds(): void {
+  private registerGetAds(): string {
     const successDataSchema = z.object({
-      ads: z
-        .array(MetaAdResponseSchema)
-        .describe('A list of ads with all available Meta API fields.'),
+      ads: z.array(MetaAdResponseSchema).describe('A list of ads.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_ads',
       {
         title: 'Get Ads',
-        description:
-          'Retrieves ads for a specific ad account or ad set. If no adAccountId is provided, uses the previously selected account or auto-selects if only one account is available.',
+        description: 'Retrieves ads for an ad account, ad set, or campaign.',
         inputSchema: {
           adAccountId: z
             .string()
@@ -69,18 +107,8 @@ export class AdToolRegistry implements IToolRegistry {
             .describe(
               "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
             ),
-          adSetId: z
-            .string()
-            .optional()
-            .describe(
-              'The ID of the ad set to filter ads by. If provided, only ads from this ad set are returned.'
-            ),
-          campaignId: z
-            .string()
-            .optional()
-            .describe(
-              'The ID of the campaign to filter ads by. If provided, only ads from this campaign are returned.'
-            ),
+          adSetId: z.string().optional().describe('The ID of the ad set to get ads from.'),
+          campaignId: z.string().optional().describe('The ID of the campaign to get ads from.'),
         },
         successDataSchema,
       },
@@ -89,49 +117,21 @@ export class AdToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerCreateAd(): void {
+  private registerCreateAd(): string {
     const successDataSchema = z.object({
       adId: z.string(),
       name: z.string(),
-      adsetId: z.string(),
-      creativeId: z.string(),
-      status: z.string(),
+      adSetId: z.string(),
+      adCreativeId: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'create_ad',
       {
         title: 'Create Ad',
-        description: 'Creates a new ad by linking an ad creative to an ad set.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-          adsetId: z.string().describe('The ID of the ad set to create the ad in.'),
-          name: z.string().describe('The name of the ad.'),
-          creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
-          status: AdStatusSchema.default('PAUSED').describe('The status of the ad.'),
-          creativeFeaturesSpec: z
-            .object({
-              standardEnhancements: z
-                .object({
-                  enrollStatus: z
-                    .enum(['OPT_IN', 'OPT_OUT'])
-                    .optional()
-                    .describe('Enrollment status for standard enhancements.'),
-                })
-                .optional()
-                .describe('Standard enhancement settings for Advantage+ Creative features.'),
-            })
-            .optional()
-            .describe(
-              'Specification for Advantage+ creative features. Required in Meta API v22 if using any Advantage+ features. Individual features must be explicitly opted into.'
-            ),
-        },
+        description: 'Creates a new ad within an ad set.',
+        inputSchema: CreateAdSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createAd(authPayload, params),
@@ -139,24 +139,19 @@ export class AdToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerUpdateAd(): void {
+  private registerUpdateAd(): string {
     const successDataSchema = z.object({
       adId: z.string(),
       updatedFields: z.array(z.string()),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'update_ad',
       {
         title: 'Update Ad',
         description: 'Updates an existing ad.',
-        inputSchema: {
-          adId: z.string().describe('The ID of the ad to update.'),
-          name: z.string().optional().describe('New name for the ad.'),
-          status: AdStatusSchema.optional().describe('New status for the ad.'),
-          creativeId: z.string().optional().describe('New creative ID for the ad.'),
-        },
+        inputSchema: UpdateAdSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateAd(authPayload, params),
@@ -164,12 +159,12 @@ export class AdToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerDeleteAd(): void {
+  private registerDeleteAd(): string {
     const successDataSchema = z.object({
       adId: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'delete_ad',
       {

@@ -21,6 +21,7 @@ import { createMcpOutputSchema } from '../types.js';
  * @param handlerCall The handler function that takes an auth payload and params, and returns a promise of the clean domain result.
  * @param successMessage A static message to be used as the human-readable description for successful calls.
  * @param options Optional configuration for the success result, including attachPrompts for context initialization.
+ * @returns The tool name that was registered.
  */
 export function createMcpTool<
   TInputSchema extends Record<string, ZodTypeAny>,
@@ -40,7 +41,7 @@ export function createMcpTool<
   ) => Promise<unknown>,
   successMessage: string,
   options?: CreateMcpSuccessResultOptions
-) {
+): string {
   server.registerTool(
     toolName,
     {
@@ -65,6 +66,8 @@ export function createMcpTool<
       }
     }
   );
+
+  return toolName;
 }
 
 /**

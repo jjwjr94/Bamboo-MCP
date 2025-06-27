@@ -17,7 +17,7 @@ import { createMcpTool } from './registryHelper.js';
 export class TargetingToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -35,172 +35,180 @@ export class TargetingToolRegistry implements IToolRegistry {
   }
 
   public getRegistryName(): string {
-    return 'Targeting Search';
+    return 'Targeting';
   }
 
   /**
    * Register all targeting-related MCP tools
    */
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
   /**
    * Register the search_interests tool
    */
-  private registerSearchInterests(): void {
+  private registerSearchInterests(): string {
     const successDataSchema = z.object({
-      interests: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          audienceSize: z.number(),
-          path: z.array(z.string()),
-        })
-      ),
-      query: z.string(),
-      total: z.number(),
+      interests: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            audience_size: z.number().optional(),
+            path: z.array(z.string()).optional(),
+            description: z.string().optional(),
+          })
+        )
+        .describe('A list of interest targeting options.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'search_interests',
       {
-        title: 'Search for Targeting Interests',
-        description:
-          'Searches for advertising interests based on a query string (e.g., "sports", "technology").',
+        title: 'Search Interest Targeting',
+        description: 'Searches for interest-based targeting options to use in ad sets.',
         inputSchema: {
-          query: z.string().describe('The keyword to search for.'),
+          query: z.string().describe('Search query for interests (e.g., "fitness", "cooking").'),
           limit: z
             .number()
             .int()
             .positive()
-            .optional()
-            .default(100)
-            .describe('Maximum number of results to return. Defaults to 100.'),
+            .max(100)
+            .default(25)
+            .describe('Maximum number of results to return (default: 25, max: 100).'),
         },
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchInterests(authPayload, params),
-      'Successfully retrieved targeting interests.'
+      'Successfully retrieved interest targeting options.'
     );
   }
 
   /**
    * Register the search_behaviors tool
    */
-  private registerSearchBehaviors(): void {
+  private registerSearchBehaviors(): string {
     const successDataSchema = z.object({
-      behaviors: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          audienceSize: z.number(),
-          path: z.array(z.string()),
-        })
-      ),
-      query: z.string(),
-      total: z.number(),
+      behaviors: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            audience_size: z.number().optional(),
+            path: z.array(z.string()).optional(),
+            description: z.string().optional(),
+          })
+        )
+        .describe('A list of behavior targeting options.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'search_behaviors',
       {
-        title: 'Search for Targeting Behaviors',
-        description:
-          'Searches for advertising behaviors based on a query string (e.g., "engaged shoppers").',
+        title: 'Search Behavior Targeting',
+        description: 'Searches for behavior-based targeting options to use in ad sets.',
         inputSchema: {
-          query: z.string().describe('The keyword to search for.'),
+          query: z.string().describe('Search query for behaviors (e.g., "frequent travelers").'),
           limit: z
             .number()
             .int()
             .positive()
-            .optional()
+            .max(100)
             .default(25)
-            .describe('Maximum number of results to return. Defaults to 25.'),
+            .describe('Maximum number of results to return (default: 25, max: 100).'),
         },
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchBehaviors(authPayload, params),
-      'Successfully retrieved targeting behaviors.'
+      'Successfully retrieved behavior targeting options.'
     );
   }
 
   /**
    * Register the search_locations tool
    */
-  private registerSearchLocations(): void {
+  private registerSearchLocations(): string {
     const successDataSchema = z.object({
-      locations: z.array(
-        z.object({
-          key: z.string(),
-          name: z.string(),
-          type: z.string(),
-          countryCode: z.string(),
-          countryName: z.string(),
-        })
-      ),
-      query: z.string(),
-      total: z.number(),
+      locations: z
+        .array(
+          z.object({
+            key: z.string(),
+            name: z.string(),
+            type: z.string(),
+            country_code: z.string().optional(),
+            country_name: z.string().optional(),
+            region: z.string().optional(),
+            region_id: z.string().optional(),
+            supports_region: z.boolean().optional(),
+            supports_city: z.boolean().optional(),
+          })
+        )
+        .describe('A list of location targeting options.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'search_locations',
       {
-        title: 'Search for Geographic Locations',
-        description:
-          'Searches for geographic locations to target (e.g., countries, regions, cities).',
+        title: 'Search Location Targeting',
+        description: 'Searches for geographic targeting options to use in ad sets.',
         inputSchema: {
           query: z
             .string()
-            .describe('The location name to search for (e.g., "California", "France").'),
+            .describe('Search query for locations (e.g., "New York", "California").'),
+          type: z
+            .enum(['country', 'region', 'city'])
+            .optional()
+            .describe('Type of location to search for.'),
           limit: z
             .number()
             .int()
             .positive()
-            .optional()
+            .max(100)
             .default(25)
-            .describe('Maximum number of results to return. Defaults to 25.'),
+            .describe('Maximum number of results to return (default: 25, max: 100).'),
         },
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchLocations(authPayload, params),
-      'Successfully retrieved geographic locations.'
+      'Successfully retrieved location targeting options.'
     );
   }
 
   /**
    * Register the validate_targeting_options tool
    */
-  private registerValidateTargetingOptions(): void {
+  private registerValidateTargetingOptions(): string {
     const successDataSchema = z.object({
-      validationResults: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          isValid: z.boolean(),
-          status: z.string(),
-        })
-      ),
-      totalValidated: z.number(),
-      validCount: z.number(),
+      validTargetingOptions: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            type: z.string(),
+            is_valid: z.boolean(),
+          })
+        )
+        .describe('Validation results for targeting options.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'validate_targeting_options',
       {
         title: 'Validate Targeting Options',
-        description:
-          'Checks if a list of targeting option IDs (interests, behaviors, etc.) are still valid for use in ads.',
+        description: 'Validates whether targeting option IDs are still active and usable.',
         inputSchema: {
           targetingOptionIds: z
             .array(z.string())
-            .describe('A list of targeting option IDs to validate.'),
+            .describe('Array of targeting option IDs to validate.'),
         },
         successDataSchema,
       },

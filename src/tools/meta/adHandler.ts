@@ -12,9 +12,9 @@ import {
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
 
+import type { CreateAdRequest, UpdateAdRequest } from '../../mcp/registries/AdToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { CreateAdRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
@@ -114,10 +114,7 @@ export class MetaAdHandler {
     );
   }
 
-  async createAd(
-    authPayload: JWTPayload,
-    params: CreateAdRequest & { adAccountId?: string }
-  ): Promise<CreateAdResult> {
+  async createAd(authPayload: JWTPayload, params: CreateAdRequest): Promise<CreateAdResult> {
     logger.info('Executing create_ad', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(
@@ -167,10 +164,7 @@ export class MetaAdHandler {
     );
   }
 
-  async updateAd(
-    authPayload: JWTPayload,
-    params: { adId: string; name?: string; status?: string; creativeId?: string }
-  ): Promise<UpdateAdResult> {
+  async updateAd(authPayload: JWTPayload, params: UpdateAdRequest): Promise<UpdateAdResult> {
     logger.info('Executing update_ad', { userId: authPayload.userId, params });
 
     return await handleMetaApiCall(

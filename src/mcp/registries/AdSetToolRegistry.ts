@@ -12,8 +12,8 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
-// Base targeting schema definition
-const BaseTargetingSchema = z.object({
+// Targeting schema definition - the single source of truth for targeting structure
+export const MetaTargetingSchema = z.object({
   geoLocations: z.object({
     countries: z
       .array(
@@ -53,11 +53,151 @@ const BaseTargetingSchema = z.object({
     .optional(),
 });
 
-// Required targeting schema for create operations
-const CreateTargetingSchema = BaseTargetingSchema;
+// Modern attribution spec schema for v22
+export const MetaAttributionSpecSchema = z
+  .array(
+    z.object({
+      event_type: z
+        .enum(['CLICK_THROUGH', 'VIEW_THROUGH'])
+        .describe("The event type for attribution. Use 'CLICK_THROUGH' or 'VIEW_THROUGH'."),
+      window_days: z
+        .union([z.literal(1), z.literal(7)])
+        .describe(
+          'The attribution window in days. Valid values are 1 or 7 due to iOS 14.5+ restrictions.'
+        ),
+    })
+  )
+  .optional()
+  .describe(
+    'Modern attribution spec for the ad set. Required for some optimization goals. Post-iOS 14.5 only supports 1-day and 7-day windows.'
+  );
 
-// Optional targeting schema for update operations
-const UpdateTargetingSchema = BaseTargetingSchema.optional();
+// CreateAdSet schema - single source of truth for ad set creation
+export const CreateAdSetSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Optional to support intelligent account selection."
+    ),
+  campaignId: z.string().describe('The ID of the campaign to create the ad set in.'),
+  name: z.string().describe('The name of the ad set.'),
+  budget: z
+    .object({
+      daily: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Daily budget in cents (e.g., 1000 = $10.00)'),
+      lifetime: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Lifetime budget in cents (e.g., 10000 = $100.00)'),
+    })
+    .refine(
+      ({ daily, lifetime }) => !!daily !== !!lifetime, // true = only-one-defined
+      {
+        message: 'Provide **either** daily **or** lifetime (one is required, not both).',
+        path: ['daily'],
+      }
+    ),
+  targeting: MetaTargetingSchema.refine(
+    (data) =>
+      data &&
+      (data.geoLocations?.countries?.length ||
+        data.geoLocations?.regions?.length ||
+        data.geoLocations?.cities?.length),
+    {
+      message:
+        'Geographic targeting (geoLocations) is required and must specify at least one of countries, regions, or cities.',
+      path: ['geoLocations'],
+    }
+  ).describe('Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'),
+  billingEvent: AdSetBillingEventSchema.describe(
+    'Billing event for the ad set. Must be compatible with optimization goal.'
+  ),
+  optimizationGoal: AdSetOptimizationGoalSchema.describe(
+    'Optimization goal for the ad set. APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id.'
+  ),
+  bidStrategy: AdSetBidStrategySchema.optional().describe(
+    'The bid strategy for the ad set. If not specified, defaults to LOWEST_COST_WITHOUT_CAP.'
+  ),
+  bidAmount: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Bid amount in cents. Required for certain bid strategies like LOWEST_COST_WITH_BID_CAP.'
+    ),
+  startTime: z.string().optional().describe('Start time in ISO format.'),
+  endTime: z.string().optional().describe('End time in ISO format.'),
+  status: AdSetStatusSchema.default('PAUSED').describe('The ad set status.'),
+  attributionSpec: MetaAttributionSpecSchema,
+  promotedObject: z
+    .record(z.string(), z.any())
+    .optional()
+    .describe(
+      'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives: APP_INSTALLS needs application_id, LEAD_GENERATION needs page_id.'
+    ),
+  isSacCfcaTermsCertified: z
+    .boolean()
+    .optional()
+    .describe(
+      "Certifies CCPA compliance. Required for Special Ad Category campaigns targeting California with optimization goals like 'VALUE', 'LEAD_GENERATION', or 'CONVERSIONS'."
+    ),
+  isEligibleForSacCampaigns: z
+    .boolean()
+    .optional()
+    .describe(
+      "Confirms eligibility for Special Ad Category campaigns. Required for all SAC campaigns from January 2025 as part of Meta's enhanced compliance framework."
+    ),
+});
+
+// UpdateAdSet schema - single source of truth for ad set updates
+export const UpdateAdSetSchema = z.object({
+  adSetId: z.string().describe('The ID of the ad set to update.'),
+  name: z.string().optional().describe('New name for the ad set.'),
+  status: AdSetStatusSchema.optional().describe('New status for the ad set.'),
+  budget: z
+    .object({
+      daily: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('New daily budget in cents (e.g., 1000 = $10.00)'),
+      lifetime: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('New lifetime budget in cents (e.g., 10000 = $100.00)'),
+    })
+    .optional()
+    .refine((budget) => !budget || !(budget.daily && budget.lifetime), {
+      message: 'Provide **either** daily **or** lifetime budget for an update, but not both.',
+      path: ['daily'],
+    })
+    .describe(
+      'New budget for the ad set. If provided, specify either daily or lifetime, not both.'
+    ),
+  bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
+  targeting: MetaTargetingSchema.optional().describe(
+    'New targeting criteria for the ad set. When provided, this will completely overwrite the existing targeting settings.'
+  ),
+  startTime: z.string().optional().describe('New start time in ISO format.'),
+  endTime: z.string().optional().describe('New end time in ISO format.'),
+});
+
+// Export inferred types - single source of truth for TypeScript types
+export type MetaTargeting = z.infer<typeof MetaTargetingSchema>;
+export type MetaAttributionSpec = z.infer<typeof MetaAttributionSpecSchema>;
+export type CreateAdSetRequest = z.infer<typeof CreateAdSetSchema>;
+export type UpdateAdSetRequest = z.infer<typeof UpdateAdSetSchema>;
 
 /**
  * Ad Set Tool Registry
@@ -71,7 +211,7 @@ const UpdateTargetingSchema = BaseTargetingSchema.optional();
 export class AdSetToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -93,23 +233,25 @@ export class AdSetToolRegistry implements IToolRegistry {
   }
 
   /**
-   * Register all ad set-related MCP tools
+   * Register all ad set-related MCP tools and return their names.
    */
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
   /**
    * Register the get_adsets tool
    */
-  private registerGetAdSets(): void {
+  private registerGetAdSets(): string {
     const successDataSchema = z.object({
       adSets: z.array(MetaAdSetResponseSchema).describe('A list of ad sets.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_adsets',
       {
@@ -134,117 +276,20 @@ export class AdSetToolRegistry implements IToolRegistry {
   /**
    * Register the create_adset tool
    */
-  private registerCreateAdSet(): void {
+  private registerCreateAdSet(): string {
     const successDataSchema = z.object({
       adSetId: z.string(),
       name: z.string(),
       campaignId: z.string(),
     });
 
-    // Define modern attribution spec schema for v22
-    const ModernAttributionSpecSchema = z
-      .array(
-        z.object({
-          event_type: z
-            .enum(['CLICK_THROUGH', 'VIEW_THROUGH'])
-            .describe("The event type for attribution. Use 'CLICK_THROUGH' or 'VIEW_THROUGH'."),
-          window_days: z
-            .union([z.literal(1), z.literal(7)])
-            .describe(
-              'The attribution window in days. Valid values are 1 or 7 due to iOS 14.5+ restrictions.'
-            ),
-        })
-      )
-      .optional()
-      .describe(
-        'Modern attribution spec for the ad set. Required for some optimization goals. Post-iOS 14.5 only supports 1-day and 7-day windows.'
-      );
-
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'create_adset',
       {
         title: 'Create Ad Set',
         description: 'Creates a new ad set within a campaign.',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to create the ad set in.'),
-          name: z.string().describe('The name of the ad set.'),
-          budget: z
-            .object({
-              daily: z
-                .number()
-                .int()
-                .positive()
-                .optional()
-                .describe('Daily budget in cents (e.g., 1000 = $10.00)'),
-              lifetime: z
-                .number()
-                .int()
-                .positive()
-                .optional()
-                .describe('Lifetime budget in cents (e.g., 10000 = $100.00)'),
-            })
-            .refine(
-              ({ daily, lifetime }) => !!daily !== !!lifetime, // true = only-one-defined
-              {
-                message: 'Provide **either** daily **or** lifetime (one is required, not both).',
-                path: ['daily'],
-              }
-            ),
-          targeting: CreateTargetingSchema.refine(
-            (data) =>
-              data &&
-              (data.geoLocations?.countries?.length ||
-                data.geoLocations?.regions?.length ||
-                data.geoLocations?.cities?.length),
-            {
-              message:
-                'Geographic targeting (geoLocations) is required and must specify at least one of countries, regions, or cities.',
-              path: ['geoLocations'],
-            }
-          ).describe(
-            'Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'
-          ),
-          billingEvent: AdSetBillingEventSchema.describe(
-            'Billing event for the ad set. Must be compatible with optimization goal.'
-          ),
-          optimizationGoal: AdSetOptimizationGoalSchema.describe(
-            'Optimization goal for the ad set. APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id.'
-          ),
-          bidStrategy: AdSetBidStrategySchema.optional().describe(
-            'The bid strategy for the ad set. If not specified, defaults to LOWEST_COST_WITHOUT_CAP.'
-          ),
-          bidAmount: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'Bid amount in cents. Required for certain bid strategies like LOWEST_COST_WITH_BID_CAP.'
-            ),
-          startTime: z.string().optional().describe('Start time in ISO format.'),
-          endTime: z.string().optional().describe('End time in ISO format.'),
-          status: AdSetStatusSchema.default('PAUSED').describe('The ad set status.'),
-          attributionSpec: ModernAttributionSpecSchema,
-          promotedObject: z
-            .record(z.string(), z.any())
-            .optional()
-            .describe(
-              'Promoted object for the ad set (e.g., { page_id, application_id, product_catalog_id }). Required for some objectives: APP_INSTALLS needs application_id, LEAD_GENERATION needs page_id.'
-            ),
-          isSacCfcaTermsCertified: z
-            .boolean()
-            .optional()
-            .describe(
-              "Certifies CCPA compliance. Required for Special Ad Category campaigns targeting California with optimization goals like 'VALUE', 'LEAD_GENERATION', or 'CONVERSIONS'."
-            ),
-          isEligibleForSacCampaigns: z
-            .boolean()
-            .optional()
-            .describe(
-              "Confirms eligibility for Special Ad Category campaigns. Required for all SAC campaigns from January 2025 as part of Meta's enhanced compliance framework."
-            ),
-        },
+        inputSchema: CreateAdSetSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createAdSet(authPayload, params),
@@ -255,53 +300,19 @@ export class AdSetToolRegistry implements IToolRegistry {
   /**
    * Register the update_adset tool
    */
-  private registerUpdateAdSet(): void {
+  private registerUpdateAdSet(): string {
     const successDataSchema = z.object({
       adSetId: z.string(),
       updatedFields: z.array(z.string()),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'update_adset',
       {
         title: 'Update Ad Set',
         description: 'Updates an existing ad set.',
-        inputSchema: {
-          adSetId: z.string().describe('The ID of the ad set to update.'),
-          name: z.string().optional().describe('New name for the ad set.'),
-          status: AdSetStatusSchema.optional().describe('New status for the ad set.'),
-          budget: z
-            .object({
-              daily: z
-                .number()
-                .int()
-                .positive()
-                .optional()
-                .describe('New daily budget in cents (e.g., 1000 = $10.00)'),
-              lifetime: z
-                .number()
-                .int()
-                .positive()
-                .optional()
-                .describe('New lifetime budget in cents (e.g., 10000 = $100.00)'),
-            })
-            .optional()
-            .refine((budget) => !budget || !(budget.daily && budget.lifetime), {
-              message:
-                'Provide **either** daily **or** lifetime budget for an update, but not both.',
-              path: ['daily'],
-            })
-            .describe(
-              'New budget for the ad set. If provided, specify either daily or lifetime, not both.'
-            ),
-          bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
-          targeting: UpdateTargetingSchema.describe(
-            'New targeting criteria for the ad set. When provided, this will completely overwrite the existing targeting settings.'
-          ),
-          startTime: z.string().optional().describe('New start time in ISO format.'),
-          endTime: z.string().optional().describe('New end time in ISO format.'),
-        },
+        inputSchema: UpdateAdSetSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateAdSet(authPayload, params),
@@ -312,12 +323,12 @@ export class AdSetToolRegistry implements IToolRegistry {
   /**
    * Register the delete_adset tool
    */
-  private registerDeleteAdSet(): void {
+  private registerDeleteAdSet(): string {
     const successDataSchema = z.object({
       adSetId: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'delete_adset',
       {

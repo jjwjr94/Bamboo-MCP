@@ -2,7 +2,6 @@
 
 // Import auto-generated types from schemas
 import type {
-  AdSetBidStrategy,
   AdSetBillingEvent,
   AdSetOptimizationGoal,
   AdsInsightsBreakdowns,
@@ -42,127 +41,9 @@ export interface MetaTargeting {
   publisherPlatforms?: Array<'facebook' | 'instagram' | 'messenger' | 'audience_network'>;
 }
 
-export interface CreateCampaignRequest {
-  name: string;
-  objective: CampaignObjective;
-  status: CampaignStatus;
-  buying_type?: 'AUCTION' | 'RESERVED'; // Required by Meta API v22, defaults to 'AUCTION'
-  adAccountId?: string; // Optional to support intelligent account selection
-  dailyBudget?: number; // in cents
-  lifetimeBudget?: number; // in cents
-  /**
-   * An array of special ad categories for the campaign. Required by Meta policy.
-   * For standard campaigns, this should be set to `['NONE']`.
-   * Using other categories may restrict targeting options.
-   */
-  specialAdCategories: CampaignSpecialAdCategories[];
-  /**
-   * Required when specialAdCategories is not ['NONE'].
-   * A list of ISO 3166-1 alpha-2 country codes (e.g., ['US', 'CA']).
-   * This parameter is mandatory for special ad categories like HOUSING, CREDIT, EMPLOYMENT, or ISSUES_ELECTIONS_POLITICS.
-   */
-  specialAdCategoryCountry?: string[];
-}
-
 export interface MetaAttributionSpec {
   event_type: 'CLICK_THROUGH' | 'VIEW_THROUGH';
   window_days: 1 | 7;
-}
-
-export interface CreateAdSetRequest {
-  adAccountId?: string;
-  campaignId: string;
-  name: string;
-  budget: {
-    daily?: number; // in cents
-    lifetime?: number; // in cents
-  };
-  targeting: MetaTargeting;
-  billingEvent: AdSetBillingEvent;
-  optimizationGoal: AdSetOptimizationGoal;
-  bidStrategy?: AdSetBidStrategy;
-  bidAmount?: number; // in cents
-  startTime?: string; // ISO date
-  endTime?: string; // ISO date
-  status?: CampaignStatus;
-  /**
-   * Certifies compliance with Meta's California Consumer Privacy Act (CCPA) and related regulations.
-   * Required for Special Ad Category campaigns targeting California (US-CA) that use optimization
-   * goals like VALUE, LEAD_GENERATION, or CONVERSIONS. Must be set to `true` when applicable.
-   *
-   * This field was introduced in Meta Marketing API v22.0 to ensure advertisers acknowledge compliance
-   * with California's privacy and advertising regulations for special ad categories.
-   *
-   * @see https://developers.facebook.com/docs/marketing-api/reference/ad-set/
-   */
-  isSacCfcaTermsCertified?: boolean;
-  /**
-   * Confirms the ad set is eligible for Special Ad Category campaigns.
-   * This field is required for all SAC campaigns starting January 2025 as part of
-   * Meta's enhanced compliance framework for special advertising categories.
-   *
-   * @see Meta Marketing API v22.0 documentation
-   */
-  isEligibleForSacCampaigns?: boolean;
-  promotedObject?: unknown;
-  attributionSpec?: MetaAttributionSpec[];
-}
-
-export interface UpdateAdSetRequest {
-  adSetId: string;
-  name?: string;
-  status?: CampaignStatus;
-  budget?: {
-    daily?: number; // in cents
-    lifetime?: number; // in cents
-  };
-  bidAmount?: number; // in cents
-  targeting?: MetaTargeting;
-  startTime?: string; // ISO date
-  endTime?: string; // ISO date
-}
-
-export interface CreateAdRequest {
-  adsetId: string;
-  name: string;
-  creativeId: string;
-  status?: CampaignStatus;
-  creativeFeaturesSpec?: {
-    standardEnhancements?: {
-      enrollStatus?: 'OPT_IN' | 'OPT_OUT';
-    };
-  };
-}
-
-export interface CreateAdCreativeRequest {
-  name: string;
-  objectStorySpec: {
-    pageId: string;
-    linkData?: {
-      link: string;
-      message?: string;
-      name?: string;
-      description?: string;
-      imageHash?: string;
-      callToAction?: {
-        type: string;
-        value?: {
-          link?: string;
-        };
-      };
-    };
-    videoData?: {
-      videoId: string;
-      title?: string;
-      message?: string;
-      callToAction?: {
-        type: string;
-        value?: {
-          link?: string;
-        };
-      };
-    };
-  };
 }
 
 export interface MetaInsightsParams {
@@ -246,13 +127,6 @@ export interface MetaInsight {
   action_type?: string;
   action_device?: string;
   conversion_destination?: string;
-}
-
-export interface CustomAudienceRequest {
-  name: string;
-  subtype: CustomAudienceSubtype;
-  description?: string;
-  customerFileSource?: CustomAudienceCustomerFileSource;
 }
 
 export interface ProductCatalogRequest {

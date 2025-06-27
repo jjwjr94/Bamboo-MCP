@@ -9,7 +9,7 @@ import { createMcpTool } from './registryHelper.js';
 export class PagesToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -29,13 +29,15 @@ export class PagesToolRegistry implements IToolRegistry {
     return 'Pages';
   }
 
-  public register() {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
-  private registerGetPages() {
+  private registerGetPages(): string {
     // Define the schema for the success data payload
     const successDataSchema = z.object({
       pages: z
@@ -51,7 +53,7 @@ export class PagesToolRegistry implements IToolRegistry {
         .describe('A list of Facebook pages.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_pages',
       {
@@ -65,7 +67,7 @@ export class PagesToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerGetPagePosts() {
+  private registerGetPagePosts(): string {
     // Define the schema for the success data payload
     const successDataSchema = z.object({
       posts: z
@@ -83,7 +85,7 @@ export class PagesToolRegistry implements IToolRegistry {
         .describe('A list of posts from the page.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_page_posts',
       {
@@ -99,14 +101,14 @@ export class PagesToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerCreatePagePostAd() {
+  private registerCreatePagePostAd(): string {
     // Define the schema for the success data payload
     const successDataSchema = z.object({
       adId: z.string(),
       adCreativeId: z.string(),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'create_page_post_ad',
       {

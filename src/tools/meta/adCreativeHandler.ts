@@ -9,9 +9,12 @@ import {
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import type {
+  CreateAdCreativeRequest,
+  UpdateAdCreativeRequest,
+} from '../../mcp/registries/AdCreativeToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { CreateAdCreativeRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
@@ -101,7 +104,7 @@ export class MetaAdCreativeHandler {
 
   async createAdCreative(
     authPayload: JWTPayload,
-    params: CreateAdCreativeRequest & { adAccountId?: string }
+    params: CreateAdCreativeRequest
   ): Promise<CreateAdCreativeResult> {
     logger.info('Executing create_ad_creative', { userId: authPayload.userId, params });
 
@@ -153,7 +156,7 @@ export class MetaAdCreativeHandler {
 
   async updateAdCreative(
     authPayload: JWTPayload,
-    params: { adCreativeId: string; name: string }
+    params: UpdateAdCreativeRequest
   ): Promise<UpdateAdCreativeResult> {
     logger.info('Executing update_ad_creative', { userId: authPayload.userId, params });
 

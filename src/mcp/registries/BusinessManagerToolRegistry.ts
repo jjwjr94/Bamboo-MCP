@@ -15,7 +15,7 @@ import { createMcpTool } from './registryHelper.js';
 export class BusinessManagerToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   constructor(server: McpServer, toolsHandler: MetaToolsHandler) {
     this.server = server;
@@ -37,35 +37,35 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
   /**
    * Register all business manager-related MCP tools
    */
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
-  private registerGetBusinessAccounts(): void {
-    // Define the schema for the success data payload
+  private registerGetBusinessAccounts(): string {
     const successDataSchema = z.object({
-      businesses: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          created_time: z.string().optional(),
-          link: z.string().optional(),
-          verification_status: z.string().optional(),
-          vertical: z.string().optional(),
-          timezone_id: z.number().optional(),
-        })
-      ),
+      businessAccounts: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            verification_status: z.string().optional(),
+            timezone_id: z.number().optional(),
+            created_time: z.string().optional(),
+          })
+        )
+        .describe('List of business accounts owned by the user.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_business_accounts',
       {
         title: 'Get Business Accounts',
-        description:
-          'List business manager accounts that the user has access to. Requires business_management permission.',
+        description: 'Retrieves business accounts owned by the user.',
         inputSchema: {},
         successDataSchema,
       },
@@ -74,40 +74,29 @@ export class BusinessManagerToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerGetBusinessUsers(): void {
-    // Define the schema for the success data payload
+  private registerGetBusinessUsers(): string {
     const successDataSchema = z.object({
-      users: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string().optional(),
-          email: z.string().optional(),
-          first_name: z.string().optional(),
-          last_name: z.string().optional(),
-          role: z.string().optional(),
-          title: z.string().optional(),
-          finance_permission: z.string().optional(),
-          ip_permission: z.string().optional(),
-          two_fac_status: z.string().optional(),
-          pending_email: z.string().optional(),
-        })
-      ),
-      businessId: z.string(),
+      businessUsers: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            email: z.string().optional(),
+            role: z.string().optional(),
+            permissions: z.array(z.string()).optional(),
+          })
+        )
+        .describe('List of users in the business account.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_business_users',
       {
         title: 'Get Business Users',
-        description:
-          'List users associated with a specific business manager. Requires business_management permission. For best performance, call `get_business_accounts` first to find the correct `businessId` to use.',
+        description: 'Retrieves users for a specific business account.',
         inputSchema: {
-          businessId: z
-            .string()
-            .describe(
-              'The ID of the business to get users for. Use get_business_accounts first to find available business IDs.'
-            ),
+          businessId: z.string().describe('The ID of the business account.'),
         },
         successDataSchema,
       },

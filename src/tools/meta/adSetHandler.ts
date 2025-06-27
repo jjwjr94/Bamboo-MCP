@@ -10,9 +10,12 @@ import {
   MetaDeleteSuccessResponseSchema,
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
+import type {
+  CreateAdSetRequest,
+  UpdateAdSetRequest,
+} from '../../mcp/registries/AdSetToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { CreateAdSetRequest, UpdateAdSetRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';

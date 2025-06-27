@@ -8,7 +8,6 @@ import {
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { InsightMetric } from '../../types/meta.js';
 import { ValidationError } from '../../utils/errors.js';
-import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
 
@@ -31,7 +30,7 @@ const DEFAULT_METRICS: InsightMetric[] = ['spend', 'impressions', 'clicks', 'ctr
 export class InsightsToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   // Static schema definitions remain here
   public static readonly GetAdInsightsInputSchema = z.object({
@@ -158,25 +157,20 @@ export class InsightsToolRegistry implements IToolRegistry {
     return 'Insights';
   }
 
-  /**
-   * Register all insights-related MCP tools
-   */
-  public register(): void {
-    logger.info('Registering Insights MCP tools');
-
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
-
-    logger.info('Insights MCP tools registered', { count: this.getToolCount() });
+    return registeredToolNames;
   }
 
-  private registerGetAdInsights(): void {
+  private registerGetAdInsights(): string {
     const successDataSchema = z.object({
       insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_ad_insights',
       {
@@ -205,12 +199,12 @@ export class InsightsToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerGetAdAccountInsights(): void {
+  private registerGetAdAccountInsights(): string {
     const successDataSchema = z.object({
       insights: z.array(MetaAdsInsightsResponseSchema).describe('A list of insight data records.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_ad_account_insights',
       {

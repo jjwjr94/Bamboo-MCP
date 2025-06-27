@@ -9,7 +9,7 @@ import { createMcpTool } from './registryHelper.js';
 export class AdsArchiveToolRegistry implements IToolRegistry {
   private server: McpServer;
   private toolsHandler: MetaToolsHandler;
-  private readonly registrationMethods: (() => void)[];
+  private readonly registrationMethods: (() => string)[];
 
   // Input schema for general ads archive search
   public static readonly SearchAdsArchiveInputSchema = z.object({
@@ -158,76 +158,70 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
   }
 
   public getRegistryName(): string {
-    return 'AdsArchive';
+    return 'Ads Archive';
   }
 
-  /**
-   * Register all ads archive-related MCP tools
-   */
-  public register(): void {
+  public register(): string[] {
+    const registeredToolNames: string[] = [];
     for (const registerMethod of this.registrationMethods) {
-      registerMethod();
+      registeredToolNames.push(registerMethod());
     }
+    return registeredToolNames;
   }
 
-  private registerSearchAdsArchive(): void {
+  private registerSearchAdsArchive(): string {
     const successDataSchema = z.object({
-      ads: z
-        .array(MetaAdsArchiveResponseSchema)
-        .describe('A list of archived ads matching the search criteria.'),
+      ads: z.array(MetaAdsArchiveResponseSchema).describe('A list of ads from Meta Ad Library.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'search_ads_archive',
       {
         title: 'Search Ads Archive',
         description:
-          'Search the Meta Ads Archive (Ad Library) for public archived ads. Useful for competitive intelligence, research, and transparency reporting. Returns general archived ads from Facebook and Instagram.',
+          'Searches Meta Ad Library for active and inactive ads to research competitors, trends, and best practices.',
         inputSchema: AdsArchiveToolRegistry.SearchAdsArchiveInputSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchAdsArchive(authPayload, params),
-      'Successfully retrieved archived ads.'
+      'Successfully searched ads archive.'
     );
   }
 
-  private registerGetPoliticalAds(): void {
+  private registerGetPoliticalAds(): string {
     const successDataSchema = z.object({
-      political_ads: z
+      ads: z
         .array(MetaAdsArchiveResponseSchema)
-        .describe('A list of political and social issue ads with transparency data.'),
+        .describe('A list of political ads from Meta Ad Library.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_political_ads',
       {
-        title: 'Get Political & Issue Ads',
+        title: 'Get Political Ads',
         description:
-          'Search for political and social issue ads in the Meta Ads Archive. Returns ads with enhanced transparency data including funding entities, demographic targeting, and regional distribution. Essential for political advertising compliance and research.',
+          'Retrieves political ads from the Meta Ad Library with enhanced transparency data.',
         inputSchema: AdsArchiveToolRegistry.GetPoliticalAdsInputSchema.shape,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getPoliticalAds(authPayload, params),
-      'Successfully retrieved political and issue ads.'
+      'Successfully retrieved political ads.'
     );
   }
 
-  private registerGetPageArchiveAds(): void {
+  private registerGetPageArchiveAds(): string {
     const successDataSchema = z.object({
-      page_ads: z
-        .array(MetaAdsArchiveResponseSchema)
-        .describe('A list of archived ads from specified Facebook pages.'),
+      ads: z.array(MetaAdsArchiveResponseSchema).describe('A list of ads from a specific page.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_page_archive_ads',
       {
         title: 'Get Page Archive Ads',
-        description:
-          'Search archived ads from specific Facebook pages. Returns ads published by the specified pages along with engagement metrics and historical data. Useful for competitive analysis and brand monitoring.',
+        description: 'Retrieves all ads from a specific Facebook Page via the Ad Library.',
         inputSchema: AdsArchiveToolRegistry.GetPageArchiveAdsInputSchema.shape,
         successDataSchema,
       },
@@ -236,20 +230,20 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
     );
   }
 
-  private registerGetAdsArchiveInsights(): void {
+  private registerGetAdsArchiveInsights(): string {
     const successDataSchema = z.object({
-      ads_insights: z
+      insights: z
         .array(MetaAdsArchiveResponseSchema)
-        .describe('Enhanced archived ads data with demographic and regional insights.'),
+        .describe('Aggregated insights data from Ad Library.'),
     });
 
-    createMcpTool(
+    return createMcpTool(
       this.server,
       'get_ads_archive_insights',
       {
         title: 'Get Ads Archive Insights',
         description:
-          'Advanced search for archived ads with enhanced demographic and regional data. Returns detailed insights including age and gender targeting, regional distribution, and estimated spend ranges for transparency reporting.',
+          'Retrieves aggregated insights about ad spending and delivery from the Meta Ad Library.',
         inputSchema: AdsArchiveToolRegistry.GetAdsArchiveInsightsInputSchema.shape,
         successDataSchema,
       },
