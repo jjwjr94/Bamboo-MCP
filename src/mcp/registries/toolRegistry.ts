@@ -40,8 +40,20 @@ export class ToolRegistry {
     ];
   }
 
-  public register() {
-    // Step 1: Register all sub-registries and collect their tool names
+  public register(): string[] {
+    const subRegistryToolNames = this.registerSubRegistries();
+    const mainToolNames = this.getMainToolNames();
+    this.validateNoDuplicateMainTools(subRegistryToolNames, mainToolNames);
+
+    const allToolNames = [...mainToolNames, ...subRegistryToolNames];
+    this.registerMainTools(allToolNames);
+
+    logger.info('Registered main MCP tools', { count: mainToolNames.length });
+    return allToolNames;
+  }
+
+  private registerSubRegistries(): string[] {
+    const allRegisteredToolNames = new Set<string>();
     const subRegistryToolNames: string[] = [];
     logger.info('Registering tool registries and collecting tool names...');
     let totalToolsRegistered = 0;
@@ -53,6 +65,8 @@ export class ToolRegistry {
           `Attempting to register ${registryName} registry (${registry.getToolCount()} tools)`
         );
         const registeredNames = registry.register();
+
+        this.checkForDuplicateTools(registeredNames, allRegisteredToolNames, registryName);
         subRegistryToolNames.push(...registeredNames);
         totalToolsRegistered += registry.getToolCount();
       } catch (error) {
@@ -61,18 +75,52 @@ export class ToolRegistry {
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
+        throw error; // Re-throw to prevent partial initialization
       }
     }
 
     logger.info(
       `Registry registration complete. Total sub-tools registered: ${totalToolsRegistered}`
     );
+    return subRegistryToolNames;
+  }
 
-    // Step 2: Define main tool names and create complete tool list
-    const mainToolNames = ['get_ad_accounts', 'select_ad_account'];
-    const allToolNames = [...mainToolNames, ...subRegistryToolNames];
+  private checkForDuplicateTools(
+    registeredNames: string[],
+    allRegisteredToolNames: Set<string>,
+    registryName: string
+  ): void {
+    for (const name of registeredNames) {
+      if (allRegisteredToolNames.has(name)) {
+        throw new Error(`Duplicate tool name detected: '${name}' from registry '${registryName}'.`);
+      }
+      allRegisteredToolNames.add(name);
+    }
+  }
 
-    // Step 3: Register main tools with complete tool list
+  private getMainToolNames(): string[] {
+    return ['get_ad_accounts', 'select_ad_account', 'get_tool_manifest'];
+  }
+
+  private validateNoDuplicateMainTools(
+    subRegistryToolNames: string[],
+    mainToolNames: string[]
+  ): void {
+    const subToolSet = new Set(subRegistryToolNames);
+    for (const mainTool of mainToolNames) {
+      if (subToolSet.has(mainTool)) {
+        throw new Error(`Main tool name '${mainTool}' conflicts with a sub-registry tool.`);
+      }
+    }
+  }
+
+  private registerMainTools(allToolNames: string[]): void {
+    this.registerGetAdAccounts(allToolNames);
+    this.registerSelectAdAccount();
+    this.registerGetToolManifest(allToolNames);
+  }
+
+  private registerGetAdAccounts(allToolNames: string[]): void {
     const getAdAccountsSuccessDataSchema = z.object({
       adAccounts: z
         .array(
@@ -108,7 +156,9 @@ export class ToolRegistry {
       'Successfully retrieved ad accounts with permissions and context.',
       { attachPrompts: true, toolNames: allToolNames }
     );
+  }
 
+  private registerSelectAdAccount(): void {
     const selectAdAccountSuccessDataSchema = z.object({
       selectedAccount: z.string(),
     });
@@ -140,7 +190,31 @@ export class ToolRegistry {
       },
       'Successfully selected ad account.'
     );
+  }
 
-    logger.info('Registered main MCP tools', { count: 2 });
+  private registerGetToolManifest(allToolNames: string[]): void {
+    const getToolManifestSuccessDataSchema = z.object({
+      tools: z.array(z.string()).describe('A list of all available tool names.'),
+      totalCount: z.number().describe('Total number of available tools.'),
+    });
+
+    createMcpTool(
+      this.server,
+      'get_tool_manifest',
+      {
+        title: 'Get Tool Manifest',
+        description: 'Retrieves a comprehensive list of all available tools that can be called.',
+        inputSchema: {},
+        successDataSchema: getToolManifestSuccessDataSchema,
+      },
+      async () => {
+        const sortedToolNames = allToolNames.sort();
+        return {
+          tools: sortedToolNames,
+          totalCount: sortedToolNames.length,
+        };
+      },
+      'Successfully retrieved the tool manifest.'
+    );
   }
 }

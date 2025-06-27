@@ -183,9 +183,14 @@ describe('MetaCampaignHandler', () => {
     const validCampaignParams = {
       name: 'Test Campaign Creation',
       objective: 'OUTCOME_LEADS' as const,
+      buying_type: 'AUCTION' as const,
       status: 'PAUSED' as const,
-      dailyBudget: 5000,
-      specialAdCategories: ['NONE' as const],
+      budget: {
+        daily: 5000,
+      },
+      specialAd: {
+        categories: ['NONE' as const],
+      },
       adAccountId: TEST_AD_ACCOUNT_ID,
     };
 
@@ -214,15 +219,16 @@ describe('MetaCampaignHandler', () => {
       expect(requestBody?.name).toBe(validCampaignParams.name);
       expect(requestBody?.objective).toBe(validCampaignParams.objective);
       expect(requestBody?.status).toBe(validCampaignParams.status);
-      expect(requestBody?.daily_budget).toBe(validCampaignParams.dailyBudget);
-      expect(requestBody?.special_ad_categories).toEqual(validCampaignParams.specialAdCategories);
+      expect(requestBody?.daily_budget).toBe(validCampaignParams.budget.daily);
+      expect(requestBody?.special_ad_categories).toEqual(validCampaignParams.specialAd.categories);
     });
 
     it('should create campaign with lifetime budget instead of daily budget', async () => {
       const lifetimeBudgetParams = {
         ...validCampaignParams,
-        dailyBudget: undefined,
-        lifetimeBudget: 100000,
+        budget: {
+          lifetime: 100000,
+        },
       };
 
       server.use(
@@ -243,8 +249,10 @@ describe('MetaCampaignHandler', () => {
     it('should throw ValidationError when both daily and lifetime budgets are provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
-        dailyBudget: 5000,
-        lifetimeBudget: 100000,
+        budget: {
+          daily: 5000,
+          lifetime: 100000,
+        },
       };
 
       // Act & Assert
@@ -253,15 +261,14 @@ describe('MetaCampaignHandler', () => {
       );
 
       await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        'A campaign must have either a dailyBudget or a lifetimeBudget, but not both'
+        'A campaign must have either a daily or lifetime budget, but not both'
       );
     });
 
     it('should throw ValidationError when neither daily nor lifetime budget is provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
-        dailyBudget: undefined,
-        lifetimeBudget: undefined,
+        budget: {},
       };
 
       // Act & Assert
@@ -270,15 +277,17 @@ describe('MetaCampaignHandler', () => {
       );
 
       await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        'A campaign must have either a dailyBudget or a lifetimeBudget'
+        'A campaign must have either a daily or lifetime budget'
       );
     });
 
     it('should throw ValidationError when special ad category requires country but none provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
-        specialAdCategories: ['EMPLOYMENT' as const],
-        specialAdCategoryCountry: [],
+        specialAd: {
+          categories: ['EMPLOYMENT' as const],
+          country: [],
+        },
       };
 
       // Act & Assert
@@ -287,7 +296,7 @@ describe('MetaCampaignHandler', () => {
       );
 
       await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        'specialAdCategoryCountry'
+        "The 'country' parameter is required when 'categories' contains values other than 'NONE'"
       );
     });
 
@@ -324,7 +333,7 @@ describe('MetaCampaignHandler', () => {
     const updateParams = {
       campaignId,
       name: 'Updated Campaign Name',
-      status: 'ACTIVE',
+      status: 'ACTIVE' as const,
     };
 
     it('should update campaign with correct parameters', async () => {
@@ -399,6 +408,20 @@ describe('MetaCampaignHandler', () => {
       // Assert
       expect(result).toBeDefined();
       expect(result.campaignId).toBe(campaignId);
+    });
+
+    it('should throw ValidationError if confirmPermanentDelete is missing', async () => {
+      // Act & Assert
+      await expect(handler.deleteCampaign(mockAuthPayload, { campaignId })).rejects.toThrow(
+        'Permanent deletion was not confirmed.'
+      );
+    });
+
+    it('should throw ValidationError if confirmPermanentDelete is false', async () => {
+      // Act & Assert
+      await expect(
+        handler.deleteCampaign(mockAuthPayload, { campaignId, confirmPermanentDelete: false })
+      ).rejects.toThrow('Permanent deletion was not confirmed.');
     });
 
     it('should throw MetaApiError when campaign not found for deletion', async () => {

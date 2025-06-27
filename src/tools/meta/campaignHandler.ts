@@ -13,6 +13,10 @@ import type {
   CreateCampaignRequest,
   UpdateCampaignRequest,
 } from '../../mcp/registries/CampaignToolRegistry.js';
+import {
+  CreateCampaignSchema,
+  UpdateCampaignSchema,
+} from '../../mcp/registries/CampaignToolRegistry.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
@@ -30,52 +34,11 @@ import type {
   UpdateCampaignResult,
 } from './types.js';
 
-// Define validation schemas for campaigns
-const BudgetXorValidationSchema = z
-  .object({
-    dailyBudget: z.number().optional(),
-    lifetimeBudget: z.number().optional(),
-  })
-  .refine(
-    (data) =>
-      (data.dailyBudget && !data.lifetimeBudget) || (!data.dailyBudget && data.lifetimeBudget),
-    {
-      message: 'A campaign must have either a dailyBudget or a lifetimeBudget, but not both.',
-      path: ['dailyBudget'],
-    }
-  );
+// Note: Validation is now handled by the Zod schemas in the registry files
 
-const SpecialAdCategoryValidationSchema = z
-  .object({
-    specialAdCategories: z.array(z.string()),
-    specialAdCategoryCountry: z.array(z.string()).optional(),
-  })
-  .refine(
-    (data) => {
-      const hasSpecialCategory = data.specialAdCategories.some((cat) => cat !== 'NONE');
-      return (
-        !hasSpecialCategory ||
-        (data.specialAdCategoryCountry && data.specialAdCategoryCountry.length > 0)
-      );
-    },
-    {
-      message:
-        "The 'specialAdCategoryCountry' parameter is required when 'specialAdCategories' contains values other than 'NONE'.",
-      path: ['specialAdCategoryCountry'],
-    }
-  );
-
-const UpdateBudgetValidationSchema = z
-  .object({
-    dailyBudget: z.number().optional(),
-    lifetimeBudget: z.number().optional(),
-  })
-  .refine((data) => !(data.dailyBudget && data.lifetimeBudget), {
-    message: 'Provide either dailyBudget or lifetimeBudget for an update, but not both.',
-    path: ['dailyBudget'],
-  });
-
+// Deletion validation schema for defense-in-depth
 const DeleteCampaignValidationSchema = z.object({
+  campaignId: z.string().min(1),
   confirmPermanentDelete: DeletionConfirmationSchema,
 });
 
@@ -161,16 +124,11 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
-    const budgetValidation = BudgetXorValidationSchema.safeParse(params);
-    if (!budgetValidation.success) {
-      const error = budgetValidation.error.errors[0];
-      throw new ValidationError(error.message);
-    }
-
-    const sacValidation = SpecialAdCategoryValidationSchema.safeParse(params);
-    if (!sacValidation.success) {
-      const error = sacValidation.error.errors[0];
-      throw new ValidationError(error.message);
+    // Validate using the refined schema to catch XOR budget validation and special ad category validation
+    const validationResult = CreateCampaignSchema.safeParse(params);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map((err) => err.message).join('; ');
+      throw new ValidationError(`Campaign validation failed: ${errorMessages}`);
     }
 
     return await handleMetaApiCall(
@@ -188,10 +146,10 @@ export class MetaCampaignHandler {
           objective: params.objective,
           buyingType: params.buying_type || 'AUCTION',
           status: params.status || 'PAUSED',
-          dailyBudget: params.dailyBudget,
-          lifetimeBudget: params.lifetimeBudget,
-          specialAdCategories: params.specialAdCategories,
-          specialAdCategoryCountry: params.specialAdCategoryCountry,
+          dailyBudget: params.budget?.daily,
+          lifetimeBudget: params.budget?.lifetime,
+          specialAdCategories: params.specialAd.categories,
+          specialAdCategoryCountry: params.specialAd.country,
         };
 
         // Convert keys to snake_case and remove undefined properties
@@ -241,10 +199,11 @@ export class MetaCampaignHandler {
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
-    const budgetValidation = UpdateBudgetValidationSchema.safeParse(params);
-    if (!budgetValidation.success) {
-      const error = budgetValidation.error.errors[0];
-      throw new ValidationError(error.message);
+    // Validate using the refined schema to catch XOR budget validation
+    const validationResult = UpdateCampaignSchema.safeParse(params);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map((err) => err.message).join('; ');
+      throw new ValidationError(`Campaign update validation failed: ${errorMessages}`);
     }
 
     return await handleMetaApiCall(
@@ -252,7 +211,16 @@ export class MetaCampaignHandler {
         const api = await createMetaApiInstance(authPayload.userId);
 
         // Separate campaignId from fields to be updated
-        const { campaignId, ...updateFields } = params;
+        const { campaignId, budget, ...otherUpdateFields } = params;
+
+        // Prepare update data with budget fields flattened if budget is provided
+        const updateFields = {
+          ...otherUpdateFields,
+          ...(budget && {
+            dailyBudget: budget.daily,
+            lifetimeBudget: budget.lifetime,
+          }),
+        };
 
         // Convert keys to snake_case and remove undefined properties
         const updateData = convertKeysToSnakeCase(updateFields);
@@ -293,10 +261,11 @@ export class MetaCampaignHandler {
   ): Promise<DeleteCampaignResult> {
     logger.info('Executing delete_campaign', { userId: authPayload.userId, params });
 
+    // Defense-in-depth validation for deletion confirmation
     const validationResult = DeleteCampaignValidationSchema.safeParse(params);
     if (!validationResult.success) {
       const error = validationResult.error.errors[0];
-      throw new ValidationError(error.message);
+      throw new ValidationError(error?.message || 'Campaign deletion validation failed.');
     }
 
     return await handleMetaApiCall(

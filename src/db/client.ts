@@ -6,7 +6,6 @@ import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import * as schema from './schema.js';
 
-// FIX: Remove prepare property as it's not supported in the current version
 const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: env.DB_POOL_MAX,

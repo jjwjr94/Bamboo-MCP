@@ -178,7 +178,6 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
     error?: string;
   }> {
     try {
-      // ATOMIC FIX: Use the new atomic method to prevent race conditions.
       const sessionData = await this.sessionManager.getAndClearSessionData(state);
       if (!sessionData) {
         // This now correctly handles both invalid and already-used states.

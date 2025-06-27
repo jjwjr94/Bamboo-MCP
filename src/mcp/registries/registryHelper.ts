@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ZodObject, ZodTypeAny } from 'zod';
+import type { ZodTypeAny } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { createMcpErrorResult } from '../errorHandler.js';
@@ -23,22 +23,17 @@ import { createMcpOutputSchema } from '../types.js';
  * @param options Optional configuration for the success result, including attachPrompts for context initialization.
  * @returns The tool name that was registered.
  */
-export function createMcpTool<
-  TInputSchema extends Record<string, ZodTypeAny>,
-  TSuccessSchema extends ZodTypeAny,
->(
+export function createMcpTool<TInputSchema extends ZodTypeAny, TSuccessSchema extends ZodTypeAny>(
   server: McpServer,
   toolName: string,
   definition: {
     title: string;
     description: string;
-    inputSchema: TInputSchema;
+    inputSchema: TInputSchema | Record<string, ZodTypeAny>;
     successDataSchema: TSuccessSchema;
   },
-  handlerCall: (
-    authPayload: JWTPayload,
-    params: z.infer<ZodObject<TInputSchema>>
-  ) => Promise<unknown>,
+  // biome-ignore lint/suspicious/noExplicitAny: Complex generic constraints require any for flexible parameter handling
+  handlerCall: (authPayload: JWTPayload, params: any) => Promise<unknown>,
   successMessage: string,
   options?: CreateMcpSuccessResultOptions
 ): string {
@@ -55,7 +50,8 @@ export function createMcpTool<
         const authPayload = extractAuthPayload(extra);
 
         // Call the handler which now returns a clean domain object
-        const typedParams = params as unknown as z.infer<ZodObject<TInputSchema>>;
+        // biome-ignore lint/suspicious/noExplicitAny: Runtime type assertion needed for MCP parameter handling
+        const typedParams = params as any;
         const domainResult = await handlerCall(authPayload, typedParams);
 
         // Automatically wrap the clean result into the MCP success format
@@ -79,3 +75,26 @@ export const DeletionConfirmationSchema = z.literal(true, {
     message: 'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.',
   }),
 });
+
+/**
+ * Creates a standardized success schema for delete operations.
+ * @param idKey The name of the ID field (e.g., 'campaignId', 'adSetId').
+ * @param description Optional description for the ID field.
+ */
+export function createDeletionSuccessSchema(idKey: string, description?: string) {
+  return z.object({
+    [idKey]: z.string().describe(description || `The ${idKey} that was deleted.`),
+  });
+}
+
+/**
+ * Creates a standardized success schema for bulk delete operations.
+ * @param idKey The name of the ID field (e.g., 'campaignIds', 'adSetIds').
+ * @param description Optional description for the ID array field.
+ */
+export function createBulkDeletionSuccessSchema(idKey: string, description?: string) {
+  return z.object({
+    [idKey]: z.array(z.string()).describe(description || `The ${idKey} that were deleted.`),
+    deletedCount: z.number().describe('The number of items successfully deleted.'),
+  });
+}

@@ -1,12 +1,8 @@
 import 'dotenv/config';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { MetaToolsHandler } from '../tools/meta/toolsHandler.js';
 import { logger } from '../utils/logger.js';
-import { PromptRegistry } from './PromptRegistry.js';
-import { ResourceRegistry } from './ResourceRegistry.js';
 import { CoreServices } from './coreServices.js';
-import { ToolRegistry } from './registries/toolRegistry.js';
 
 export class BambooMCPServer {
   private server: McpServer;
@@ -14,44 +10,19 @@ export class BambooMCPServer {
   private readonly requestId: string | undefined;
 
   /**
-   * Creates a new, lightweight BambooMCPServer instance for a single request.
-   * All expensive resources are passed in via the CoreServices singleton.
+   * Creates a new, lightweight BambooMCPServer instance that references the singleton MCP server.
+   * All tool registration and expensive setup is done once in CoreServices.
    */
   constructor(coreServices: CoreServices, requestId?: string) {
     this.requestId = requestId;
-    const promptCache = coreServices.promptCache;
-    const systemPrompt = promptCache.getSystemPromptContent();
-    const bestPractices = promptCache.getBestPracticesPromptContent();
-    const instructions = `# Bamboo Meta Ads AI Agent Instructions
 
-You are an expert Meta advertising specialist. Use these instructions and context for all interactions:
+    // Get the pre-configured singleton MCP server from CoreServices
+    this.server = coreServices.getMcpServer();
 
-## System Context
-${systemPrompt || 'System prompt not available'}
-
-## Best Practices
-${bestPractices || 'Best practices not available'}
-
-Use this context to provide expert guidance on Meta advertising operations, campaign optimization, and strategic recommendations.`;
-
-    this.server = new McpServer(
-      { name: 'Bamboo MCP', version: '0.1.0' },
-      {
-        capabilities: { tools: {}, resources: {}, prompts: {} },
-        instructions,
-      }
-    );
-
-    const toolsHandler = new MetaToolsHandler();
-    const promptRegistry = new PromptRegistry(this.server);
-    const resourceRegistry = new ResourceRegistry(this.server);
-    const toolRegistry = new ToolRegistry(this.server, toolsHandler);
-
-    promptRegistry.register();
-    resourceRegistry.register();
-    toolRegistry.register();
-
-    logger.debug('Per-request BambooMCPServer instance created.', { requestId: this.requestId });
+    logger.debug('BambooMCPServer instance created with singleton MCP server reference.', {
+      requestId: this.requestId,
+      toolCount: coreServices.getToolNames().length,
+    });
   }
 
   public static async create(): Promise<BambooMCPServer> {
@@ -66,6 +37,7 @@ Use this context to provide expert guidance on Meta advertising operations, camp
   /**
    * Gracefully and idempotently shuts down the per-request MCP server instance.
    * This method can be called multiple times without causing errors.
+   * Note: This does NOT shut down the singleton MCP server itself, only the reference.
    */
   public async shutdown(): Promise<void> {
     if (this.isShutdown) {
@@ -73,19 +45,12 @@ Use this context to provide expert guidance on Meta advertising operations, camp
       return;
     }
 
-    logger.debug('Shutting down MCP server', { requestId: this.requestId });
+    logger.debug('Shutting down MCP server reference', { requestId: this.requestId });
     this.isShutdown = true;
 
-    try {
-      await this.server.close();
-      logger.debug('MCP server shutdown complete', { requestId: this.requestId });
-    } catch (error) {
-      logger.error('MCP server shutdown error', {
-        requestId: this.requestId,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    }
+    // Note: We don't close the actual MCP server since it's a singleton
+    // Only log the completion of this instance's shutdown
+    logger.debug('MCP server reference shutdown complete', { requestId: this.requestId });
   }
 
   public async runStdio() {

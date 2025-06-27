@@ -11,6 +11,60 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
+// Campaign Budget Schema with internal XOR validation
+const CampaignBudgetSchema = z
+  .object({
+    daily: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Daily budget in cents (e.g., 1000 = $10.00)'),
+    lifetime: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Lifetime budget in cents (e.g., 10000 = $100.00)'),
+  })
+  .refine(
+    ({ daily, lifetime }) => !!daily !== !!lifetime, // XOR: exactly one should be defined
+    {
+      message: 'A campaign must have either a daily or lifetime budget, but not both.',
+      path: ['daily'],
+    }
+  );
+
+// Special Ad Category Schema with internal validation
+const SpecialAdSchema = z
+  .object({
+    categories: z
+      .array(CampaignSpecialAdCategoriesSchema)
+      .default(['NONE'])
+      .describe(
+        "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
+      ),
+    country: z
+      .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
+      .optional()
+      .describe(
+        "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when categories is not ['NONE']."
+      ),
+  })
+  .superRefine((data, ctx) => {
+    // Special Ad Category Validation - ensure country is provided when special categories are used
+    const hasSpecialCategory = data.categories.some((cat) => cat !== 'NONE');
+
+    if (hasSpecialCategory && (!data.country || data.country.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "The 'country' parameter is required when 'categories' contains values other than 'NONE'.",
+        path: ['country'],
+      });
+    }
+  });
+
 // CreateCampaign schema - single source of truth for campaign creation
 export const CreateCampaignSchema = z.object({
   adAccountId: z
@@ -28,34 +82,10 @@ export const CreateCampaignSchema = z.object({
       "The buying type for the campaign. Defaults to 'AUCTION'. RESERVED is for guaranteed delivery campaigns."
     ),
   status: CampaignStatusSchema.default('PAUSED').describe('The campaign status.'),
-  dailyBudget: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
-    ),
-  lifetimeBudget: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
-    ),
-  specialAdCategories: z
-    .array(CampaignSpecialAdCategoriesSchema)
-    .default(['NONE'])
-    .describe(
-      "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
-    ),
-  specialAdCategoryCountry: z
-    .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
-    .optional()
-    .describe(
-      "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when specialAdCategories is not ['NONE']."
-    ),
+  budget: CampaignBudgetSchema.describe(
+    'Budget configuration for the campaign. Provide either daily or lifetime budget.'
+  ),
+  specialAd: SpecialAdSchema.describe('Special ad category configuration.'),
 });
 
 // UpdateCampaign schema - single source of truth for campaign updates
@@ -63,21 +93,28 @@ export const UpdateCampaignSchema = z.object({
   campaignId: z.string().describe('The ID of the campaign to update.'),
   name: z.string().optional().describe('New name for the campaign.'),
   status: CampaignStatusSchema.optional().describe('New status for the campaign.'),
-  dailyBudget: z
-    .number()
-    .int()
-    .positive()
+  budget: z
+    .object({
+      daily: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('New daily budget in cents (e.g., 1000 = $10.00)'),
+      lifetime: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('New lifetime budget in cents (e.g., 10000 = $100.00)'),
+    })
     .optional()
+    .refine((budget) => !budget || !(budget.daily && budget.lifetime), {
+      message: 'Provide either daily or lifetime budget for an update, but not both.',
+      path: ['daily'],
+    })
     .describe(
-      'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
-    ),
-  lifetimeBudget: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
+      'New budget for the campaign. If provided, specify either daily or lifetime, not both.'
     ),
 });
 
