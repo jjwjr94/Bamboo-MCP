@@ -34,7 +34,8 @@ import type {
   UpdateCampaignResult,
 } from './types.js';
 
-// Note: Validation is now handled by the Zod schemas in the registry files
+// Note: Complete validation (static + business logic) is handled by the schemas from the registry
+// since MCP framework can't handle refinements when using .shape
 
 // Deletion validation schema for defense-in-depth
 const DeleteCampaignValidationSchema = z.object({
@@ -124,11 +125,11 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
-    // Validate using the refined schema to catch XOR budget validation and special ad category validation
+    // Validate using the complete schema (MCP framework can't handle refinements with .shape)
     const validationResult = CreateCampaignSchema.safeParse(params);
     if (!validationResult.success) {
-      const errorMessages = validationResult.error.errors.map((err) => err.message).join('; ');
-      throw new ValidationError(`Campaign validation failed: ${errorMessages}`);
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error?.message || 'Campaign validation failed.');
     }
 
     return await handleMetaApiCall(
@@ -199,11 +200,11 @@ export class MetaCampaignHandler {
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
-    // Validate using the refined schema to catch XOR budget validation
+    // Validate using the complete schema (MCP framework can't handle refinements with .shape)
     const validationResult = UpdateCampaignSchema.safeParse(params);
     if (!validationResult.success) {
-      const errorMessages = validationResult.error.errors.map((err) => err.message).join('; ');
-      throw new ValidationError(`Campaign update validation failed: ${errorMessages}`);
+      const error = validationResult.error.errors[0];
+      throw new ValidationError(error?.message || 'Campaign update validation failed.');
     }
 
     return await handleMetaApiCall(

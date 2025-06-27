@@ -35,7 +35,7 @@ const CampaignBudgetSchema = z
     }
   );
 
-// Special Ad Category Schema with internal validation
+// Special Ad Category Schema with business logic validation
 const SpecialAdSchema = z
   .object({
     categories: z
@@ -52,9 +52,8 @@ const SpecialAdSchema = z
       ),
   })
   .superRefine((data, ctx) => {
-    // Special Ad Category Validation - ensure country is provided when special categories are used
+    // Special Ad Category Validation: Ensure country is provided when special categories are used.
     const hasSpecialCategory = data.categories.some((cat) => cat !== 'NONE');
-
     if (hasSpecialCategory && (!data.country || data.country.length === 0)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
