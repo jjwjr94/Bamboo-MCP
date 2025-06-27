@@ -150,19 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.reload();
   }
 
-  // Handler for close button functionality
-  function handleCloseButtonClick() {
-    window.close();
-
-    // Show fallback message if window doesn't close automatically
-    setTimeout(() => {
-      const fallback = document.getElementById('close-fallback');
-      if (fallback) {
-        fallback.style.display = 'block';
-      }
-    }, 500);
-  }
-
   // Single event listener using modern event delegation pattern
   document.body.addEventListener('click', async (event) => {
     const target = event.target;
@@ -178,13 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (target.id === 'tryAgainBtn' || target.id === 'reloadBtn') {
       event.preventDefault();
       handleReloadButtonClick();
-      return;
-    }
-
-    // Handle "Close Window" button clicks
-    if (target.id === 'closeBtn') {
-      event.preventDefault();
-      handleCloseButtonClick();
       return;
     }
   });

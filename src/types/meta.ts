@@ -111,9 +111,9 @@ export interface CreateAdRequest {
   name: string;
   creativeId: string;
   status?: CampaignStatus;
-  creative_features_spec?: {
-    standard_enhancements?: {
-      enroll_status?: 'OPT_IN' | 'OPT_OUT';
+  creativeFeaturesSpec?: {
+    standardEnhancements?: {
+      enrollStatus?: 'OPT_IN' | 'OPT_OUT';
     };
   };
 }

@@ -16,7 +16,7 @@ import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
@@ -179,17 +179,20 @@ export class MetaCampaignHandler {
           params.adAccountId
         );
 
-        const campaignData: Record<string, unknown> = {
-          [MetaCampaignSDK.Fields.name]: params.name,
-          [MetaCampaignSDK.Fields.objective]: params.objective,
-          [MetaCampaignSDK.Fields.buying_type]: params.buying_type || 'AUCTION',
-          [MetaCampaignSDK.Fields.status]: params.status || 'PAUSED',
-          [MetaCampaignSDK.Fields.daily_budget]: params.dailyBudget,
-          [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
-          [MetaCampaignSDK.Fields.special_ad_categories]: params.specialAdCategories,
-          [MetaCampaignSDK.Fields.special_ad_category_country]: params.specialAdCategoryCountry,
+        // Create a consolidated, camelCased object for API parameters
+        const apiParams = {
+          name: params.name,
+          objective: params.objective,
+          buyingType: params.buying_type || 'AUCTION',
+          status: params.status || 'PAUSED',
+          dailyBudget: params.dailyBudget,
+          lifetimeBudget: params.lifetimeBudget,
+          specialAdCategories: params.specialAdCategories,
+          specialAdCategoryCountry: params.specialAdCategoryCountry,
         };
 
+        // Convert keys to snake_case and remove undefined properties
+        const campaignData = convertKeysToSnakeCase(apiParams);
         removeUndefinedProperties(campaignData);
 
         const campaign = await new MetaAdAccountSDK(adAccountId, {}, null, api).createCampaign(
@@ -251,13 +254,11 @@ export class MetaCampaignHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const updateData: Record<string, unknown> = {
-          [MetaCampaignSDK.Fields.name]: params.name,
-          [MetaCampaignSDK.Fields.status]: params.status,
-          [MetaCampaignSDK.Fields.daily_budget]: params.dailyBudget,
-          [MetaCampaignSDK.Fields.lifetime_budget]: params.lifetimeBudget,
-        };
+        // Separate campaignId from fields to be updated
+        const { campaignId, ...updateFields } = params;
 
+        // Convert keys to snake_case and remove undefined properties
+        const updateData = convertKeysToSnakeCase(updateFields);
         removeUndefinedProperties(updateData);
 
         const campaign = new MetaCampaignSDK(params.campaignId, {}, null, api);

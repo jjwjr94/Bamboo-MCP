@@ -16,7 +16,7 @@ import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
@@ -115,7 +115,9 @@ export class MetaAdCreativeHandler {
 
         const adCreativeData: Record<string, unknown> = {
           [MetaAdCreativeSDK.Fields.name]: params.name,
-          [MetaAdCreativeSDK.Fields.object_story_spec]: params.objectStorySpec,
+          [MetaAdCreativeSDK.Fields.object_story_spec]: convertKeysToSnakeCase(
+            params.objectStorySpec
+          ),
         };
 
         removeUndefinedProperties(adCreativeData);

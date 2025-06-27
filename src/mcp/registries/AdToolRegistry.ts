@@ -115,11 +115,11 @@ export class AdToolRegistry implements IToolRegistry {
           name: z.string().describe('The name of the ad.'),
           creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
           status: AdStatusSchema.default('PAUSED').describe('The status of the ad.'),
-          creative_features_spec: z
+          creativeFeaturesSpec: z
             .object({
-              standard_enhancements: z
+              standardEnhancements: z
                 .object({
-                  enroll_status: z
+                  enrollStatus: z
                     .enum(['OPT_IN', 'OPT_OUT'])
                     .optional()
                     .describe('Enrollment status for standard enhancements.'),

@@ -19,7 +19,7 @@ import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
@@ -128,14 +128,17 @@ export class MetaAdHandler {
           params.adAccountId ||
           (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
 
-        const adData: Record<string, unknown> = {
-          [MetaAdSDK.Fields.name]: params.name,
-          [MetaAdSDK.Fields.adset_id]: params.adsetId,
-          [MetaAdSDK.Fields.creative]: { creative_id: params.creativeId },
-          [MetaAdSDK.Fields.status]: params.status,
-          creative_features_spec: params.creative_features_spec,
+        // Create a consolidated, camelCased object for API parameters
+        const apiParams = {
+          name: params.name,
+          adsetId: params.adsetId,
+          creative: { creativeId: params.creativeId },
+          status: params.status,
+          creativeFeaturesSpec: params.creativeFeaturesSpec,
         };
 
+        // Convert keys to snake_case and remove undefined properties
+        const adData = convertKeysToSnakeCase(apiParams);
         removeUndefinedProperties(adData);
 
         const ad = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAd([], adData);
@@ -174,15 +177,17 @@ export class MetaAdHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const updateData: Record<string, unknown> = {
-          [MetaAdSDK.Fields.name]: params.name,
-          [MetaAdSDK.Fields.status]: params.status,
-          // For creative updates, Meta API expects the creative field to be an object with creative_id
+        // Create a consolidated object for API parameters, handling creative field specially
+        const apiParams = {
+          name: params.name,
+          status: params.status,
           ...(params.creativeId && {
-            [MetaAdSDK.Fields.creative]: { creative_id: params.creativeId },
+            creative: { creativeId: params.creativeId },
           }),
         };
 
+        // Convert keys to snake_case and remove undefined properties
+        const updateData = convertKeysToSnakeCase(apiParams);
         removeUndefinedProperties(updateData);
 
         const ad = new MetaAdSDK(params.adId, {}, null, api);

@@ -15,11 +15,6 @@ export type UploadSuccessResult = {
 // All JavaScript functionality has been moved to /js/upload-scripts.js for CSP compliance
 
 // Reusable HTML components for common page elements
-const CLOSE_FALLBACK_HTML = `
-  <div id="close-fallback" style="display: none; text-align: center; margin-top: var(--bamboo-space-4); padding: var(--bamboo-space-3); background-color: var(--bamboo-color-surface); border-radius: var(--bamboo-border-radius);">
-    <p style="margin: 0; font-size: var(--bamboo-font-size-sm); color: var(--bamboo-color-text-light);">You can now safely close this tab or window.</p>
-  </div>
-`;
 
 /**
  * Renders the status header component with icon, title and subtitle
@@ -200,11 +195,6 @@ export function renderUploadSuccessPage({
       </div>
 
       ${renderAICopySection('Next Step: Validate with AI', 'Copy the message below and send it to your AI assistant to confirm the upload and continue your workflow.', aiPrompt)}
-
-      <div class="actions">
-        <button id="closeBtn" class="secondary">Close Window</button>
-      </div>
-      ${CLOSE_FALLBACK_HTML}
     `,
   });
 }
@@ -325,9 +315,7 @@ export function renderUploadFailedPage(
 
       <div class="actions">
         <button id="tryAgainBtn">Try Again</button>
-        <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      ${CLOSE_FALLBACK_HTML}
     `,
   });
 }
@@ -362,11 +350,6 @@ export function renderUploadSessionNotFoundPage(): string {
       ${renderStatusHeader('status-icon--error', '!', 'Session Not Found', 'This upload link is invalid, expired, or has already been used.')}
       
       ${renderAICopySection('Request a New Link', 'Copy the message below and send it to your AI assistant to get a new upload link.', aiPrompt)}
-
-      <div class="actions">
-        <button id="closeBtn" class="secondary">Close Window</button>
-      </div>
-      ${CLOSE_FALLBACK_HTML}
     `,
   });
 }
@@ -418,9 +401,7 @@ export function renderServerErrorPage(customMessage?: string): string {
       
       <div class="actions">
         <button id="reloadBtn">Try Again</button>
-        <button id="closeBtn" class="secondary">Close Window</button>
       </div>
-      ${CLOSE_FALLBACK_HTML}
     `,
   });
 }

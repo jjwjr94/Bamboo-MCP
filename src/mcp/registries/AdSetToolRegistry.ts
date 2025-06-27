@@ -12,6 +12,53 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
+// Base targeting schema definition
+const BaseTargetingSchema = z.object({
+  geoLocations: z.object({
+    countries: z
+      .array(
+        z
+          .string()
+          .toUpperCase()
+          .regex(
+            /^[A-Z]{2}$/,
+            "Must be a 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g., 'US', 'CA', 'GB')"
+          )
+      )
+      .optional(),
+    regions: z.array(z.object({ key: z.string() })).optional(),
+    cities: z.array(z.object({ key: z.string() })).optional(),
+  }),
+  ageMin: z.number().int().min(13).max(65).optional(),
+  ageMax: z.number().int().min(13).max(65).optional(),
+  genders: z
+    .array(z.enum(['1', '2']))
+    .optional()
+    .describe('1 = male, 2 = female'),
+  interests: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
+  behaviors: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
+  customAudiences: z.array(z.object({ id: z.string() })).optional(),
+  excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
+  flexibleSpec: z
+    .array(
+      z.object({
+        interests: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
+        behaviors: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
+      })
+    )
+    .optional(),
+  devicePlatforms: z.array(z.enum(['mobile', 'desktop'])).optional(),
+  publisherPlatforms: z
+    .array(z.enum(['facebook', 'instagram', 'messenger', 'audience_network']))
+    .optional(),
+});
+
+// Required targeting schema for create operations
+const CreateTargetingSchema = BaseTargetingSchema;
+
+// Optional targeting schema for update operations
+const UpdateTargetingSchema = BaseTargetingSchema.optional();
+
 /**
  * Ad Set Tool Registry
  *
@@ -122,61 +169,42 @@ export class AdSetToolRegistry implements IToolRegistry {
         inputSchema: {
           campaignId: z.string().describe('The ID of the campaign to create the ad set in.'),
           name: z.string().describe('The name of the ad set.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'Daily budget in cents (e.g., 1000 = $10.00). Provide either this or lifetimeBudget, but not both.'
-            ),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'Lifetime budget in cents (e.g., 10000 = $100.00). Provide either this or dailyBudget, but not both.'
-            ),
-          targeting: z
+          budget: z
             .object({
-              geoLocations: z
-                .object({
-                  countries: z
-                    .array(
-                      z
-                        .string()
-                        .toUpperCase()
-                        .regex(
-                          /^[A-Z]{2}$/,
-                          "Must be a 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g., 'US', 'CA', 'GB')"
-                        )
-                    )
-                    .optional(),
-                  regions: z.array(z.object({ key: z.string() })).optional(),
-                  cities: z.array(z.object({ key: z.string() })).optional(),
-                })
-                .describe(
-                  'Geographic targeting is required. Must specify at least one of countries, regions, or cities.'
-                ),
-              ageMin: z.number().int().min(13).max(65).optional(),
-              ageMax: z.number().int().min(13).max(65).optional(),
-              genders: z
-                .array(z.enum(['1', '2']))
+              daily: z
+                .number()
+                .int()
+                .positive()
                 .optional()
-                .describe('1 = male, 2 = female'),
-              interests: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              behaviors: z
-                .array(z.object({ id: z.string(), name: z.string().optional() }))
-                .optional(),
-              customAudiences: z.array(z.object({ id: z.string() })).optional(),
-              excludedCustomAudiences: z.array(z.object({ id: z.string() })).optional(),
+                .describe('Daily budget in cents (e.g., 1000 = $10.00)'),
+              lifetime: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe('Lifetime budget in cents (e.g., 10000 = $100.00)'),
             })
-            .describe(
-              'Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'
+            .refine(
+              ({ daily, lifetime }) => !!daily !== !!lifetime, // true = only-one-defined
+              {
+                message: 'Provide **either** daily **or** lifetime (one is required, not both).',
+                path: ['daily'],
+              }
             ),
+          targeting: CreateTargetingSchema.refine(
+            (data) =>
+              data &&
+              (data.geoLocations?.countries?.length ||
+                data.geoLocations?.regions?.length ||
+                data.geoLocations?.cities?.length),
+            {
+              message:
+                'Geographic targeting (geoLocations) is required and must specify at least one of countries, regions, or cities.',
+              path: ['geoLocations'],
+            }
+          ).describe(
+            'Targeting criteria for the ad set. Geographic targeting (geoLocations) is required.'
+          ),
           billingEvent: AdSetBillingEventSchema.describe(
             'Billing event for the ad set. Must be compatible with optimization goal.'
           ),
@@ -260,6 +288,11 @@ export class AdSetToolRegistry implements IToolRegistry {
               'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
             ),
           bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
+          targeting: UpdateTargetingSchema.describe(
+            'New targeting criteria for the ad set. When provided, this will completely overwrite the existing targeting settings.'
+          ),
+          startTime: z.string().optional().describe('New start time in ISO format.'),
+          endTime: z.string().optional().describe('New end time in ISO format.'),
         },
         successDataSchema,
       },

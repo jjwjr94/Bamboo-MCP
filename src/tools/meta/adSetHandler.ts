@@ -17,7 +17,7 @@ import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { ADSET_COMPATIBILITY, META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
@@ -260,25 +260,28 @@ export class MetaAdSetHandler {
           params.adAccountId
         );
 
-        const adSetData: Record<string, unknown> = {
-          [MetaAdSetSDK.Fields.name]: params.name,
-          [MetaAdSetSDK.Fields.campaign_id]: params.campaignId,
-          [MetaAdSetSDK.Fields.status]: params.status || 'PAUSED',
-          [MetaAdSetSDK.Fields.optimization_goal]: params.optimizationGoal,
-          [MetaAdSetSDK.Fields.billing_event]: params.billingEvent,
-          [MetaAdSetSDK.Fields.bid_strategy]: params.bidStrategy,
-          [MetaAdSetSDK.Fields.bid_amount]: params.bidAmount,
-          [MetaAdSetSDK.Fields.daily_budget]: params.dailyBudget,
-          [MetaAdSetSDK.Fields.lifetime_budget]: params.lifetimeBudget,
-          [MetaAdSetSDK.Fields.start_time]: params.startTime,
-          [MetaAdSetSDK.Fields.end_time]: params.endTime,
-          [MetaAdSetSDK.Fields.targeting]: params.targeting,
-          [MetaAdSetSDK.Fields.promoted_object]: params.promotedObject,
-          [MetaAdSetSDK.Fields.attribution_spec]: params.attributionSpec,
-          is_sac_cfca_terms_certified: params.isSacCfcaTermsCertified,
-          is_eligible_for_sac_campaigns: params.isEligibleForSacCampaigns,
+        // Create a consolidated, camelCased object for API parameters
+        const apiParams = {
+          name: params.name,
+          campaignId: params.campaignId,
+          status: params.status || 'PAUSED',
+          optimizationGoal: params.optimizationGoal,
+          billingEvent: params.billingEvent,
+          bidStrategy: params.bidStrategy,
+          bidAmount: params.bidAmount,
+          dailyBudget: params.dailyBudget,
+          lifetimeBudget: params.lifetimeBudget,
+          startTime: params.startTime,
+          endTime: params.endTime,
+          targeting: params.targeting,
+          promotedObject: params.promotedObject,
+          attributionSpec: params.attributionSpec,
+          isSacCfcaTermsCertified: params.isSacCfcaTermsCertified,
+          isEligibleForSacCampaigns: params.isEligibleForSacCampaigns,
         };
 
+        // Convert keys to snake_case and remove undefined properties
+        const adSetData = convertKeysToSnakeCase(apiParams);
         removeUndefinedProperties(adSetData);
 
         const adSet = await new MetaAdAccountSDK(adAccountId, {}, null, api).createAdSet(
@@ -345,16 +348,11 @@ export class MetaAdSetHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const updateData = {
-          [MetaAdSetSDK.Fields.name]: params.name,
-          [MetaAdSetSDK.Fields.status]: params.status,
-          [MetaAdSetSDK.Fields.daily_budget]: params.dailyBudget,
-          [MetaAdSetSDK.Fields.lifetime_budget]: params.lifetimeBudget,
-          [MetaAdSetSDK.Fields.bid_amount]: params.bidAmount,
-          [MetaAdSetSDK.Fields.targeting]: params.targeting,
-          [MetaAdSetSDK.Fields.start_time]: params.startTime,
-          [MetaAdSetSDK.Fields.end_time]: params.endTime,
-        };
+        // Separate adSetId from fields to be updated
+        const { adSetId, ...updateFields } = params;
+
+        // Convert keys to snake_case and remove undefined properties
+        const updateData = convertKeysToSnakeCase(updateFields);
         removeUndefinedProperties(updateData);
 
         const adSet = new MetaAdSetSDK(params.adSetId, {}, null, api);

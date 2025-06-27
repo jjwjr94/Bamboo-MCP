@@ -14,7 +14,7 @@ import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { removeUndefinedProperties } from '../../utils/objectUtils.js';
+import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
@@ -128,12 +128,15 @@ export class MetaCustomAudienceHandler {
           params.adAccountId
         );
 
-        const audienceData: Record<string, unknown> = {
-          [MetaCustomAudienceSDK.Fields.name]: params.name,
-          [MetaCustomAudienceSDK.Fields.subtype]: params.subtype,
-          [MetaCustomAudienceSDK.Fields.description]: params.description,
+        // Create a consolidated, camelCased object for API parameters
+        const apiParams = {
+          name: params.name,
+          subtype: params.subtype,
+          description: params.description,
         };
 
+        // Convert keys to snake_case and remove undefined properties
+        const audienceData = convertKeysToSnakeCase(apiParams);
         removeUndefinedProperties(audienceData);
 
         const audience = await new MetaAdAccountSDK(
