@@ -12,7 +12,7 @@ import {
 } from '../../generated/schemas.js';
 import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
-import type { CampaignStatus, CreateAdSetRequest, MetaTargeting } from '../../types/meta.js';
+import type { CreateAdSetRequest, UpdateAdSetRequest } from '../../types/meta.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
@@ -29,11 +29,10 @@ import type {
   UpdateAdSetResult,
 } from './types.js';
 
-// Define comprehensive validation schemas for ad sets
+// Define business logic validation schema for ad sets
+// Note: Static validation (budget XOR, field types, required fields) is handled by the MCP registry
 const CreateAdSetValidationSchema = z
   .object({
-    dailyBudget: z.number().optional(),
-    lifetimeBudget: z.number().optional(),
     targeting: z.object({
       geoLocations: z.object({
         countries: z.array(z.string()).optional(),
@@ -46,23 +45,7 @@ const CreateAdSetValidationSchema = z
     promotedObject: z.record(z.string(), z.any()).optional(),
   })
   .superRefine((data, ctx) => {
-    // 1. Budget XOR validation
-    if (!data.dailyBudget && !data.lifetimeBudget) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Either dailyBudget or lifetimeBudget must be provided.',
-        path: ['dailyBudget'],
-      });
-    }
-    if (data.dailyBudget && data.lifetimeBudget) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Provide either dailyBudget or lifetimeBudget, but not both.',
-        path: ['dailyBudget'],
-      });
-    }
-
-    // 2. Geographic targeting validation
+    // 1. Geographic targeting validation (business logic - not static)
     const geoLocs = data.targeting.geoLocations;
     if (!geoLocs.countries?.length && !geoLocs.regions?.length && !geoLocs.cities?.length) {
       ctx.addIssue({
@@ -73,7 +56,7 @@ const CreateAdSetValidationSchema = z
       });
     }
 
-    // 3. Promoted object requirements based on optimization goal
+    // 2. Promoted object requirements based on optimization goal (business logic)
     if (data.optimizationGoal === 'APP_INSTALLS' && !data.promotedObject?.application_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -91,7 +74,7 @@ const CreateAdSetValidationSchema = z
       });
     }
 
-    // 4. Billing event compatibility matrix validation
+    // 3. Billing event compatibility matrix validation (business logic)
     const billingEvent = data.billingEvent;
     if (billingEvent in ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP) {
       const compatibleGoals =
@@ -108,15 +91,8 @@ const CreateAdSetValidationSchema = z
     }
   });
 
-const UpdateAdSetValidationSchema = z
-  .object({
-    dailyBudget: z.number().optional(),
-    lifetimeBudget: z.number().optional(),
-  })
-  .refine((data) => !(data.dailyBudget && data.lifetimeBudget), {
-    message: 'Provide either dailyBudget or lifetimeBudget for an update, but not both.',
-    path: ['dailyBudget'],
-  });
+// UpdateAdSetValidationSchema removed - static validation handled by MCP registry
+// No dynamic business logic validation required for updates
 
 const DeleteAdSetValidationSchema = z.object({
   confirmPermanentDelete: DeletionConfirmationSchema,
@@ -269,8 +245,8 @@ export class MetaAdSetHandler {
           billingEvent: params.billingEvent,
           bidStrategy: params.bidStrategy,
           bidAmount: params.bidAmount,
-          dailyBudget: params.dailyBudget,
-          lifetimeBudget: params.lifetimeBudget,
+          dailyBudget: params.budget.daily,
+          lifetimeBudget: params.budget.lifetime,
           startTime: params.startTime,
           endTime: params.endTime,
           targeting: params.targeting,
@@ -324,32 +300,26 @@ export class MetaAdSetHandler {
 
   async updateAdSet(
     authPayload: JWTPayload,
-    params: {
-      adSetId: string;
-      name?: string;
-      status?: CampaignStatus;
-      dailyBudget?: number;
-      lifetimeBudget?: number;
-      bidAmount?: number;
-      targeting?: MetaTargeting;
-      startTime?: string;
-      endTime?: string;
-    }
+    params: UpdateAdSetRequest
   ): Promise<UpdateAdSetResult> {
     logger.info('Executing update_adset', { userId: authPayload.userId, params });
 
-    const validation = UpdateAdSetValidationSchema.safeParse(params);
-    if (!validation.success) {
-      const error = validation.error.errors[0];
-      throw new ValidationError(error.message);
-    }
+    // Static validation (budget XOR, field types) handled by MCP registry
+    // No additional dynamic business logic validation required for updates
 
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Separate adSetId from fields to be updated
-        const { adSetId, ...updateFields } = params;
+        // Separate adSetId and budget from fields to be updated
+        const { adSetId, budget, ...otherFields } = params;
+
+        // Flatten the budget object for the API call
+        const updateFields = {
+          ...otherFields,
+          dailyBudget: budget?.daily,
+          lifetimeBudget: budget?.lifetime,
+        };
 
         // Convert keys to snake_case and remove undefined properties
         const updateData = convertKeysToSnakeCase(updateFields);

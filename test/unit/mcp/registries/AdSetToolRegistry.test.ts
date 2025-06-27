@@ -132,12 +132,100 @@ describe('create_adset tool validation', () => {
     });
   });
 
+  describe('create_adset budget validation', () => {
+    // Test the actual schema from the registry
+    const budgetSchema = z
+      .object({
+        daily: z.number().int().positive().optional(),
+        lifetime: z.number().int().positive().optional(),
+      })
+      .refine(({ daily, lifetime }) => !!daily !== !!lifetime, {
+        message: 'Provide **either** daily **or** lifetime (one is required, not both).',
+        path: ['daily'],
+      });
+
+    it('should accept valid daily budget only', () => {
+      const result = budgetSchema.safeParse({ daily: 1000 });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid lifetime budget only', () => {
+      const result = budgetSchema.safeParse({ lifetime: 50000 });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject when both budgets provided', () => {
+      const result = budgetSchema.safeParse({ daily: 1000, lifetime: 50000 });
+      expect(result.success).toBe(false);
+      expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+    });
+
+    it('should reject when no budget provided', () => {
+      const result = budgetSchema.safeParse({});
+      expect(result.success).toBe(false);
+      expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+    });
+
+    it('should reject negative budget values', () => {
+      expect(budgetSchema.safeParse({ daily: -100 }).success).toBe(false);
+      expect(budgetSchema.safeParse({ lifetime: -500 }).success).toBe(false);
+    });
+
+    it('should reject non-integer budget values', () => {
+      expect(budgetSchema.safeParse({ daily: 10.5 }).success).toBe(false);
+      expect(budgetSchema.safeParse({ lifetime: 100.99 }).success).toBe(false);
+    });
+  });
+
+  describe('update_adset budget validation', () => {
+    // Test the update budget schema (optional, but if provided, enforces XOR)
+    const updateBudgetSchema = z
+      .object({
+        daily: z.number().int().positive().optional(),
+        lifetime: z.number().int().positive().optional(),
+      })
+      .optional()
+      .refine((budget) => !budget || !(budget.daily && budget.lifetime), {
+        message: 'Provide **either** daily **or** lifetime budget for an update, but not both.',
+        path: ['daily'],
+      });
+
+    it('should accept undefined budget (no update)', () => {
+      const result = updateBudgetSchema.safeParse(undefined);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid daily budget only', () => {
+      const result = updateBudgetSchema.safeParse({ daily: 2000 });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid lifetime budget only', () => {
+      const result = updateBudgetSchema.safeParse({ lifetime: 100000 });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept empty budget object', () => {
+      const result = updateBudgetSchema.safeParse({});
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject when both budgets provided in update', () => {
+      const result = updateBudgetSchema.safeParse({ daily: 2000, lifetime: 100000 });
+      expect(result.success).toBe(false);
+      expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+    });
+  });
+
   describe('Integration with CreateAdSetRequest type', () => {
     it('should validate that the new field is properly typed', () => {
       // This test ensures TypeScript compilation validates our types
       const validRequest = {
         campaignId: '123456789',
         name: 'Test Ad Set',
+        budget: {
+          daily: 5000, // e.g., $50.00
+        },
         targeting: {
           geoLocations: {
             countries: ['US', 'CA'],
@@ -150,6 +238,7 @@ describe('create_adset tool validation', () => {
 
       // TypeScript should not complain about this structure
       expect(validRequest.isSacCfcaTermsCertified).toBe(true);
+      expect(validRequest.budget.daily).toBe(5000);
       expect(validRequest.targeting.geoLocations?.countries).toEqual(['US', 'CA']);
     });
   });

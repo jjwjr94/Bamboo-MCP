@@ -179,7 +179,9 @@ Creates a new ad set within a campaign.
 *   **Input Parameters**:
     *   `campaignId` (string, **required**): The campaign to create the ad set in.
     *   `name` (string, **required**): The name for the new ad set.
-    *   `dailyBudget` / `lifetimeBudget` (integer, optional): Budget in cents. *One is required.*
+    *   `budget` (object, **required**): An object containing either the daily or lifetime budget.
+        *   `daily` (integer, optional): Daily budget in cents (e.g., 5000 for $50.00). Provide this or `lifetime`.
+        *   `lifetime` (integer, optional): Lifetime budget in cents. Provide this or `daily`.
     *   `targeting` (object, **required**): A complex object defining the target audience. Must include `geoLocations`.
         *   `geoLocations`: `{ countries: string[], regions: object[], cities: object[] }`
         *   See `src/types/meta.ts` for the full `MetaTargeting` interface.
@@ -203,7 +205,10 @@ Updates an existing ad set.
     *   `adSetId` (string, **required**): The ID of the ad set to update.
     *   `name` (string, optional): New name.
     *   `status` (enum, optional): New status.
-    *   `dailyBudget` / `lifetimeBudget` / `bidAmount` (integer, optional): New budget or bid values in cents.
+    *   `budget` (object, optional): New budget for the ad set. If provided, specify either daily or lifetime, not both.
+        *   `daily` (integer, optional): New daily budget in cents (e.g., 1000 = $10.00).
+        *   `lifetime` (integer, optional): New lifetime budget in cents (e.g., 10000 = $100.00).
+    *   `bidAmount` (integer, optional): New bid amount in cents.
 *   **Successful Output**:
     *   `adSetId` (string): The ID of the updated ad set.
     *   `updatedFields` (array of strings): A list of the fields that were updated.

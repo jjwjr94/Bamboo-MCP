@@ -32,7 +32,7 @@ const BaseTargetingSchema = z.object({
   ageMin: z.number().int().min(13).max(65).optional(),
   ageMax: z.number().int().min(13).max(65).optional(),
   genders: z
-    .array(z.enum(['1', '2']))
+    .array(z.union([z.literal(1), z.literal(2)]))
     .optional()
     .describe('1 = male, 2 = female'),
   interests: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
@@ -271,21 +271,29 @@ export class AdSetToolRegistry implements IToolRegistry {
           adSetId: z.string().describe('The ID of the ad set to update.'),
           name: z.string().optional().describe('New name for the ad set.'),
           status: AdSetStatusSchema.optional().describe('New status for the ad set.'),
-          dailyBudget: z
-            .number()
-            .int()
-            .positive()
+          budget: z
+            .object({
+              daily: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe('New daily budget in cents (e.g., 1000 = $10.00)'),
+              lifetime: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe('New lifetime budget in cents (e.g., 10000 = $100.00)'),
+            })
             .optional()
+            .refine((budget) => !budget || !(budget.daily && budget.lifetime), {
+              message:
+                'Provide **either** daily **or** lifetime budget for an update, but not both.',
+              path: ['daily'],
+            })
             .describe(
-              'New daily budget in cents (e.g., 1000 = $10.00). Cannot be provided with lifetimeBudget.'
-            ),
-          lifetimeBudget: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-              'New lifetime budget in cents (e.g., 10000 = $100.00). Cannot be provided with dailyBudget.'
+              'New budget for the ad set. If provided, specify either daily or lifetime, not both.'
             ),
           bidAmount: z.number().int().positive().optional().describe('New bid amount in cents.'),
           targeting: UpdateTargetingSchema.describe(

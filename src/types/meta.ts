@@ -29,7 +29,7 @@ export interface MetaTargeting {
   };
   ageMin?: number;
   ageMax?: number;
-  genders?: Array<'1' | '2'>; // 1 = male, 2 = female
+  genders?: Array<1 | 2>; // 1 = male, 2 = female
   interests?: Array<{ id: string; name?: string }>;
   behaviors?: Array<{ id: string; name?: string }>;
   customAudiences?: Array<{ id: string }>;
@@ -73,8 +73,10 @@ export interface CreateAdSetRequest {
   adAccountId?: string;
   campaignId: string;
   name: string;
-  dailyBudget?: number; // in cents
-  lifetimeBudget?: number; // in cents
+  budget: {
+    daily?: number; // in cents
+    lifetime?: number; // in cents
+  };
   targeting: MetaTargeting;
   billingEvent: AdSetBillingEvent;
   optimizationGoal: AdSetOptimizationGoal;
@@ -104,6 +106,20 @@ export interface CreateAdSetRequest {
   isEligibleForSacCampaigns?: boolean;
   promotedObject?: unknown;
   attributionSpec?: MetaAttributionSpec[];
+}
+
+export interface UpdateAdSetRequest {
+  adSetId: string;
+  name?: string;
+  status?: CampaignStatus;
+  budget?: {
+    daily?: number; // in cents
+    lifetime?: number; // in cents
+  };
+  bidAmount?: number; // in cents
+  targeting?: MetaTargeting;
+  startTime?: string; // ISO date
+  endTime?: string; // ISO date
 }
 
 export interface CreateAdRequest {

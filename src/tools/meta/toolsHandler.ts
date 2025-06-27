@@ -16,7 +16,7 @@ import type {
   CreateAdSetRequest,
   CreateCampaignRequest,
   CustomAudienceRequest,
-  MetaTargeting,
+  UpdateAdSetRequest,
 } from '../../types/meta.js';
 import { MetaAdAccountHandler } from './adAccountHandler.js';
 import { MetaAdCreativeHandler } from './adCreativeHandler.js';
@@ -85,20 +85,7 @@ export class MetaToolsHandler {
     return this.adSetHandler.createAdSet(authPayload, params);
   }
 
-  async updateAdSet(
-    authPayload: JWTPayload,
-    params: {
-      adSetId: string;
-      name?: string;
-      status?: CampaignStatus;
-      dailyBudget?: number;
-      lifetimeBudget?: number;
-      bidAmount?: number;
-      targeting?: MetaTargeting;
-      startTime?: string;
-      endTime?: string;
-    }
-  ) {
+  async updateAdSet(authPayload: JWTPayload, params: UpdateAdSetRequest) {
     return this.adSetHandler.updateAdSet(authPayload, params);
   }
 
