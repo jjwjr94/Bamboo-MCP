@@ -1,4 +1,5 @@
 import {
+  type FacebookAdsApi,
   AdAccount as MetaAdAccountSDK,
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
@@ -21,7 +22,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
-import { META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
+import { ADSET_COMPATIBILITY, META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateAdSetResult,
@@ -107,7 +108,93 @@ function validateSacCompliance(params: {
   }
 }
 
+/**
+ * Validates that the ad set's bid strategy is compatible with the parent campaign's bid strategy.
+ * Based on Meta Marketing API v22+ requirements for Campaign Budget Optimization (CBO) campaigns.
+ * @param campaignBidStrategy The bid_strategy of the parent campaign
+ * @param adSetBidStrategy The bid_strategy proposed for the new ad set
+ * @throws {ValidationError} If the strategies are incompatible
+ */
+function validateBidStrategyCompatibility(
+  campaignBidStrategy: string | undefined,
+  adSetBidStrategy: string | undefined
+): void {
+  // If the campaign has no specific bid strategy, no validation is needed
+  if (!campaignBidStrategy) {
+    return;
+  }
+
+  // Check if the campaign's bid strategy has defined restrictions
+  const compatibilityMap = ADSET_COMPATIBILITY.CAMPAIGN_ADSET_BID_STRATEGY_MAP;
+  if (campaignBidStrategy in compatibilityMap) {
+    const compatibleAdSetStrategies =
+      compatibilityMap[campaignBidStrategy as keyof typeof compatibilityMap];
+
+    // Default to 'LOWEST_COST_WITHOUT_CAP' if the ad set strategy is not provided, as this is Meta's default
+    const effectiveAdSetStrategy = adSetBidStrategy || 'LOWEST_COST_WITHOUT_CAP';
+
+    if (!(compatibleAdSetStrategies as readonly string[]).includes(effectiveAdSetStrategy)) {
+      throw new ValidationError(
+        `Bid strategy conflict: The ad set's bid strategy '${effectiveAdSetStrategy}' is not compatible with the campaign's bid strategy '${campaignBidStrategy}'. ` +
+          `For this campaign, you must use one of the following strategies for the ad set: ${compatibleAdSetStrategies.join(', ')}.`
+      );
+    }
+  }
+}
+
 export class MetaAdSetHandler {
+  /**
+   * Performs async validation for ad set updates that depend on campaign state.
+   * This function fetches the live state of the parent campaign to ensure rules
+   * around budget management (CBO vs. ABO) and bid strategy compatibility are
+   * correctly enforced at the time of the update.
+   * @param api The Meta API instance
+   * @param params The update parameters
+   */
+  private async performUpdateValidations(
+    api: FacebookAdsApi,
+    params: UpdateAdSetRequest
+  ): Promise<void> {
+    const needsValidation =
+      (params.budget && (params.budget.daily || params.budget.lifetime)) || params.bidStrategy;
+
+    if (!needsValidation) {
+      return;
+    }
+
+    // Fetch the ad set to get its parent campaign ID
+    const adSetForValidation = await new MetaAdSetSDK(params.adSetId, {}, null, api).read([
+      'campaign_id',
+    ]);
+    const campaignId = adSetForValidation.campaign_id;
+
+    if (!campaignId) {
+      throw new ValidationError('Could not determine the parent campaign for the ad set.');
+    }
+
+    // Fetch the campaign to check its CBO status and bid strategy
+    const campaign = await new MetaCampaignSDK(campaignId, {}, null, api).read([
+      'daily_budget',
+      'lifetime_budget',
+      'bid_strategy',
+    ]);
+
+    // Budget validation (only if a budget update is requested)
+    if (params.budget && (params.budget.daily || params.budget.lifetime)) {
+      const isCboCampaign = isCampaignBudgetOptimized(campaign);
+      if (isCboCampaign) {
+        throw new ValidationError(
+          'Cannot update the budget of an ad set that belongs to a Campaign Budget Optimization (CBO) campaign. Budget must be managed at the campaign level.'
+        );
+      }
+    }
+
+    // Bid strategy validation (only if a bid strategy update is requested)
+    if (params.bidStrategy) {
+      validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy);
+    }
+  }
+
   async getAdSets(
     authPayload: JWTPayload,
     params: { campaignId?: string; adAccountId?: string }
@@ -202,12 +289,20 @@ export class MetaAdSetHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Fetch campaign to check for special ad categories and budget compatibility (async validation)
+        // Asynchronous Validation Step: Fetch the parent campaign to validate rules that
+        // depend on its state (e.g., CBO status, bid strategy restrictions).
+        // This is intentionally done on every call to ensure correctness with live data,
+        // avoiding the risks of a complex and potentially stale caching layer.
         const campaign = await new MetaCampaignSDK(params.campaignId, {}, null, api).read([
           'special_ad_categories',
           'daily_budget',
           'lifetime_budget',
+          'bid_strategy',
         ]);
+
+        // Bid strategy compatibility validation (requires async campaign data)
+        validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy);
+
         const isSpecialAdCategory = hasSpecialAdCategory(campaign);
 
         // Campaign vs. Ad Set Budget Validation (requires async campaign data)
@@ -304,31 +399,8 @@ export class MetaAdSetHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // If budget is being updated, perform CBO validation (requires async campaign data)
-        if (params.budget && (params.budget.daily || params.budget.lifetime)) {
-          // Fetch the ad set to get its parent campaign ID
-          const adSetForValidation = await new MetaAdSetSDK(params.adSetId, {}, null, api).read([
-            'campaign_id',
-          ]);
-          const campaignId = adSetForValidation.campaign_id;
-
-          if (!campaignId) {
-            throw new ValidationError('Could not determine the parent campaign for the ad set.');
-          }
-
-          // Fetch the campaign to check its CBO status
-          const campaign = await new MetaCampaignSDK(campaignId, {}, null, api).read([
-            'daily_budget',
-            'lifetime_budget',
-          ]);
-          const isCboCampaign = isCampaignBudgetOptimized(campaign);
-
-          if (isCboCampaign) {
-            throw new ValidationError(
-              'Cannot update the budget of an ad set that belongs to a Campaign Budget Optimization (CBO) campaign. Budget must be managed at the campaign level.'
-            );
-          }
-        }
+        // Perform async validation for fields that depend on the parent campaign's state
+        await this.performUpdateValidations(api, params);
 
         // Separate adSetId and budget from fields to be updated
         const { adSetId, budget, ...otherFields } = params;

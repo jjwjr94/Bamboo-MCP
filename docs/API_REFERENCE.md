@@ -188,6 +188,8 @@ Creates a new ad set within a campaign.
     *   `billingEvent` (enum, **required**): Event to bill for (e.g., `IMPRESSIONS`).
     *   `optimizationGoal` (enum, **required**): Goal to optimize delivery for (e.g., `REACH`, `LINK_CLICKS`).
     *   `bidStrategy` (enum, optional, default: `LOWEST_COST_WITHOUT_CAP`): Bidding strategy.
+        
+        **Compatibility Note:** For Campaign Budget Optimization (CBO) campaigns, this bid strategy must be compatible with the parent campaign's bid strategy. For example, if the campaign uses `COST_CAP`, the ad set must also use `COST_CAP`. The server validates this automatically to prevent API errors.
     *   `startTime` / `endTime` (string, optional): ISO 8601 formatted date strings.
     *   `status` (enum, optional, default: `PAUSED`): Initial status.
     *   `attributionSpec` (array, optional): Modern attribution spec for iOS 14.5+. E.g., `[{ "event_type": "CLICK_THROUGH", "window_days": 7 }]`.
@@ -208,6 +210,9 @@ Updates an existing ad set.
     *   `budget` (object, optional): New budget for the ad set. If provided, specify either daily or lifetime, not both.
         *   `daily` (integer, optional): New daily budget in cents (e.g., 1000 = $10.00).
         *   `lifetime` (integer, optional): New lifetime budget in cents (e.g., 10000 = $100.00).
+    *   `bidStrategy` (enum, optional): New bid strategy for the ad set. If changing to LOWEST_COST_WITH_BID_CAP or COST_CAP, you must also provide bidAmount.
+        
+        **Compatibility Note:** For Campaign Budget Optimization (CBO) campaigns, this bid strategy must be compatible with the parent campaign's bid strategy. For example, if the campaign uses `COST_CAP`, the ad set must also use `COST_CAP`. The server validates this automatically to prevent API errors.
     *   `bidAmount` (integer, optional): New bid amount in cents.
 *   **Successful Output**:
     *   `adSetId` (string): The ID of the updated ad set.

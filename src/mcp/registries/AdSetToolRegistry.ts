@@ -196,7 +196,7 @@ export const CreateAdSetSchema = z
     optimizationGoal: AdSetOptimizationGoalSchema.describe(
       'How Meta optimizes ad delivery to find the best users for your campaign objective. Must be compatible with billingEvent - server validates this compatibility. Special requirements: APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id, VALUE/CONVERSIONS work best with conversion tracking and attribution specs. iOS 14.5+ campaigns may need minimum 3-day duration for value optimization.'
     ),
-    bidStrategy: AdSetBidStrategySchema.optional().describe(
+    bidStrategy: AdSetBidStrategySchema.default('LOWEST_COST_WITHOUT_CAP').describe(
       'Controls how Meta bids in the ad auction. Defaults to LOWEST_COST_WITHOUT_CAP. LOWEST_COST_WITHOUT_CAP is automatic bidding. LOWEST_COST_WITH_BID_CAP uses automatic bidding with a max bid limit (requires bidAmount). COST_CAP targets an average cost per result (requires bidAmount). TARGET_COST was fully deprecated in v9.0 and is no longer a valid option. Choose based on your budget control needs.'
     ),
     bidAmount: z

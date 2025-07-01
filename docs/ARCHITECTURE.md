@@ -254,4 +254,10 @@ const CreateAdSetValidationSchema = z.object({
 });
 ```
 
+This declarative approach in Zod is ideal for all *synchronous* validation. However, some critical business rules are *asynchronous* because they depend on the state of related objects. A key example is **Campaign-Ad Set Bid Strategy Compatibility**, which requires fetching the parent campaign's `bid_strategy` before the ad set can be created or updated.
+
+Following our core principle of separating concerns and prioritizing correctness:
+*   **Synchronous validation** (rules that only depend on the request's inputs) is defined within the Zod schemas in the `AdSetToolRegistry`.
+*   **Asynchronous validation** (rules that require external data) is implemented within the business logic handler (`adSetHandler.ts`). The handler first fetches the necessary dependency (e.g., the parent campaign) and then applies the validation logic before proceeding. This fail-fast approach prevents invalid API calls and provides precise, contextual error messages to the user.
+
 This approach provides comprehensive validation while maintaining clear error reporting and type safety.

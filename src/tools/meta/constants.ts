@@ -5,6 +5,8 @@
  * to improve maintainability and reduce hardcoded values throughout the codebase.
  */
 
+import type { AdSetBidStrategy, CampaignBidStrategy } from '../../generated/schemas.js';
+
 /**
  * Meta API location keys for geographic targeting
  * These keys are used in the targeting.geoLocations.regions field
@@ -51,4 +53,21 @@ export const ADSET_COMPATIBILITY = {
     // Note: NONE, POST_ENGAGEMENT, and LISTING_INTERACTION billing events
     // are not restricted here as they have broader compatibility
   } as const,
+
+  /**
+   * Maps campaign-level bid strategies to compatible ad set-level bid strategies.
+   * This is critical for Campaign Budget Optimization (CBO) campaigns where the
+   * campaign's strategy can dictate the allowed strategies for its ad sets.
+   * If a campaign strategy is not in this map, it is considered permissive.
+   * Based on Meta Marketing API v22+ CBO requirements research (2025).
+   */
+  CAMPAIGN_ADSET_BID_STRATEGY_MAP: {
+    /** COST_CAP campaigns require ad sets to also use COST_CAP */
+    COST_CAP: ['COST_CAP'],
+    /** LOWEST_COST_WITH_BID_CAP campaigns require ad sets to use the same strategy */
+    LOWEST_COST_WITH_BID_CAP: ['LOWEST_COST_WITH_BID_CAP'],
+    // Note: LOWEST_COST_WITHOUT_CAP and other unlisted campaign strategies are
+    // intentionally omitted. If a campaign's bid strategy is not a key in this map,
+    // it is considered permissive and allows any ad set bid strategy.
+  } as const satisfies Partial<Record<CampaignBidStrategy, readonly AdSetBidStrategy[]>>,
 } as const;
