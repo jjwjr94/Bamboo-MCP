@@ -4,7 +4,6 @@ import {
   AdSet as MetaAdSetSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
 import {
   MetaAdResponseSchema,
   MetaCreateSuccessResponseSchema,
@@ -12,8 +11,11 @@ import {
   MetaUpdateSuccessResponseSchema,
 } from '../../generated/schemas.js';
 
-import type { CreateAdRequest, UpdateAdRequest } from '../../mcp/registries/AdToolRegistry.js';
-import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
+import type {
+  CreateAdRequest,
+  DeleteAdRequest,
+  UpdateAdRequest,
+} from '../../mcp/registries/AdToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -30,15 +32,12 @@ import type {
   UpdateAdResult,
 } from './types.js';
 
-// Define validation schema for ad deletion
-const DeleteAdValidationSchema = z.object({
-  confirmPermanentDelete: DeletionConfirmationSchema,
-});
+// Note: Input validation is now handled at the MCP tool registration level.
 
 export class MetaAdHandler {
   async getAds(
     authPayload: JWTPayload,
-    params: { adSetId?: string; campaignId?: string; adAccountId?: string }
+    params: { adAccountId?: string; adSetId?: string; campaignId?: string }
   ): Promise<GetAdsResult> {
     logger.info('Executing get_ads', { userId: authPayload.userId, params });
 
@@ -46,33 +45,36 @@ export class MetaAdHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const fields = [
-          MetaAdSDK.Fields.id,
-          MetaAdSDK.Fields.name,
-          MetaAdSDK.Fields.status,
-          MetaAdSDK.Fields.configured_status,
-          MetaAdSDK.Fields.effective_status,
-          MetaAdSDK.Fields.creative,
-          MetaAdSDK.Fields.adset_id,
-          MetaAdSDK.Fields.campaign_id,
-          MetaAdSDK.Fields.ad_review_feedback,
-          MetaAdSDK.Fields.issues_info,
-          MetaAdSDK.Fields.created_time,
-          MetaAdSDK.Fields.updated_time,
-        ];
-
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,
           params.adAccountId
         );
 
+        const fields = [
+          MetaAdSDK.Fields.id,
+          MetaAdSDK.Fields.name,
+          MetaAdSDK.Fields.status,
+          MetaAdSDK.Fields.effective_status,
+          MetaAdSDK.Fields.creative,
+          MetaAdSDK.Fields.created_time,
+          MetaAdSDK.Fields.updated_time,
+          MetaAdSDK.Fields.campaign_id,
+          MetaAdSDK.Fields.adset_id,
+          MetaAdSDK.Fields.bid_amount,
+          MetaAdSDK.Fields.tracking_specs,
+          MetaAdSDK.Fields.source_ad_id,
+        ];
+
         let adsCursor: unknown;
 
         if (params.adSetId) {
+          // Get ads from specific ad set
           adsCursor = await new MetaAdSetSDK(params.adSetId, {}, null, api).getAds(fields);
         } else if (params.campaignId) {
+          // Get ads from specific campaign
           adsCursor = await new MetaCampaignSDK(params.campaignId, {}, null, api).getAds(fields);
         } else {
+          // Get all ads from ad account
           adsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAds(fields);
         }
 
@@ -81,7 +83,7 @@ export class MetaAdHandler {
           limit: env.META_MAX_ADS_TO_FETCH,
           entityName: 'ads',
           userId: authPayload.userId,
-          apiContext: { adAccountId },
+          apiContext: { adAccountId, adSetId: params.adSetId, campaignId: params.campaignId },
         });
 
         const validatedAds: MetaAd[] = [];
@@ -99,11 +101,8 @@ export class MetaAdHandler {
           }
         }
 
-        const response = { ads: validatedAds };
-        logger.info('Retrieved ads', {
-          userId: authPayload.userId,
-          count: validatedAds.length,
-        });
+        const response: GetAdsResult = { ads: validatedAds };
+        logger.info('Retrieved ads', { userId: authPayload.userId, count: validatedAds.length });
 
         return response;
       },
@@ -171,17 +170,11 @@ export class MetaAdHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        // Create a consolidated object for API parameters, handling creative field specially
-        const apiParams = {
-          name: params.name,
-          status: params.status,
-          ...(params.creativeId && {
-            creative: { creativeId: params.creativeId },
-          }),
-        };
+        // Separate adId from fields to be updated
+        const { adId, ...updateFields } = params;
 
         // Convert keys to snake_case and remove undefined properties
-        const updateData = convertKeysToSnakeCase(apiParams);
+        const updateData = convertKeysToSnakeCase(updateFields);
         removeUndefinedProperties(updateData);
 
         const ad = new MetaAdSDK(params.adId, {}, null, api);
@@ -201,7 +194,9 @@ export class MetaAdHandler {
 
         const result: UpdateAdResult = {
           adId: params.adId,
-          updatedFields: Object.keys(updateData),
+          updatedFields: Object.keys(updateFields).filter(
+            (key) => updateFields[key as keyof typeof updateFields] !== undefined
+          ),
         };
 
         return result;
@@ -213,17 +208,8 @@ export class MetaAdHandler {
     );
   }
 
-  async deleteAd(
-    authPayload: JWTPayload,
-    params: { adId: string; confirmPermanentDelete?: boolean }
-  ): Promise<DeleteAdResult> {
+  async deleteAd(authPayload: JWTPayload, params: DeleteAdRequest): Promise<DeleteAdResult> {
     logger.info('Executing delete_ad', { userId: authPayload.userId, params });
-
-    const validationResult = DeleteAdValidationSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error.message);
-    }
 
     return await handleMetaApiCall(
       async () => {

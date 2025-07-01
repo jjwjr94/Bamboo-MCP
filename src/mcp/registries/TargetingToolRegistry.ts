@@ -1,9 +1,56 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
+
+// Static input schema definitions
+export const SearchInterestsInputSchema = z.object({
+  query: z.string().describe('Search query for interests (e.g., "fitness", "cooking").'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(25)
+    .describe('Maximum number of results to return (default: 25, max: 100).'),
+});
+
+export const SearchBehaviorsInputSchema = z.object({
+  query: z.string().describe('Search query for behaviors (e.g., "frequent travelers").'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(25)
+    .describe('Maximum number of results to return (default: 25, max: 100).'),
+});
+
+export const SearchLocationsInputSchema = z.object({
+  query: z.string().describe('Search query for locations (e.g., "New York", "California").'),
+  type: z
+    .enum(['country', 'region', 'city'])
+    .optional()
+    .describe('Type of location to search for.'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(25)
+    .describe('Maximum number of results to return (default: 25, max: 100).'),
+});
+
+export const ValidateTargetingOptionsInputSchema = z.object({
+  targetingOptionIds: z.array(z.string()).describe('Array of targeting option IDs to validate.'),
+});
+
+// Export inferred types
+export type SearchInterestsRequest = z.infer<typeof SearchInterestsInputSchema>;
+export type SearchBehaviorsRequest = z.infer<typeof SearchBehaviorsInputSchema>;
+export type SearchLocationsRequest = z.infer<typeof SearchLocationsInputSchema>;
+export type ValidateTargetingOptionsRequest = z.infer<typeof ValidateTargetingOptionsInputSchema>;
 
 /**
  * Targeting Tool Registry
@@ -73,16 +120,7 @@ export class TargetingToolRegistry implements IToolRegistry {
       {
         title: 'Search Interest Targeting',
         description: 'Searches for interest-based targeting options to use in ad sets.',
-        inputSchema: {
-          query: z.string().describe('Search query for interests (e.g., "fitness", "cooking").'),
-          limit: z
-            .number()
-            .int()
-            .positive()
-            .max(100)
-            .default(25)
-            .describe('Maximum number of results to return (default: 25, max: 100).'),
-        },
+        inputSchema: SearchInterestsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchInterests(authPayload, params),
@@ -114,16 +152,7 @@ export class TargetingToolRegistry implements IToolRegistry {
       {
         title: 'Search Behavior Targeting',
         description: 'Searches for behavior-based targeting options to use in ad sets.',
-        inputSchema: {
-          query: z.string().describe('Search query for behaviors (e.g., "frequent travelers").'),
-          limit: z
-            .number()
-            .int()
-            .positive()
-            .max(100)
-            .default(25)
-            .describe('Maximum number of results to return (default: 25, max: 100).'),
-        },
+        inputSchema: SearchBehaviorsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchBehaviors(authPayload, params),
@@ -159,22 +188,7 @@ export class TargetingToolRegistry implements IToolRegistry {
       {
         title: 'Search Location Targeting',
         description: 'Searches for geographic targeting options to use in ad sets.',
-        inputSchema: {
-          query: z
-            .string()
-            .describe('Search query for locations (e.g., "New York", "California").'),
-          type: z
-            .enum(['country', 'region', 'city'])
-            .optional()
-            .describe('Type of location to search for.'),
-          limit: z
-            .number()
-            .int()
-            .positive()
-            .max(100)
-            .default(25)
-            .describe('Maximum number of results to return (default: 25, max: 100).'),
-        },
+        inputSchema: SearchLocationsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchLocations(authPayload, params),
@@ -186,17 +200,31 @@ export class TargetingToolRegistry implements IToolRegistry {
    * Register the validate_targeting_options tool
    */
   private registerValidateTargetingOptions(): string {
+    // ValidateTargetingOptions success schema - Updated to match Meta API v22+ actual response
     const successDataSchema = z.object({
       validTargetingOptions: z
         .array(
           z.object({
-            id: z.string(),
-            name: z.string(),
-            type: z.string(),
-            is_valid: z.boolean(),
+            key: z.string().optional().describe('Fixed identifier unique in each category'),
+            id: z.string().optional().describe('The targeting option ID'),
+            name: z.string().describe('Human-readable name'),
+            type: z
+              .string()
+              .optional()
+              .describe('Category type (e.g., "country", "interest", "region")'),
+            supports_city: z
+              .boolean()
+              .optional()
+              .describe('Indicates if sub-city targeting is supported'),
+            supports_region: z
+              .boolean()
+              .optional()
+              .describe('Indicates if sub-region targeting is supported'),
+            is_valid: z.boolean().optional().describe('Whether the targeting option is valid'),
+            message: z.string().optional().describe('Optional error message if invalid'),
           })
         )
-        .describe('Validation results for targeting options.'),
+        .describe('List of validated targeting options.'),
     });
 
     return createMcpTool(
@@ -205,11 +233,7 @@ export class TargetingToolRegistry implements IToolRegistry {
       {
         title: 'Validate Targeting Options',
         description: 'Validates whether targeting option IDs are still active and usable.',
-        inputSchema: {
-          targetingOptionIds: z
-            .array(z.string())
-            .describe('Array of targeting option IDs to validate.'),
-        },
+        inputSchema: ValidateTargetingOptionsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.validateTargetingOptions(authPayload, params),

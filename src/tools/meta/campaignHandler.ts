@@ -2,7 +2,6 @@ import {
   AdAccount as MetaAdAccountSDK,
   Campaign as MetaCampaignSDK,
 } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
 import {
   MetaCampaignResponseSchema,
   MetaCreateSuccessResponseSchema,
@@ -11,13 +10,9 @@ import {
 } from '../../generated/schemas.js';
 import type {
   CreateCampaignRequest,
+  DeleteCampaignRequest,
   UpdateCampaignRequest,
 } from '../../mcp/registries/CampaignToolRegistry.js';
-import {
-  CreateCampaignSchema,
-  UpdateCampaignSchema,
-} from '../../mcp/registries/CampaignToolRegistry.js';
-import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -34,14 +29,7 @@ import type {
   UpdateCampaignResult,
 } from './types.js';
 
-// Note: Complete validation (static + business logic) is handled by the schemas from the registry
-// since MCP framework can't handle refinements when using .shape
-
-// Deletion validation schema for defense-in-depth
-const DeleteCampaignValidationSchema = z.object({
-  campaignId: z.string().min(1),
-  confirmPermanentDelete: DeletionConfirmationSchema,
-});
+// Note: Input validation is now handled at the MCP tool registration level.
 
 export class MetaCampaignHandler {
   async getCampaigns(
@@ -125,13 +113,6 @@ export class MetaCampaignHandler {
   ): Promise<CreateCampaignResult> {
     logger.info('Executing create_campaign', { userId: authPayload.userId, params });
 
-    // Validate using the complete schema (MCP framework can't handle refinements with .shape)
-    const validationResult = CreateCampaignSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error?.message || 'Campaign validation failed.');
-    }
-
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -200,13 +181,6 @@ export class MetaCampaignHandler {
   ): Promise<UpdateCampaignResult> {
     logger.info('Executing update_campaign', { userId: authPayload.userId, params });
 
-    // Validate using the complete schema (MCP framework can't handle refinements with .shape)
-    const validationResult = UpdateCampaignSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error?.message || 'Campaign update validation failed.');
-    }
-
     return await handleMetaApiCall(
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
@@ -244,7 +218,9 @@ export class MetaCampaignHandler {
 
         const result: UpdateCampaignResult = {
           campaignId: params.campaignId,
-          updatedFields: Object.keys(updateData),
+          updatedFields: Object.keys(updateFields).filter(
+            (key) => updateFields[key as keyof typeof updateFields] !== undefined
+          ),
         };
 
         return result;
@@ -258,16 +234,9 @@ export class MetaCampaignHandler {
 
   async deleteCampaign(
     authPayload: JWTPayload,
-    params: { campaignId: string; confirmPermanentDelete?: boolean }
+    params: DeleteCampaignRequest
   ): Promise<DeleteCampaignResult> {
     logger.info('Executing delete_campaign', { userId: authPayload.userId, params });
-
-    // Defense-in-depth validation for deletion confirmation
-    const validationResult = DeleteCampaignValidationSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error?.message || 'Campaign deletion validation failed.');
-    }
 
     return await handleMetaApiCall(
       async () => {

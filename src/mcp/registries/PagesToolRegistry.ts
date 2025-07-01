@@ -1,10 +1,40 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { createMcpTool } from './registryHelper.js';
+
+// GetPages schema - single source of truth
+export const GetPagesInputSchema = z.object({});
+
+// GetPagePosts schema - single source of truth
+export const GetPagePostsInputSchema = z.object({
+  pageId: z.string().describe('The ID of the Facebook Page.'),
+});
+
+// CreatePagePostAd schema - single source of truth
+export const CreatePagePostAdInputSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe('The ad account ID. Optional if one is already selected.'),
+  name: z.string().describe('The name for the new ad.'),
+  adSetId: z.string().describe('The ID of the Ad Set for this ad.'),
+  postId: z
+    .string()
+    .refine((val) => /^\d+_\d+$/.test(val), {
+      message:
+        "Invalid postId format. Must be in the format 'pageId_postId' (e.g., '12345_67890').",
+    })
+    .describe("The ID of the page post to promote (e.g., '12345_67890')."),
+  status: z.enum(['ACTIVE', 'PAUSED']).optional().describe('Status for the ad (ACTIVE or PAUSED).'),
+});
+
+// Export inferred types - single source of truth for TypeScript types
+export type GetPagesInput = z.infer<typeof GetPagesInputSchema>;
+export type GetPagePostsInput = z.infer<typeof GetPagePostsInputSchema>;
+export type CreatePagePostAdInput = z.infer<typeof CreatePagePostAdInputSchema>;
 
 export class PagesToolRegistry implements IToolRegistry {
   private server: McpServer;
@@ -59,7 +89,7 @@ export class PagesToolRegistry implements IToolRegistry {
       {
         title: 'Get Facebook Pages',
         description: 'Retrieves a list of Facebook Pages the user has access to.',
-        inputSchema: {},
+        inputSchema: GetPagesInputSchema,
         successDataSchema,
       },
       (authPayload) => this.toolsHandler.getPages(authPayload),
@@ -91,9 +121,7 @@ export class PagesToolRegistry implements IToolRegistry {
       {
         title: 'Get Page Posts',
         description: 'Retrieves recent posts for a specific Facebook Page.',
-        inputSchema: {
-          pageId: z.string().describe('The ID of the Facebook Page.'),
-        },
+        inputSchema: GetPagePostsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getPagePosts(authPayload, params),
@@ -114,25 +142,7 @@ export class PagesToolRegistry implements IToolRegistry {
       {
         title: 'Create Ad From Page Post',
         description: 'Creates a new ad by promoting an existing Facebook Page post.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe('The ad account ID. Optional if one is already selected.'),
-          name: z.string().describe('The name for the new ad.'),
-          adSetId: z.string().describe('The ID of the Ad Set for this ad.'),
-          postId: z
-            .string()
-            .refine((val) => /^\d+_\d+$/.test(val), {
-              message:
-                "Invalid postId format. Must be in the format 'pageId_postId' (e.g., '12345_67890').",
-            })
-            .describe("The ID of the page post to promote (e.g., '12345_67890')."),
-          status: z
-            .enum(['ACTIVE', 'PAUSED'])
-            .optional()
-            .describe('Status for the ad (ACTIVE or PAUSED).'),
-        },
+        inputSchema: CreatePagePostAdInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createPagePostAd(authPayload, params),

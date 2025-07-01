@@ -64,7 +64,24 @@ export class MetaPagesHandler {
           }
         }
 
-        const response = { pages: validatedPages };
+        // Transform to match Meta API v22+ actual response schema
+        // Note: Using type assertion here is safe because data is already validated by MetaPageResponseSchema
+        const transformedPages = validatedPages.map((page) => ({
+          id: page.id as string,
+          name: page.name as string,
+          category: page.category as string | undefined,
+          category_list: page.category_list as string[] | undefined,
+          access_token: page.access_token as string | undefined,
+          tasks: page.tasks as string[] | undefined,
+          perms: page.perms as string[] | undefined,
+          can_create_ads: page.can_create_ads as boolean | undefined,
+          can_manage: page.can_manage as boolean | undefined,
+          picture: page.picture as { url?: string } | undefined,
+          link: page.link as string | undefined,
+          about: page.about as string | undefined,
+        }));
+
+        const response = { pages: transformedPages };
         logger.info('Successfully retrieved pages', {
           userId: authPayload.userId,
           count: validatedPages.length,
@@ -151,7 +168,25 @@ export class MetaPagesHandler {
           }
         }
 
-        const response = { posts: validatedPosts };
+        // Transform to match Meta API v22+ actual response schema
+        // Note: Using type assertion here is safe because data is already validated by MetaPagePostResponseSchema
+        const transformedPosts = validatedPosts.map((post) => ({
+          id: post.id as string,
+          message: post.message as string | undefined,
+          created_time: post.created_time as string | undefined,
+          story: post.story as string | undefined,
+          permalink_url: post.permalink_url as string | undefined,
+          type: post.type as string | undefined,
+          status_type: post.status_type as string | undefined,
+          attachments: post.attachments as object | undefined,
+          full_picture: post.full_picture as string | undefined,
+          shares: post.shares as { count?: number } | undefined,
+          reactions: post.reactions as object | undefined,
+          comments: post.comments as object | undefined,
+          insights: post.insights as object | undefined,
+        }));
+
+        const response = { posts: transformedPosts };
         logger.info('Successfully retrieved page posts', {
           userId: authPayload.userId,
           pageId: params.pageId,

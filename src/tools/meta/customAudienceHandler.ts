@@ -2,14 +2,16 @@ import {
   AdAccount as MetaAdAccountSDK,
   CustomAudience as MetaCustomAudienceSDK,
 } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
+import type { z } from 'zod';
 import {
   MetaCreateSuccessResponseSchema,
   MetaCustomAudienceResponseSchema,
   MetaDeleteSuccessResponseSchema,
 } from '../../generated/schemas.js';
-import type { CreateCustomAudienceRequest } from '../../mcp/registries/CustomAudienceToolRegistry.js';
-import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
+import type {
+  CreateCustomAudienceRequest,
+  DeleteCustomAudienceRequest,
+} from '../../mcp/registries/CustomAudienceToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -24,10 +26,7 @@ import type {
   GetCustomAudiencesResult,
 } from './types.js';
 
-// Define validation schema for custom audience deletion
-const DeleteCustomAudienceValidationSchema = z.object({
-  confirmPermanentDelete: DeletionConfirmationSchema,
-});
+// Note: Input validation is now handled at the MCP tool registration level.
 
 // Module-level constants for better performance and readability
 const CUSTOM_AUDIENCE_FIELDS = [
@@ -91,7 +90,39 @@ export class MetaCustomAudienceHandler {
           }
         }
 
-        const response = { audiences: validatedAudiences };
+        // Transform to match Meta API v22+ actual response schema
+        // Note: Using type assertion here is safe because data is already validated by MetaCustomAudienceResponseSchema
+        const transformedAudiences = validatedAudiences.map((audience) => ({
+          id: audience.id as string,
+          account_id: audience.account_id as string | undefined,
+          name: audience.name as string,
+          description: audience.description as string | undefined,
+          approximate_count: audience.approximate_count as number | undefined,
+          approximate_count_lower_bound: audience.approximate_count_lower_bound as
+            | number
+            | undefined,
+          approximate_count_upper_bound: audience.approximate_count_upper_bound as
+            | number
+            | undefined,
+          customer_file_source: audience.customer_file_source as string | undefined,
+          delivery_status: audience.delivery_status as { code?: string } | undefined,
+          external_event_source: audience.external_event_source as object | undefined,
+          is_value_based: audience.is_value_based as string | undefined,
+          lookalike_audience_ids: audience.lookalike_audience_ids as object | undefined,
+          lookalike_spec: audience.lookalike_spec as object | undefined,
+          operation_status: audience.operation_status as object | undefined,
+          opt_out_link: audience.opt_out_link as string | undefined,
+          pixel_id: audience.pixel_id as string | undefined,
+          retention_days: audience.retention_days as number | undefined,
+          time_created: audience.time_created as number | undefined,
+          time_updated: audience.time_updated as number | undefined,
+          data_source: audience.data_source as { type: string; sub_type?: string } | undefined,
+          permission_for_actions: audience.permission_for_actions as object | undefined,
+          sharing_status: audience.sharing_status as object | undefined,
+          subtype: audience.subtype as string | undefined,
+        }));
+
+        const response = { customAudiences: transformedAudiences };
         logger.info('Retrieved custom audiences', {
           userId: authPayload.userId,
           count: validatedAudiences.length,
@@ -153,7 +184,11 @@ export class MetaCustomAudienceHandler {
 
         const audienceId = validation.data.id;
 
-        const result = { audienceId };
+        const result = {
+          name: params.name,
+          subtype: params.subtype,
+          customAudienceId: audienceId,
+        };
         logger.info('Successfully created custom audience', {
           userId: authPayload.userId,
           adAccountId,
@@ -175,15 +210,9 @@ export class MetaCustomAudienceHandler {
    */
   async deleteCustomAudience(
     authPayload: JWTPayload,
-    params: { customAudienceId: string; confirmPermanentDelete?: boolean }
+    params: DeleteCustomAudienceRequest
   ): Promise<DeleteCustomAudienceResult> {
     logger.info('Executing delete_custom_audience', { userId: authPayload.userId, params });
-
-    const validationResult = DeleteCustomAudienceValidationSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error.message);
-    }
 
     return await handleMetaApiCall(
       async () => {

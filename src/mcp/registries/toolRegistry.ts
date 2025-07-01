@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
@@ -16,6 +15,22 @@ import { InsightsToolRegistry } from './InsightsToolRegistry.js';
 import { PagesToolRegistry } from './PagesToolRegistry.js';
 import { TargetingToolRegistry } from './TargetingToolRegistry.js';
 import { createMcpTool } from './registryHelper.js';
+
+// Schemas for main tools
+export const GetAdAccountsInputSchema = z.object({
+  adAccountId: z.string().optional().describe('Optional specific ad account ID to retrieve'),
+});
+
+export const SelectAdAccountInputSchema = z.object({
+  adAccountId: z.string().describe("The ID of the ad account to select (e.g., 'act_12345')"),
+});
+
+export const GetToolManifestInputSchema = z.object({});
+
+// Export inferred types
+export type GetAdAccountsRequest = z.infer<typeof GetAdAccountsInputSchema>;
+export type SelectAdAccountRequest = z.infer<typeof SelectAdAccountInputSchema>;
+export type GetToolManifestRequest = z.infer<typeof GetToolManifestInputSchema>;
 
 export class ToolRegistry {
   private server: McpServer;
@@ -144,12 +159,7 @@ export class ToolRegistry {
         title: 'Get Meta Ad Accounts',
         description:
           'Retrieve all accessible ad accounts with details including permissions. This is usually the first call to make.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe('Optional specific ad account ID to retrieve'),
-        },
+        inputSchema: GetAdAccountsInputSchema,
         successDataSchema: getAdAccountsSuccessDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getAdAccounts(authPayload, params),
@@ -170,11 +180,7 @@ export class ToolRegistry {
         title: 'Select Ad Account',
         description:
           'Select an ad account for subsequent operations. This allows you to set a default account for campaigns and other operations.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .describe("The ID of the ad account to select (e.g., 'act_12345')"),
-        },
+        inputSchema: SelectAdAccountInputSchema,
         successDataSchema: selectAdAccountSuccessDataSchema,
       },
       async (authPayload, params) => {
@@ -204,7 +210,7 @@ export class ToolRegistry {
       {
         title: 'Get Tool Manifest',
         description: 'Retrieves a comprehensive list of all available tools that can be called.',
-        inputSchema: {},
+        inputSchema: GetToolManifestInputSchema,
         successDataSchema: getToolManifestSuccessDataSchema,
       },
       async () => {

@@ -1,12 +1,18 @@
 import type {
   CreateAdCreativeRequest,
+  DeleteAdCreativeRequest,
   UpdateAdCreativeRequest,
 } from '../../mcp/registries/AdCreativeToolRegistry.js';
 import type {
   CreateAdSetRequest,
+  DeleteAdSetRequest,
   UpdateAdSetRequest,
 } from '../../mcp/registries/AdSetToolRegistry.js';
-import type { CreateAdRequest, UpdateAdRequest } from '../../mcp/registries/AdToolRegistry.js';
+import type {
+  CreateAdRequest,
+  DeleteAdRequest,
+  UpdateAdRequest,
+} from '../../mcp/registries/AdToolRegistry.js';
 import type {
   GetAdsArchiveInsightsInput,
   GetPageArchiveAdsInput,
@@ -15,9 +21,13 @@ import type {
 } from '../../mcp/registries/AdsArchiveToolRegistry.js';
 import type {
   CreateCampaignRequest,
+  DeleteCampaignRequest,
   UpdateCampaignRequest,
 } from '../../mcp/registries/CampaignToolRegistry.js';
-import type { CreateCustomAudienceRequest } from '../../mcp/registries/CustomAudienceToolRegistry.js';
+import type {
+  CreateCustomAudienceRequest,
+  DeleteCustomAudienceRequest,
+} from '../../mcp/registries/CustomAudienceToolRegistry.js';
 import type {
   GetAdAccountInsightsInput,
   GetAdInsightsInput,
@@ -68,7 +78,7 @@ export class MetaToolsHandler {
     return this.campaignHandler.updateCampaign(authPayload, params);
   }
 
-  async deleteCampaign(authPayload: JWTPayload, params: { campaignId: string }) {
+  async deleteCampaign(authPayload: JWTPayload, params: DeleteCampaignRequest) {
     return this.campaignHandler.deleteCampaign(authPayload, params);
   }
 
@@ -85,7 +95,7 @@ export class MetaToolsHandler {
     return this.adSetHandler.updateAdSet(authPayload, params);
   }
 
-  async deleteAdSet(authPayload: JWTPayload, params: { adSetId: string }) {
+  async deleteAdSet(authPayload: JWTPayload, params: DeleteAdSetRequest) {
     return this.adSetHandler.deleteAdSet(authPayload, params);
   }
 
@@ -102,10 +112,7 @@ export class MetaToolsHandler {
     return this.adCreativeHandler.updateAdCreative(authPayload, params);
   }
 
-  async deleteAdCreative(
-    authPayload: JWTPayload,
-    params: { adCreativeId: string; confirmPermanentDelete?: boolean }
-  ) {
+  async deleteAdCreative(authPayload: JWTPayload, params: DeleteAdCreativeRequest) {
     return this.adCreativeHandler.deleteAdCreative(authPayload, params);
   }
 
@@ -140,10 +147,7 @@ export class MetaToolsHandler {
     return this.adHandler.updateAd(authPayload, params);
   }
 
-  async deleteAd(
-    authPayload: JWTPayload,
-    params: { adId: string; confirmPermanentDelete?: boolean }
-  ) {
+  async deleteAd(authPayload: JWTPayload, params: DeleteAdRequest) {
     return this.adHandler.deleteAd(authPayload, params);
   }
 
@@ -165,10 +169,7 @@ export class MetaToolsHandler {
     return this.customAudienceHandler.createCustomAudience(authPayload, params);
   }
 
-  async deleteCustomAudience(
-    authPayload: JWTPayload,
-    params: { customAudienceId: string; confirmPermanentDelete?: boolean }
-  ) {
+  async deleteCustomAudience(authPayload: JWTPayload, params: DeleteCustomAudienceRequest) {
     return this.customAudienceHandler.deleteCustomAudience(authPayload, params);
   }
 

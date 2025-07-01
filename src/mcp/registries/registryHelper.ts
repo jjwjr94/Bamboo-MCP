@@ -1,61 +1,130 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ZodTypeAny } from 'zod';
+import type { ZodRawShape, ZodTypeAny } from 'zod';
 import { extractAuthPayload } from '../../auth/mcpAuthUtils.js';
 import type { JWTPayload } from '../../types/auth.js';
+import { ValidationError } from '../../utils/errors.js';
+import { logger } from '../../utils/logger.js';
 import { createMcpErrorResult } from '../errorHandler.js';
 import { type CreateMcpSuccessResultOptions, createMcpSuccessResult } from '../responseHelper.js';
 import { createMcpOutputSchema } from '../types.js';
 
 /**
- * Creates and registers an MCP tool with discriminated union outputs.
- * This helper wraps a handler call that returns a clean domain object, and
- * automatically formats the result into the standard MCP success structure.
+ * A type constraint for MCP tool input schemas.
+ * Ensures the schema is a ZodObject or a ZodEffects schema wrapping a ZodObject.
+ * This is required by `extractShape` to get the raw shape for the MCP SDK.
+ */
+type McpToolInputSchema = z.ZodObject<ZodRawShape> | z.ZodEffects<z.ZodObject<ZodRawShape>>;
+
+/**
+ * Creates and registers an MCP tool with full Zod validation and type safety.
  *
- * It simplifies handler implementation by abstracting away the MCP-specific
- * response format. Handlers can focus on returning pure data objects.
+ * This helper ensures complete runtime validation including complex refinements,
+ * while providing the raw shape to the MCP SDK for metadata generation.
+ *
+ * Key improvements:
+ * - Accepts only ZodObject and ZodEffects (refined schemas) for maximum type safety
+ * - Performs validation internally before calling handlers
+ * - Provides strongly-typed parameters to handlers
+ * - Enforces type-safe handler return values that match successDataSchema
+ * - Validates handler output at runtime to ensure schema conformance
+ * - Maintains MCP SDK compatibility by extracting underlying object shape
+ * - Eliminates runtime normalization for better performance and consistency
  *
  * @param server The MCP server instance.
  * @param toolName The name of the tool.
  * @param definition The tool's definition including title, description, and schemas.
- * @param handlerCall The handler function that takes an auth payload and params, and returns a promise of the clean domain result.
+ * @param definition.inputSchema A ZodObject or ZodEffects schema for validating input parameters.
+ * @param definition.successDataSchema A Zod schema that defines the expected return type from handlers.
+ * @param handlerCall The handler function that takes an auth payload and validated, typed params, and returns data matching successDataSchema.
  * @param successMessage A static message to be used as the human-readable description for successful calls.
  * @param options Optional configuration for the success result, including attachPrompts for context initialization.
  * @returns The tool name that was registered.
+ *
+ * @note The inputSchema must be a ZodObject or a refined ZodEffects schema to ensure
+ * full type-safety and runtime validation of all parameters, including complex refinements.
+ * The handlerCall return type is now enforced to match successDataSchema for end-to-end type safety.
  */
-export function createMcpTool<TInputSchema extends ZodTypeAny, TSuccessSchema extends ZodTypeAny>(
+export function createMcpTool<
+  TInputSchema extends McpToolInputSchema,
+  TSuccessSchema extends ZodTypeAny,
+>(
   server: McpServer,
   toolName: string,
   definition: {
     title: string;
     description: string;
-    inputSchema: TInputSchema | Record<string, ZodTypeAny>;
+    inputSchema: TInputSchema;
     successDataSchema: TSuccessSchema;
   },
-  // biome-ignore lint/suspicious/noExplicitAny: Complex generic constraints require any for flexible parameter handling
-  handlerCall: (authPayload: JWTPayload, params: any) => Promise<unknown>,
+  handlerCall: (
+    authPayload: JWTPayload,
+    params: z.infer<TInputSchema>
+  ) => Promise<z.infer<TSuccessSchema>>,
   successMessage: string,
   options?: CreateMcpSuccessResultOptions
 ): string {
+  /**
+   * Extracts the raw shape from a Zod schema for MCP SDK compatibility.
+   * Uses Zod's public APIs to safely support both plain and refined schemas.
+   */
+  const extractShape = (schema: TInputSchema): z.ZodRawShape => {
+    // For ZodEffects (refined schemas), access the underlying schema using the public API.
+    // The `McpToolInputSchema` constraint ensures the inner schema is a ZodObject.
+    if (schema instanceof z.ZodEffects) {
+      return schema.innerType().shape;
+    }
+
+    // For a plain ZodObject, directly access its shape.
+    // The type guard is exhaustive because `TInputSchema` can only be one of these two types.
+    return schema.shape;
+  };
+
   server.registerTool(
     toolName,
     {
       title: definition.title,
       description: definition.description,
-      inputSchema: definition.inputSchema as Record<string, ZodTypeAny>,
+      // Extract raw shape for MCP SDK metadata/documentation compatibility
+      inputSchema: extractShape(definition.inputSchema),
       outputSchema: createMcpOutputSchema(definition.successDataSchema),
     },
     async (params, extra) => {
       try {
         const authPayload = extractAuthPayload(extra);
 
-        // Call the handler which now returns a clean domain object
-        // biome-ignore lint/suspicious/noExplicitAny: Runtime type assertion needed for MCP parameter handling
-        const typedParams = params as any;
-        const domainResult = await handlerCall(authPayload, typedParams);
+        // CRITICAL: Perform full validation including refinements
+        const validationResult = definition.inputSchema.safeParse(params);
+        if (!validationResult.success) {
+          // Add detailed logging for developers/debugging
+          logger.warn('MCP tool input validation failed', {
+            toolName,
+            params, // Log the raw input that failed
+            error: validationResult.error.format(), // Log the formatted error
+          });
+          const firstIssue = validationResult.error.issues[0];
+          const errorMessage = `Invalid input for tool '${toolName}'. Field '${firstIssue.path.join('.')}': ${firstIssue.message}`;
+          throw new ValidationError(errorMessage);
+        }
 
-        // Automatically wrap the clean result into the MCP success format
-        return await createMcpSuccessResult(domainResult, successMessage, options);
+        // Handler receives fully validated and strongly-typed parameters
+        const domainResult = await handlerCall(authPayload, validationResult.data);
+
+        // CRITICAL: Add runtime validation for the handler's output
+        const successDataResult = definition.successDataSchema.safeParse(domainResult);
+        if (!successDataResult.success) {
+          logger.error('Handler returned invalid success data', {
+            toolName,
+            error: successDataResult.error.format(),
+            domainResult,
+          });
+          throw new Error(
+            `Internal Server Error: Tool '${toolName}' produced an invalid response.`
+          );
+        }
+
+        // Automatically wrap the clean, validated result into the MCP success format
+        return await createMcpSuccessResult(successDataResult.data, successMessage, options);
       } catch (error) {
         // Error handling remains the same, wrapping errors in the MCP format
         return createMcpErrorResult(error);

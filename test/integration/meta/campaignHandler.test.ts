@@ -2,16 +2,11 @@
 import '../../helpers/testEnv.js';
 
 import { http } from 'msw';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MetaCampaignHandler } from '../../../src/tools/meta/campaignHandler.js';
-import { MetaApiError, ValidationError } from '../../../src/utils/errors.js';
-import {
-  TEST_AD_ACCOUNT_ID,
-  cleanupTestData,
-  createTestAuthPayload,
-  seedTestAdAccount,
-  seedTestUserAndToken,
-} from '../../helpers/db.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { CampaignToolRegistry } from '../../../src/mcp/registries/CampaignToolRegistry.js';
+import { MetaToolsHandler } from '../../../src/tools/meta/toolsHandler.js';
+import { TEST_AD_ACCOUNT_ID, createTestAuthPayload } from '../../helpers/db.js';
+import { invokeTool, mockMcpServer } from '../../helpers/mcp-harness.js';
 import {
   createErrorHandler,
   createMetaUrl,
@@ -19,6 +14,7 @@ import {
   createSuccessHandler,
   server,
 } from '../../helpers/msw.js';
+import { setupStandardTest } from '../../helpers/test-setup.js';
 
 import apiErrorFixtures from '../../fixtures/meta/api-errors.json' assert { type: 'json' };
 // Load test fixtures
@@ -27,30 +23,18 @@ import successResponseFixtures from '../../fixtures/meta/success-responses.json'
   type: 'json',
 };
 
-// Start MSW server before all tests
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-
-// Reset handlers after each test to ensure test isolation
-afterEach(() => server.resetHandlers());
-
-// Stop MSW server after all tests
-afterAll(() => server.close());
-
-// Seed database before each test
-beforeEach(async () => {
-  await seedTestUserAndToken();
-  await seedTestAdAccount();
+// Register tools once for the entire test suite
+beforeAll(() => {
+  const toolsHandler = new MetaToolsHandler();
+  const campaignRegistry = new CampaignToolRegistry(mockMcpServer, toolsHandler);
+  campaignRegistry.register();
 });
 
-// Clean up database after each test
-afterEach(async () => {
-  await cleanupTestData();
-});
-
-const handler = new MetaCampaignHandler();
 const mockAuthPayload = createTestAuthPayload();
 
 describe('MetaCampaignHandler', () => {
+  // Centralized setup for DB and MSW
+  setupStandardTest();
   describe('getCampaigns', () => {
     it('should return campaigns successfully when Meta API returns valid data', async () => {
       // Arrange: Mock successful Meta API response
@@ -62,17 +46,22 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act: Call the handler method
-      const result = await handler.getCampaigns(mockAuthPayload, {
-        adAccountId: TEST_AD_ACCOUNT_ID,
-      });
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        {
+          adAccountId: TEST_AD_ACCOUNT_ID,
+        },
+        mockAuthPayload
+      );
 
-      // Assert: Verify response structure and data
-      expect(result).toBeDefined();
-      expect(result.campaigns).toBeInstanceOf(Array);
-      expect(result.campaigns).toHaveLength(2);
+      // Assert: Verify MCP success response structure and data
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaigns).toBeInstanceOf(Array);
+      expect(result.structuredContent.result.data.campaigns).toHaveLength(2);
 
-      const firstCampaign = result.campaigns[0];
+      const firstCampaign = result.structuredContent.result.data.campaigns[0];
       expect(firstCampaign.id).toBe('23844883336250011');
       expect(firstCampaign.name).toBe('Test Campaign 1');
       expect(firstCampaign.status).toBe('ACTIVE');
@@ -89,14 +78,20 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act
-      const result = await handler.getCampaigns(mockAuthPayload, {
-        adAccountId: TEST_AD_ACCOUNT_ID,
-      });
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        {
+          adAccountId: TEST_AD_ACCOUNT_ID,
+        },
+        mockAuthPayload
+      );
 
-      // Assert
-      expect(result.campaigns).toBeInstanceOf(Array);
-      expect(result.campaigns).toHaveLength(0);
+      // Assert: Verify MCP success response structure and data
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaigns).toBeInstanceOf(Array);
+      expect(result.structuredContent.result.data.campaigns).toHaveLength(0);
     });
 
     it('should throw MetaApiError when Meta API returns authentication error', async () => {
@@ -110,18 +105,18 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(
-        handler.getCampaigns(mockAuthPayload, { adAccountId: TEST_AD_ACCOUNT_ID })
-      ).rejects.toThrowError(
-        expect.objectContaining({
-          name: 'BambooError',
-          code: 'META_API_ERROR',
-          statusCode: 401,
-          metaErrorCode: '190',
-          message: expect.stringContaining('Invalid OAuth access token'),
-        })
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        { adAccountId: TEST_AD_ACCOUNT_ID },
+        mockAuthPayload
       );
+
+      // Assert: Check for structured MCP error response
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('190');
+      expect(result.structuredContent.result.message).toContain('Authentication failed');
     });
 
     it('should throw MetaApiError when Meta API returns invalid parameter error', async () => {
@@ -135,10 +130,17 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(
-        handler.getCampaigns(mockAuthPayload, { adAccountId: TEST_AD_ACCOUNT_ID })
-      ).rejects.toThrow(MetaApiError);
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        { adAccountId: TEST_AD_ACCOUNT_ID },
+        mockAuthPayload
+      );
+
+      // Assert: Check for structured MCP error response
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('100');
     });
 
     it('should throw MetaApiError on network error', async () => {
@@ -147,10 +149,17 @@ describe('MetaCampaignHandler', () => {
         createNetworkErrorHandler('get', createMetaUrl(`/${TEST_AD_ACCOUNT_ID}/campaigns`))
       );
 
-      // Act & Assert
-      await expect(
-        handler.getCampaigns(mockAuthPayload, { adAccountId: TEST_AD_ACCOUNT_ID })
-      ).rejects.toThrow(MetaApiError);
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        { adAccountId: TEST_AD_ACCOUNT_ID },
+        mockAuthPayload
+      );
+
+      // Assert: Check for structured MCP error response
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('META_API_ERROR');
     });
 
     it('should throw MetaApiError when rate limit is exceeded', async () => {
@@ -164,17 +173,19 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(
-        handler.getCampaigns(mockAuthPayload, { adAccountId: TEST_AD_ACCOUNT_ID })
-      ).rejects.toThrowError(
-        expect.objectContaining({
-          name: 'BambooError',
-          code: 'META_API_ERROR',
-          statusCode: 429,
-          metaErrorCode: '4',
-          message: expect.stringContaining('Application request limit reached'),
-        })
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'get_campaigns',
+        { adAccountId: TEST_AD_ACCOUNT_ID },
+        mockAuthPayload
+      );
+
+      // Assert: Check for structured MCP error response
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('4');
+      expect(result.structuredContent.result.message).toContain(
+        'Application request limit reached'
       );
     });
   });
@@ -205,14 +216,16 @@ describe('MetaCampaignHandler', () => {
         })
       );
 
-      // Act
-      const result = await handler.createCampaign(mockAuthPayload, validCampaignParams);
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('create_campaign', validCampaignParams, mockAuthPayload);
 
       // Assert Response
-      expect(result.campaignId).toBe('23844883336250033');
-      expect(result.name).toBe('Test Campaign Creation');
-      expect(result.objective).toBe('OUTCOME_LEADS');
-      expect(result.status).toBe('PAUSED');
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaignId).toBe('23844883336250033');
+      expect(result.structuredContent.result.data.name).toBe('Test Campaign Creation');
+      expect(result.structuredContent.result.data.objective).toBe('OUTCOME_LEADS');
+      expect(result.structuredContent.result.data.status).toBe('PAUSED');
 
       // Assert Request Body
       expect(requestBody).toBeDefined();
@@ -239,14 +252,16 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act
-      const result = await handler.createCampaign(mockAuthPayload, lifetimeBudgetParams);
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('create_campaign', lifetimeBudgetParams, mockAuthPayload);
 
       // Assert
-      expect(result.campaignId).toBe('23844883336250033');
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaignId).toBe('23844883336250033');
     });
 
-    it('should throw ValidationError when both daily and lifetime budgets are provided', async () => {
+    it('should return validation error when both daily and lifetime budgets are provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
         budget: {
@@ -255,47 +270,53 @@ describe('MetaCampaignHandler', () => {
         },
       };
 
-      // Act & Assert
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        ValidationError
-      );
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('create_campaign', invalidParams, mockAuthPayload);
 
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
+      // Assert: Check for structured MCP validation error
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.structuredContent.result.message).toContain(
         'A campaign must have either a daily or lifetime budget, but not both'
       );
     });
 
-    it('should throw ValidationError when neither daily nor lifetime budget is provided', async () => {
+    it('should return validation error when neither daily nor lifetime budget is provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
         budget: {},
       };
 
-      // Act & Assert
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        ValidationError
-      );
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('create_campaign', invalidParams, mockAuthPayload);
 
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
+      // Assert: Check for structured MCP validation error
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.structuredContent.result.message).toContain(
         'A campaign must have either a daily or lifetime budget'
       );
     });
 
-    it('should throw ValidationError when special ad category requires country but none provided', async () => {
+    it('should return validation error when special ad category requires country but none provided', async () => {
       const invalidParams = {
         ...validCampaignParams,
         specialAd: {
           categories: ['EMPLOYMENT' as const],
-          country: [],
+          // country field is omitted/undefined, which is what triggers the validation error
         },
       };
 
-      // Act & Assert
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
-        ValidationError
-      );
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('create_campaign', invalidParams, mockAuthPayload);
 
-      await expect(handler.createCampaign(mockAuthPayload, invalidParams)).rejects.toThrow(
+      // Assert: Check for structured MCP validation error
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.structuredContent.result.message).toContain(
         "The 'country' parameter is required when 'categories' contains values other than 'NONE'"
       );
     });
@@ -310,10 +331,14 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(handler.createCampaign(mockAuthPayload, validCampaignParams)).rejects.toThrow(
-        MetaApiError
-      );
+      // Act
+      const result = await invokeTool('create_campaign', validCampaignParams, mockAuthPayload);
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('100');
+      expect(result.structuredContent.result.message).toContain('Campaign name is required');
     });
 
     it('should throw MetaApiError on network error during creation', async () => {
@@ -321,9 +346,15 @@ describe('MetaCampaignHandler', () => {
         createNetworkErrorHandler('post', createMetaUrl(`/${TEST_AD_ACCOUNT_ID}/campaigns`))
       );
 
-      // Act & Assert
-      await expect(handler.createCampaign(mockAuthPayload, validCampaignParams)).rejects.toThrow(
-        MetaApiError
+      // Act
+      const result = await invokeTool('create_campaign', validCampaignParams, mockAuthPayload);
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('META_API_ERROR');
+      expect(result.structuredContent.result.message).toContain(
+        'The request was made but no response was received'
       );
     });
   });
@@ -348,12 +379,13 @@ describe('MetaCampaignHandler', () => {
       );
 
       // Act
-      const result = await handler.updateCampaign(mockAuthPayload, updateParams);
+      const result = await invokeTool('update_campaign', updateParams, mockAuthPayload);
 
       // Assert Response
-      expect(result.campaignId).toBe(campaignId);
-      expect(result.updatedFields).toContain('name');
-      expect(result.updatedFields).toContain('status');
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaignId).toBe(campaignId);
+      expect(result.structuredContent.result.data.updatedFields).toEqual(['name', 'status']);
 
       // Assert Request Body
       expect(requestBody).toBeDefined();
@@ -371,19 +403,26 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(handler.updateCampaign(mockAuthPayload, updateParams)).rejects.toThrow(
-        MetaApiError
-      );
+      // Act
+      const result = await invokeTool('update_campaign', updateParams, mockAuthPayload);
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('100');
+      expect(result.structuredContent.result.message).toContain('Campaign not found');
     });
 
     it('should throw MetaApiError on network error during update', async () => {
       server.use(createNetworkErrorHandler('post', createMetaUrl(`/${campaignId}`)));
 
-      // Act & Assert
-      await expect(handler.updateCampaign(mockAuthPayload, updateParams)).rejects.toThrow(
-        MetaApiError
-      );
+      // Act
+      const result = await invokeTool('update_campaign', updateParams, mockAuthPayload);
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('META_API_ERROR');
     });
   });
 
@@ -400,28 +439,49 @@ describe('MetaCampaignHandler', () => {
       );
 
       // Act
-      const result = await handler.deleteCampaign(mockAuthPayload, {
-        campaignId,
-        confirmPermanentDelete: true,
-      });
+      const result = await invokeTool(
+        'delete_campaign',
+        {
+          campaignId,
+          confirmPermanentDelete: true,
+        },
+        mockAuthPayload
+      );
 
       // Assert
-      expect(result).toBeDefined();
-      expect(result.campaignId).toBe(campaignId);
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent.result.type).toBe('success');
+      expect(result.structuredContent.result.data.campaignId).toBe(campaignId);
     });
 
-    it('should throw ValidationError if confirmPermanentDelete is missing', async () => {
-      // Act & Assert
-      await expect(handler.deleteCampaign(mockAuthPayload, { campaignId })).rejects.toThrow(
-        'Permanent deletion was not confirmed.'
+    it('should return validation error if confirmPermanentDelete is missing', async () => {
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool('delete_campaign', { campaignId }, mockAuthPayload);
+
+      // Assert: Check for structured MCP validation error
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.structuredContent.result.message).toContain(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
       );
     });
 
-    it('should throw ValidationError if confirmPermanentDelete is false', async () => {
-      // Act & Assert
-      await expect(
-        handler.deleteCampaign(mockAuthPayload, { campaignId, confirmPermanentDelete: false })
-      ).rejects.toThrow('Permanent deletion was not confirmed.');
+    it('should return validation error if confirmPermanentDelete is false', async () => {
+      // Act: Call the tool through the MCP test harness
+      const result = await invokeTool(
+        'delete_campaign',
+        { campaignId, confirmPermanentDelete: false },
+        mockAuthPayload
+      );
+
+      // Assert: Check for structured MCP validation error
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('VALIDATION_ERROR');
+      expect(result.structuredContent.result.message).toContain(
+        'Permanent deletion was not confirmed. Set confirmPermanentDelete to true to proceed.'
+      );
     });
 
     it('should throw MetaApiError when campaign not found for deletion', async () => {
@@ -434,19 +494,33 @@ describe('MetaCampaignHandler', () => {
         )
       );
 
-      // Act & Assert
-      await expect(
-        handler.deleteCampaign(mockAuthPayload, { campaignId, confirmPermanentDelete: true })
-      ).rejects.toThrow(MetaApiError);
+      // Act
+      const result = await invokeTool(
+        'delete_campaign',
+        { campaignId, confirmPermanentDelete: true },
+        mockAuthPayload
+      );
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('100');
     });
 
     it('should throw MetaApiError on network error during deletion', async () => {
       server.use(createNetworkErrorHandler('delete', createMetaUrl(`/${campaignId}`)));
 
-      // Act & Assert
-      await expect(
-        handler.deleteCampaign(mockAuthPayload, { campaignId, confirmPermanentDelete: true })
-      ).rejects.toThrow(MetaApiError);
+      // Act
+      const result = await invokeTool(
+        'delete_campaign',
+        { campaignId, confirmPermanentDelete: true },
+        mockAuthPayload
+      );
+
+      // Assert
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.result.type).toBe('error');
+      expect(result._meta.errorMetadata.errorCode).toBe('META_API_ERROR');
     });
   });
 });

@@ -1,6 +1,6 @@
 import { SignJWT, decodeJwt, importPKCS8, importSPKI, errors as joseErrors, jwtVerify } from 'jose';
 import type { JWTPayload } from '../types/auth.js';
-import { env } from '../utils/env.js';
+import { env, getRequiredBaseUrl } from '../utils/env.js';
 import { TokenError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js';
 const jwtConfig = {
   algorithm: 'EdDSA' as const,
   expiresIn: env.JWT_EXPIRES_IN,
-  issuer: env.BASE_URL,
+  issuer: getRequiredBaseUrl('JWT issuer configuration'),
   audience: 'bamboo-mcp-client',
 };
 

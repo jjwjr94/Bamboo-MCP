@@ -6,7 +6,7 @@
  */
 
 // Set test environment variables before any imports
-process.env.NODE_ENV = 'development';
+process.env.NODE_ENV = 'test';
 process.env.BASE_URL = 'http://localhost:3000';
 process.env.FACEBOOK_APP_ID = 'test_app_id';
 process.env.FACEBOOK_APP_SECRET = 'test_app_secret';

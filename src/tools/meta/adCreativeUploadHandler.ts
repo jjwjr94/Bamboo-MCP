@@ -42,7 +42,10 @@ export class AdCreativeUploadHandler {
         const uploadId = newUploadRequest.id;
         const uploadUrl = `${env.BASE_URL}/v1/assets/upload/${uploadId}`;
 
-        const result: InitiateAssetUploadResult = { uploadId, uploadUrl };
+        const result: InitiateAssetUploadResult = {
+          uploadId,
+          uploadUrl,
+        };
         return result;
       },
       { toolName: 'initiate_asset_upload', userId: authPayload.userId }

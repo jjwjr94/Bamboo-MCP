@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { AdStatusSchema, MetaAdResponseSchema } from '../../generated/schemas.js';
@@ -37,16 +36,46 @@ export const CreateAdSchema = z.object({
 });
 
 // UpdateAd schema - single source of truth for ad updates
-export const UpdateAdSchema = z.object({
-  adId: z.string().describe('The ID of the ad to update.'),
-  name: z.string().optional().describe('New name for the ad.'),
-  status: AdStatusSchema.optional().describe('New status for the ad.'),
-  creativeId: z.string().optional().describe('New creative ID for the ad.'),
+export const UpdateAdSchema = z
+  .object({
+    adId: z.string().describe('The ID of the ad to update.'),
+    name: z.string().optional().describe('New name for the ad.'),
+    status: AdStatusSchema.optional().describe('New status for the ad.'),
+    creativeId: z.string().optional().describe('New creative ID for the ad.'),
+  })
+  .refine(
+    (data) => data.name !== undefined || data.status !== undefined || data.creativeId !== undefined,
+    {
+      message: 'At least one field to update (name, status, or creativeId) must be provided.',
+      path: [],
+    }
+  );
+
+// GetAds schema - single source of truth for ad retrieval
+export const GetAdsInputSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
+    ),
+  adSetId: z.string().optional().describe('The ID of the ad set to get ads from.'),
+  campaignId: z.string().optional().describe('The ID of the campaign to get ads from.'),
+});
+
+// DeleteAd schema - single source of truth for ad deletion
+export const DeleteAdInputSchema = z.object({
+  adId: z.string().describe('The ID of the ad to delete.'),
+  confirmPermanentDelete: DeletionConfirmationSchema.describe(
+    'Must be set to true to confirm permanent deletion.'
+  ),
 });
 
 // Export inferred types - single source of truth for TypeScript types
 export type CreateAdRequest = z.infer<typeof CreateAdSchema>;
 export type UpdateAdRequest = z.infer<typeof UpdateAdSchema>;
+export type GetAdsRequest = z.infer<typeof GetAdsInputSchema>;
+export type DeleteAdRequest = z.infer<typeof DeleteAdInputSchema>;
 
 /**
  * Ad Tool Registry
@@ -100,16 +129,7 @@ export class AdToolRegistry implements IToolRegistry {
       {
         title: 'Get Ads',
         description: 'Retrieves ads for an ad account, ad set, or campaign.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-          adSetId: z.string().optional().describe('The ID of the ad set to get ads from.'),
-          campaignId: z.string().optional().describe('The ID of the campaign to get ads from.'),
-        },
+        inputSchema: GetAdsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getAds(authPayload, params),
@@ -119,10 +139,11 @@ export class AdToolRegistry implements IToolRegistry {
 
   private registerCreateAd(): string {
     const successDataSchema = z.object({
-      adId: z.string(),
-      name: z.string(),
-      adSetId: z.string(),
-      adCreativeId: z.string(),
+      adId: z.string().describe('The ID of the newly created ad.'),
+      name: z.string().describe('The name of the ad.'),
+      adsetId: z.string().describe('The ID of the parent ad set.'),
+      creativeId: z.string().describe('The ID of the associated ad creative.'),
+      status: z.string().describe('The status of the newly created ad.'),
     });
 
     return createMcpTool(
@@ -131,7 +152,7 @@ export class AdToolRegistry implements IToolRegistry {
       {
         title: 'Create Ad',
         description: 'Creates a new ad within an ad set.',
-        inputSchema: CreateAdSchema.shape,
+        inputSchema: CreateAdSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createAd(authPayload, params),
@@ -151,7 +172,7 @@ export class AdToolRegistry implements IToolRegistry {
       {
         title: 'Update Ad',
         description: 'Updates an existing ad.',
-        inputSchema: UpdateAdSchema.shape,
+        inputSchema: UpdateAdSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateAd(authPayload, params),
@@ -171,12 +192,7 @@ export class AdToolRegistry implements IToolRegistry {
         title: 'Delete Ad',
         description:
           'Permanently deletes an ad. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
-        inputSchema: {
-          adId: z.string().describe('The ID of the ad to delete.'),
-          confirmPermanentDelete: DeletionConfirmationSchema.describe(
-            'Must be set to true to confirm permanent deletion.'
-          ),
-        },
+        inputSchema: DeleteAdInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.deleteAd(authPayload, params),

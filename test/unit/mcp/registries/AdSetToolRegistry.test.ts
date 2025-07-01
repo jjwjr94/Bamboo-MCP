@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AdSetBidStrategySchema } from '../../../../src/generated/schemas.js';
+import { CreateAdSetSchema } from '../../../../src/mcp/registries/AdSetToolRegistry.js';
 
 // Test the schema validation for create_adset tool
 describe('create_adset tool validation', () => {
@@ -133,47 +134,64 @@ describe('create_adset tool validation', () => {
   });
 
   describe('create_adset budget validation', () => {
-    // Test the actual schema from the registry
-    const budgetSchema = z
-      .object({
-        daily: z.number().int().positive().optional(),
-        lifetime: z.number().int().positive().optional(),
-      })
-      .refine(({ daily, lifetime }) => !!daily !== !!lifetime, {
-        message: 'Provide **either** daily **or** lifetime (one is required, not both).',
-        path: ['daily'],
-      });
+    // Use a minimal valid payload and test budget variations against the full schema
+    const minimalPayload = {
+      campaignId: '1',
+      name: 'Test',
+      targeting: { geoLocations: { countries: ['US'] } },
+      billingEvent: 'IMPRESSIONS' as const,
+      optimizationGoal: 'REACH' as const,
+    };
+
+    it('should pass validation when no budget is provided (for CBO)', () => {
+      const result = CreateAdSetSchema.safeParse({ ...minimalPayload });
+      expect(result.success).toBe(true);
+    });
 
     it('should accept valid daily budget only', () => {
-      const result = budgetSchema.safeParse({ daily: 1000 });
+      const result = CreateAdSetSchema.safeParse({ ...minimalPayload, budget: { daily: 1000 } });
       expect(result.success).toBe(true);
     });
 
     it('should accept valid lifetime budget only', () => {
-      const result = budgetSchema.safeParse({ lifetime: 50000 });
+      const result = CreateAdSetSchema.safeParse({
+        ...minimalPayload,
+        budget: { lifetime: 50000 },
+      });
       expect(result.success).toBe(true);
     });
 
     it('should reject when both budgets provided', () => {
-      const result = budgetSchema.safeParse({ daily: 1000, lifetime: 50000 });
+      const result = CreateAdSetSchema.safeParse({
+        ...minimalPayload,
+        budget: { daily: 1000, lifetime: 50000 },
+      });
       expect(result.success).toBe(false);
-      expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+      expect(result.error?.errors[0].message).toContain('but not both');
     });
 
-    it('should reject when no budget provided', () => {
-      const result = budgetSchema.safeParse({});
+    it('should reject when budget object is empty', () => {
+      const result = CreateAdSetSchema.safeParse({ ...minimalPayload, budget: {} });
       expect(result.success).toBe(false);
-      expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+      expect(result.error?.errors[0].message).toContain('specify **either** daily **or** lifetime');
     });
 
     it('should reject negative budget values', () => {
-      expect(budgetSchema.safeParse({ daily: -100 }).success).toBe(false);
-      expect(budgetSchema.safeParse({ lifetime: -500 }).success).toBe(false);
+      expect(
+        CreateAdSetSchema.safeParse({ ...minimalPayload, budget: { daily: -100 } }).success
+      ).toBe(false);
+      expect(
+        CreateAdSetSchema.safeParse({ ...minimalPayload, budget: { lifetime: -500 } }).success
+      ).toBe(false);
     });
 
     it('should reject non-integer budget values', () => {
-      expect(budgetSchema.safeParse({ daily: 10.5 }).success).toBe(false);
-      expect(budgetSchema.safeParse({ lifetime: 100.99 }).success).toBe(false);
+      expect(
+        CreateAdSetSchema.safeParse({ ...minimalPayload, budget: { daily: 10.5 } }).success
+      ).toBe(false);
+      expect(
+        CreateAdSetSchema.safeParse({ ...minimalPayload, budget: { lifetime: 100.99 } }).success
+      ).toBe(false);
     });
   });
 
@@ -214,6 +232,55 @@ describe('create_adset tool validation', () => {
       const result = updateBudgetSchema.safeParse({ daily: 2000, lifetime: 100000 });
       expect(result.success).toBe(false);
       expect(result.error?.errors[0].message).toContain('**either** daily **or** lifetime');
+    });
+  });
+
+  describe('create_adset conditional bidAmount validation', () => {
+    const minimalPayload = {
+      campaignId: '1',
+      name: 'Test',
+      budget: { daily: 1000 },
+      targeting: { geoLocations: { countries: ['US'] } },
+      billingEvent: 'IMPRESSIONS' as const,
+      optimizationGoal: 'REACH' as const,
+    };
+
+    it('should fail if bidStrategy is LOWEST_COST_WITH_BID_CAP and bidAmount is missing', () => {
+      const payload = { ...minimalPayload, bidStrategy: 'LOWEST_COST_WITH_BID_CAP' as const };
+      const result = CreateAdSetSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+      expect(result.error?.errors[0].path).toEqual(['bidAmount']);
+      expect(result.error?.errors[0].message).toContain("'bidAmount' is required");
+    });
+
+    it('should fail if bidStrategy is COST_CAP and bidAmount is missing', () => {
+      const payload = { ...minimalPayload, bidStrategy: 'COST_CAP' as const };
+      const result = CreateAdSetSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+      expect(result.error?.errors[0].path).toEqual(['bidAmount']);
+      expect(result.error?.errors[0].message).toContain("'bidAmount' is required");
+    });
+
+    it('should pass if bidStrategy is LOWEST_COST_WITH_BID_CAP and bidAmount is present', () => {
+      const payload = {
+        ...minimalPayload,
+        bidStrategy: 'LOWEST_COST_WITH_BID_CAP' as const,
+        bidAmount: 500,
+      };
+      const result = CreateAdSetSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+    });
+
+    it('should pass if bidStrategy does not require a bidAmount and it is missing', () => {
+      const payload = { ...minimalPayload, bidStrategy: 'LOWEST_COST_WITHOUT_CAP' as const };
+      const result = CreateAdSetSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+    });
+
+    it('should pass if no bidStrategy is specified (defaults to LOWEST_COST_WITHOUT_CAP)', () => {
+      const payload = { ...minimalPayload };
+      const result = CreateAdSetSchema.safeParse(payload);
+      expect(result.success).toBe(true);
     });
   });
 

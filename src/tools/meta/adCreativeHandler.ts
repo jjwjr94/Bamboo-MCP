@@ -2,7 +2,6 @@ import {
   AdAccount as MetaAdAccountSDK,
   AdCreative as MetaAdCreativeSDK,
 } from 'facebook-nodejs-business-sdk';
-import { z } from 'zod';
 import {
   MetaAdCreativeResponseSchema,
   MetaCreateSuccessResponseSchema,
@@ -11,9 +10,9 @@ import {
 } from '../../generated/schemas.js';
 import type {
   CreateAdCreativeRequest,
+  DeleteAdCreativeRequest,
   UpdateAdCreativeRequest,
 } from '../../mcp/registries/AdCreativeToolRegistry.js';
-import { DeletionConfirmationSchema } from '../../mcp/registries/registryHelper.js';
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
@@ -30,10 +29,7 @@ import type {
   UpdateAdCreativeResult,
 } from './types.js';
 
-// Define validation schema for ad creative deletion
-const DeleteAdCreativeValidationSchema = z.object({
-  confirmPermanentDelete: DeletionConfirmationSchema,
-});
+// Note: Input validation is now handled at the MCP tool registration level.
 
 export class MetaAdCreativeHandler {
   async getAdCreatives(
@@ -164,10 +160,9 @@ export class MetaAdCreativeHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const updateData = { [MetaAdCreativeSDK.Fields.name]: params.name };
-
-        // Ensure no undefined values are passed to Meta API
-        removeUndefinedProperties(updateData);
+        const updateData = {
+          [MetaAdCreativeSDK.Fields.name]: params.name,
+        };
 
         const adCreative = new MetaAdCreativeSDK(params.adCreativeId, {}, null, api);
         const response = await adCreative.update([], updateData);
@@ -186,7 +181,9 @@ export class MetaAdCreativeHandler {
 
         const result: UpdateAdCreativeResult = {
           adCreativeId: params.adCreativeId,
-          updatedFields: Object.keys(updateData),
+          // Hardcoded because the schema only permits updating the 'name' field,
+          // reflecting Meta API's immutability constraints for creatives.
+          updatedFields: ['name'],
         };
         return result;
       },
@@ -199,15 +196,9 @@ export class MetaAdCreativeHandler {
 
   async deleteAdCreative(
     authPayload: JWTPayload,
-    params: { adCreativeId: string; confirmPermanentDelete?: boolean }
+    params: DeleteAdCreativeRequest
   ): Promise<DeleteAdCreativeResult> {
     logger.info('Executing delete_ad_creative', { userId: authPayload.userId, params });
-
-    const validationResult = DeleteAdCreativeValidationSchema.safeParse(params);
-    if (!validationResult.success) {
-      const error = validationResult.error.errors[0];
-      throw new ValidationError(error.message);
-    }
 
     return await handleMetaApiCall(
       async () => {

@@ -9,6 +9,9 @@ export default defineConfig({
     // Use node environment for server-side testing
     environment: 'node',
 
+    // Setup files - run before each test file
+    setupFiles: ['test/helpers/testEnv.ts'],
+
     // Include test files
     include: ['test/**/*.test.ts'],
     exclude: ['node_modules', 'dist', 'test/fixtures/**'],

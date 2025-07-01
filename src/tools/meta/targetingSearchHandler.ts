@@ -54,6 +54,12 @@ interface MetaTargetingValidation {
   name: string;
   valid: boolean;
   status: string;
+  // Properties from the v22+ response schema
+  key?: string;
+  type?: string;
+  supports_city?: boolean;
+  supports_region?: boolean;
+  message?: string;
 }
 
 interface MetaSearchResponse<T> {
@@ -369,21 +375,24 @@ export class MetaTargetingSearchHandler {
           (await response.json()) as MetaSearchResponse<MetaTargetingValidation>;
         const validationResults = data.data || [];
 
+        // Transform to match Meta API v22+ actual response schema
         const result = {
-          validationResults: validationResults.map((item) => ({
+          validTargetingOptions: validationResults.map((item) => ({
+            key: item.key || item.id, // Fixed identifier unique in each category
             id: item.id,
             name: item.name,
-            isValid: item.valid === true,
-            status: item.status || 'unknown',
+            type: item.type || 'targeting_option',
+            supports_city: item.supports_city,
+            supports_region: item.supports_region,
+            is_valid: item.valid === true,
+            message: item.message,
           })),
-          totalValidated: validationResults.length,
-          validCount: validationResults.filter((item) => item.valid === true).length,
         };
 
         logger.info('Successfully validated targeting options', {
           userId: authPayload.userId,
-          totalValidated: result.totalValidated,
-          validCount: result.validCount,
+          totalValidated: validationResults.length,
+          validCount: validationResults.filter((item) => item.valid === true).length,
         });
 
         return result;

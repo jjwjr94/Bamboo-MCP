@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { MetaAdsArchiveResponseSchema } from '../../generated/schemas.js';
@@ -181,7 +180,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
         title: 'Search Ads Archive',
         description:
           'Searches Meta Ad Library for active and inactive ads to research competitors, trends, and best practices.',
-        inputSchema: AdsArchiveToolRegistry.SearchAdsArchiveInputSchema.shape,
+        inputSchema: AdsArchiveToolRegistry.SearchAdsArchiveInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.searchAdsArchive(authPayload, params),
@@ -203,7 +202,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
         title: 'Get Political Ads',
         description:
           'Retrieves political ads from the Meta Ad Library with enhanced transparency data.',
-        inputSchema: AdsArchiveToolRegistry.GetPoliticalAdsInputSchema.shape,
+        inputSchema: AdsArchiveToolRegistry.GetPoliticalAdsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getPoliticalAds(authPayload, params),
@@ -222,7 +221,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
       {
         title: 'Get Page Archive Ads',
         description: 'Retrieves all ads from a specific Facebook Page via the Ad Library.',
-        inputSchema: AdsArchiveToolRegistry.GetPageArchiveAdsInputSchema.shape,
+        inputSchema: AdsArchiveToolRegistry.GetPageArchiveAdsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getPageArchiveAds(authPayload, params),
@@ -244,7 +243,7 @@ export class AdsArchiveToolRegistry implements IToolRegistry {
         title: 'Get Ads Archive Insights',
         description:
           'Retrieves aggregated insights about ad spending and delivery from the Meta Ad Library.',
-        inputSchema: AdsArchiveToolRegistry.GetAdsArchiveInsightsInputSchema.shape,
+        inputSchema: AdsArchiveToolRegistry.GetAdsArchiveInsightsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getAdsArchiveInsights(authPayload, params),

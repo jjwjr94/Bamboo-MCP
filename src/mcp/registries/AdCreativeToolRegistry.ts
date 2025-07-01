@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
@@ -74,9 +73,53 @@ export const UpdateAdCreativeSchema = z.object({
   name: z.string().describe('New name for the ad creative.'),
 });
 
+// GetAdCreatives schema - single source of truth for ad creative retrieval
+export const GetAdCreativesInputSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ad account ID (e.g., 'act_12345'). If not provided, the selected account will be used."
+    ),
+});
+
+// DeleteAdCreative schema - single source of truth for ad creative deletion
+export const DeleteAdCreativeInputSchema = z.object({
+  adCreativeId: z.string().describe('The ID of the ad creative to delete.'),
+  confirmPermanentDelete: DeletionConfirmationSchema.describe(
+    'Must be set to true to confirm permanent deletion.'
+  ),
+});
+
+// InitiateAssetUpload schema - single source of truth for asset upload initiation
+export const InitiateAssetUploadInputSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe('The ad account ID. Optional if one is already selected.'),
+});
+
+// GetAssetUploadStatus schema - single source of truth
+export const GetAssetUploadStatusInputSchema = z.object({
+  uploadId: z.string().describe('The upload ID returned from initiate_asset_upload.'),
+});
+
+// GetAssetUploadStatus success schema - single source of truth
+const GetAssetUploadStatusSuccessSchema = z.object({
+  status: z
+    .string()
+    .describe('Current status of the upload (pending, uploading, completed, failed).'),
+  metaAssetId: z.string().optional().describe('The Meta asset ID (available when completed).'),
+  errorMessage: z.string().optional().describe('Error message if upload failed.'),
+});
+
 // Export inferred types - single source of truth for TypeScript types
 export type CreateAdCreativeRequest = z.infer<typeof CreateAdCreativeSchema>;
 export type UpdateAdCreativeRequest = z.infer<typeof UpdateAdCreativeSchema>;
+export type GetAdCreativesRequest = z.infer<typeof GetAdCreativesInputSchema>;
+export type DeleteAdCreativeRequest = z.infer<typeof DeleteAdCreativeInputSchema>;
+export type InitiateAssetUploadRequest = z.infer<typeof InitiateAssetUploadInputSchema>;
+export type GetAssetUploadStatusRequest = z.infer<typeof GetAssetUploadStatusInputSchema>;
 
 /**
  * Ad Creative Tool Registry
@@ -135,14 +178,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         title: 'Get Ad Creatives',
         description:
           'Retrieves all ad creatives for the selected or specified ad account. Ad creatives define the visual and textual content of ads.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ad account ID (e.g., 'act_12345'). If not provided, the selected account will be used."
-            ),
-        },
+        inputSchema: GetAdCreativesInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getAdCreatives(authPayload, params),
@@ -152,7 +188,8 @@ export class AdCreativeToolRegistry implements IToolRegistry {
 
   private registerCreateAdCreative(): string {
     const successDataSchema = z.object({
-      id: z.string().describe('The ID of the newly created ad creative.'),
+      adCreativeId: z.string().describe('The ID of the newly created ad creative.'),
+      name: z.string().describe('The name of the newly created ad creative.'),
     });
 
     return createMcpTool(
@@ -162,7 +199,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         title: 'Create Ad Creative',
         description:
           'Creates a new ad creative. Ad creatives define the visual and textual content that will be displayed in ads.',
-        inputSchema: CreateAdCreativeSchema.shape,
+        inputSchema: CreateAdCreativeSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createAdCreative(authPayload, params),
@@ -172,7 +209,8 @@ export class AdCreativeToolRegistry implements IToolRegistry {
 
   private registerUpdateAdCreative(): string {
     const successDataSchema = z.object({
-      success: z.boolean().describe('Whether the update was successful.'),
+      adCreativeId: z.string().describe('The ID of the updated ad creative.'),
+      updatedFields: z.array(z.string()).describe('A list of the fields that were updated.'),
     });
 
     return createMcpTool(
@@ -181,7 +219,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
       {
         title: 'Update Ad Creative',
         description: 'Updates an existing ad creative.',
-        inputSchema: UpdateAdCreativeSchema.shape,
+        inputSchema: UpdateAdCreativeSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateAdCreative(authPayload, params),
@@ -191,7 +229,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
 
   private registerDeleteAdCreative(): string {
     const successDataSchema = z.object({
-      success: z.boolean(),
+      adCreativeId: z.string().describe('The ID of the deleted ad creative.'),
     });
 
     return createMcpTool(
@@ -201,12 +239,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         title: 'Delete Ad Creative',
         description:
           'Permanently deletes an ad creative by its ID. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
-        inputSchema: {
-          adCreativeId: z.string().describe('The ID of the ad creative to delete.'),
-          confirmPermanentDelete: DeletionConfirmationSchema.describe(
-            'Must be set to true to confirm permanent deletion.'
-          ),
-        },
+        inputSchema: DeleteAdCreativeInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.deleteAdCreative(authPayload, params),
@@ -218,7 +251,6 @@ export class AdCreativeToolRegistry implements IToolRegistry {
     const successDataSchema = z.object({
       uploadId: z.string().describe('The upload ID to use for the file upload.'),
       uploadUrl: z.string().describe('The presigned URL to upload the file to.'),
-      formData: z.record(z.string()).describe('Form data fields required for the upload request.'),
     });
 
     return createMcpTool(
@@ -228,12 +260,7 @@ export class AdCreativeToolRegistry implements IToolRegistry {
         title: 'Initiate Asset Upload',
         description:
           'Prepares for uploading creative assets (images, videos) by generating a presigned upload URL and form data. Use this before uploading assets via file upload.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe('The ad account ID. Optional if one is already selected.'),
-        },
+        inputSchema: InitiateAssetUploadInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.initiateAssetUpload(authPayload, params),
@@ -242,25 +269,14 @@ export class AdCreativeToolRegistry implements IToolRegistry {
   }
 
   private registerGetAssetUploadStatus(): string {
-    const successDataSchema = z.object({
-      status: z
-        .string()
-        .describe('Current status of the upload (pending, processing, completed, error).'),
-      uploadId: z.string().describe('The upload ID.'),
-      assetId: z.string().optional().describe('The Meta asset ID (available when completed).'),
-      errorMessage: z.string().optional().describe('Error message if upload failed.'),
-    });
-
     return createMcpTool(
       this.server,
       'get_asset_upload_status',
       {
         title: 'Get Asset Upload Status',
         description: 'Checks the status of a previously initiated asset upload.',
-        inputSchema: {
-          uploadId: z.string().describe('The upload ID returned from initiate_asset_upload.'),
-        },
-        successDataSchema,
+        inputSchema: GetAssetUploadStatusInputSchema,
+        successDataSchema: GetAssetUploadStatusSuccessSchema,
       },
       (authPayload, params) => this.toolsHandler.getAssetUploadStatus(authPayload, params),
       'Successfully retrieved asset upload status.'

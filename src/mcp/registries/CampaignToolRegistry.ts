@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
@@ -11,7 +10,17 @@ import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
 import type { IToolRegistry } from '../types.js';
 import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 
-// Campaign Budget Schema with internal XOR validation
+// GetCampaigns schema - single source of truth
+export const GetCampaignsInputSchema = z.object({
+  adAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
+    ),
+});
+
+// Campaign budget schema - shared structure for campaign budget configuration
 const CampaignBudgetSchema = z
   .object({
     daily: z
@@ -19,42 +28,42 @@ const CampaignBudgetSchema = z
       .int()
       .positive()
       .optional()
-      .describe('Daily budget in cents (e.g., 1000 = $10.00)'),
+      .describe('Daily budget in cents (e.g., 1000 = $10.00 per day)'),
     lifetime: z
       .number()
       .int()
       .positive()
       .optional()
-      .describe('Lifetime budget in cents (e.g., 10000 = $100.00)'),
+      .describe('Lifetime budget in cents (e.g., 10000 = $100.00 total)'),
   })
-  .refine(
-    ({ daily, lifetime }) => !!daily !== !!lifetime, // XOR: exactly one should be defined
-    {
-      message: 'A campaign must have either a daily or lifetime budget, but not both.',
-      path: ['daily'],
-    }
-  );
+  .refine((budget) => budget.daily || budget.lifetime, {
+    message: 'A campaign must have either a daily or lifetime budget',
+    path: ['daily'],
+  })
+  .refine((budget) => !(budget.daily && budget.lifetime), {
+    message: 'A campaign must have either a daily or lifetime budget, but not both',
+    path: ['daily'],
+  });
 
-// Special Ad Category Schema with business logic validation
+// Special Ad Category schema - defines compliance requirements for restricted content
 const SpecialAdSchema = z
   .object({
     categories: z
       .array(CampaignSpecialAdCategoriesSchema)
       .default(['NONE'])
       .describe(
-        "An array of special ad categories for the campaign. Required by Meta policy. Defaults to ['NONE'] for standard campaigns. Setting a special category (e.g., 'HOUSING') will restrict targeting options. Valid values: 'CREDIT', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'HOUSING', 'ISSUES_ELECTIONS_POLITICS', 'NONE', 'ONLINE_GAMBLING_AND_GAMING'."
+        "Special ad categories for compliance. Use 'NONE' for regular ads. Other categories have specific targeting restrictions."
       ),
     country: z
-      .array(z.string().length(2, 'Country codes must be 2-letter ISO format.'))
+      .string()
       .optional()
       .describe(
-        "Required for special ad categories. An array of ISO 3166-1 alpha-2 country codes (e.g., ['US']). Must be provided when categories is not ['NONE']."
+        "Required country code (e.g., 'US') when using special ad categories other than 'NONE'."
       ),
   })
   .superRefine((data, ctx) => {
-    // Special Ad Category Validation: Ensure country is provided when special categories are used.
-    const hasSpecialCategory = data.categories.some((cat) => cat !== 'NONE');
-    if (hasSpecialCategory && (!data.country || data.country.length === 0)) {
+    const hasSpecialCategories = data.categories.some((category) => category !== 'NONE');
+    if (hasSpecialCategories && !data.country) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
@@ -117,9 +126,19 @@ export const UpdateCampaignSchema = z.object({
     ),
 });
 
+// DeleteCampaign schema - single source of truth for campaign deletion
+export const DeleteCampaignInputSchema = z.object({
+  campaignId: z.string().describe('The ID of the campaign to delete.'),
+  confirmPermanentDelete: DeletionConfirmationSchema.describe(
+    'Must be set to true to confirm permanent deletion.'
+  ),
+});
+
 // Export inferred types - single source of truth for TypeScript types
+export type GetCampaignsRequest = z.infer<typeof GetCampaignsInputSchema>;
 export type CreateCampaignRequest = z.infer<typeof CreateCampaignSchema>;
 export type UpdateCampaignRequest = z.infer<typeof UpdateCampaignSchema>;
+export type DeleteCampaignRequest = z.infer<typeof DeleteCampaignInputSchema>;
 
 /**
  * Handles registration of campaign-related MCP tools:
@@ -174,14 +193,7 @@ export class CampaignToolRegistry implements IToolRegistry {
         title: 'Get Campaigns',
         description:
           'Retrieves all campaigns for a specific ad account. If no adAccountId is provided, uses the previously selected account or auto-selects if only one account is available.',
-        inputSchema: {
-          adAccountId: z
-            .string()
-            .optional()
-            .describe(
-              "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
-            ),
-        },
+        inputSchema: GetCampaignsInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.getCampaigns(authPayload, params),
@@ -203,7 +215,7 @@ export class CampaignToolRegistry implements IToolRegistry {
       {
         title: 'Create Campaign',
         description: 'Creates a new advertising campaign.',
-        inputSchema: CreateCampaignSchema.shape,
+        inputSchema: CreateCampaignSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.createCampaign(authPayload, params),
@@ -223,7 +235,7 @@ export class CampaignToolRegistry implements IToolRegistry {
       {
         title: 'Update Campaign',
         description: 'Updates an existing campaign.',
-        inputSchema: UpdateCampaignSchema.shape,
+        inputSchema: UpdateCampaignSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.updateCampaign(authPayload, params),
@@ -243,12 +255,7 @@ export class CampaignToolRegistry implements IToolRegistry {
         title: 'Delete Campaign',
         description:
           'Permanently deletes a campaign by setting its status to DELETED. This action cannot be undone. The user must be prompted to confirm this permanent deletion before calling this tool.',
-        inputSchema: {
-          campaignId: z.string().describe('The ID of the campaign to delete.'),
-          confirmPermanentDelete: DeletionConfirmationSchema.describe(
-            'Must be set to true to confirm permanent deletion.'
-          ),
-        },
+        inputSchema: DeleteCampaignInputSchema,
         successDataSchema,
       },
       (authPayload, params) => this.toolsHandler.deleteCampaign(authPayload, params),

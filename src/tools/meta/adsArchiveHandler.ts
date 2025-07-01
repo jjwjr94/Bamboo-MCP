@@ -288,7 +288,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return { political_ads: validatedResults };
+        return { ads: validatedResults };
       },
       {
         toolName: 'get_political_ads',
@@ -365,7 +365,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return { page_ads: validatedResults };
+        return { ads: validatedResults };
       },
       {
         toolName: 'get_page_archive_ads',
@@ -454,7 +454,7 @@ export class MetaAdsArchiveHandler {
           requestedLimit: params.limit,
         });
 
-        return { ads_insights: validatedResults };
+        return { insights: validatedResults };
       },
       {
         toolName: 'get_ads_archive_insights',

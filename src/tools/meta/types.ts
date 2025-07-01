@@ -137,7 +137,7 @@ export interface InitiateAssetUploadResult {
 }
 
 export interface GetAssetUploadStatusResult {
-  status: string;
+  status: 'pending' | 'uploading' | 'completed' | 'failed';
   metaAssetId?: string;
   errorMessage?: string;
 }
@@ -153,11 +153,42 @@ export interface GetAdAccountInsightsResult {
 
 // Custom Audience Handler Results
 export interface GetCustomAudiencesResult {
-  audiences: MetaCustomAudience[];
+  customAudiences: {
+    id: string;
+    account_id?: string;
+    name: string;
+    description?: string;
+    approximate_count?: number;
+    approximate_count_lower_bound?: number;
+    approximate_count_upper_bound?: number;
+    customer_file_source?: string;
+    delivery_status?: {
+      code?: string;
+    };
+    external_event_source?: object;
+    is_value_based?: string;
+    lookalike_audience_ids?: object;
+    lookalike_spec?: object;
+    operation_status?: object;
+    opt_out_link?: string;
+    pixel_id?: string;
+    retention_days?: number;
+    time_created?: number;
+    time_updated?: number;
+    data_source?: {
+      type: string;
+      sub_type?: string;
+    };
+    permission_for_actions?: object;
+    sharing_status?: object;
+    subtype?: string;
+  }[];
 }
 
 export interface CreateCustomAudienceResult {
-  audienceId: string;
+  name: string;
+  subtype: string;
+  customAudienceId: string;
 }
 
 export type DeleteCustomAudienceResult = DeleteResult<'customAudienceId'>;
@@ -181,11 +212,42 @@ export interface GetAdAccountsResult {
 
 // Pages Handler Results
 export interface GetPagesResult {
-  pages: MetaPage[];
+  pages: {
+    id: string;
+    name: string;
+    category?: string;
+    category_list?: string[];
+    access_token?: string;
+    tasks?: string[];
+    perms?: string[];
+    can_create_ads?: boolean;
+    can_manage?: boolean;
+    picture?: {
+      url?: string;
+    };
+    link?: string;
+    about?: string;
+  }[];
 }
 
 export interface GetPagePostsResult {
-  posts: MetaPagePost[];
+  posts: {
+    id: string;
+    message?: string;
+    created_time?: string;
+    story?: string;
+    permalink_url?: string;
+    type?: string;
+    status_type?: string;
+    attachments?: object;
+    full_picture?: string;
+    shares?: {
+      count?: number;
+    };
+    reactions?: object;
+    comments?: object;
+    insights?: object;
+  }[];
 }
 
 export interface CreatePagePostAdResult {
@@ -195,11 +257,30 @@ export interface CreatePagePostAdResult {
 
 // Business Manager Handler Results
 export interface GetBusinessAccountsResult {
-  businesses: MetaBusinessAccount[];
+  businessAccounts: {
+    id: string;
+    name: string;
+    created_time?: string;
+    timezone_id?: string;
+    primary_page?: string;
+    vertical?: string;
+    two_factor_type?: string;
+  }[];
 }
 
 export interface GetBusinessUsersResult {
-  users: MetaBusinessUser[];
+  businessUsers: {
+    id: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    role?: string;
+    title?: string;
+    work_email?: string;
+    permissions?: string[];
+    finance_permission?: string;
+    created_time?: string;
+  }[];
 }
 
 // Ads Archive Handler Results
@@ -225,15 +306,15 @@ export interface SearchAdsArchiveResult {
 }
 
 export interface GetPoliticalAdsResult {
-  political_ads: MetaAdsArchiveAd[];
+  ads: MetaAdsArchiveAd[];
 }
 
 export interface GetPageArchiveAdsResult {
-  page_ads: MetaAdsArchiveAd[];
+  ads: MetaAdsArchiveAd[];
 }
 
 export interface GetAdsArchiveInsightsResult {
-  ads_insights: MetaAdsArchiveInsight[];
+  insights: MetaAdsArchiveInsight[];
 }
 
 // Targeting Search Handler Results
@@ -278,14 +359,16 @@ export interface SearchLocationsResult {
 }
 
 export interface TargetingValidationItem {
-  id: string;
+  key?: string;
+  id?: string;
   name: string;
-  isValid: boolean;
-  status: string;
+  type?: string;
+  supports_city?: boolean;
+  supports_region?: boolean;
+  is_valid?: boolean;
+  message?: string;
 }
 
 export interface ValidateTargetingOptionsResult {
-  validationResults: TargetingValidationItem[];
-  totalValidated: number;
-  validCount: number;
+  validTargetingOptions: TargetingValidationItem[];
 }

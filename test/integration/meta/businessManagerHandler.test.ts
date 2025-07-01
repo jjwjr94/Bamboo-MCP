@@ -64,12 +64,12 @@ describe('MetaBusinessManagerHandler', () => {
 
       // Assert
       expect(result).toBeDefined();
-      expect(result.businesses).toHaveLength(2);
-      expect(result.businesses[0]).toMatchObject({
+      expect(result.businessAccounts).toHaveLength(2);
+      expect(result.businessAccounts[0]).toMatchObject({
         id: 'business_123',
         name: 'Test Business 1',
       });
-      expect(result.businesses[1]).toMatchObject({
+      expect(result.businessAccounts[1]).toMatchObject({
         id: 'business_456',
         name: 'Test Business 2',
       });
@@ -89,7 +89,7 @@ describe('MetaBusinessManagerHandler', () => {
 
       // Assert
       expect(result).toBeDefined();
-      expect(result.businesses).toHaveLength(0);
+      expect(result.businessAccounts).toHaveLength(0);
     });
 
     it('should throw MetaApiError when API returns error', async () => {
@@ -151,8 +151,8 @@ describe('MetaBusinessManagerHandler', () => {
 
       // Assert
       expect(result).toBeDefined();
-      expect(result.users).toHaveLength(2);
-      expect(result.users[0]).toMatchObject({
+      expect(result.businessUsers).toHaveLength(2);
+      expect(result.businessUsers[0]).toMatchObject({
         id: 'user_abc',
         name: 'Test User A',
         email: 'user.a@example.com',
