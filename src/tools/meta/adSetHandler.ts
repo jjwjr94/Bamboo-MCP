@@ -18,7 +18,11 @@ import type {
 import type { JWTPayload } from '../../types/auth.js';
 import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
-import { ValidationError } from '../../utils/errors.js';
+import {
+  AggregatedValidationError,
+  ValidationError,
+  type ValidationIssue,
+} from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, handleMetaApiCall } from './api.js';
@@ -59,18 +63,28 @@ function isTargetingCalifornia(targeting: {
 function validateBudgetConstraints(
   isCboCampaign: boolean,
   budget: CreateAdSetRequest['budget']
-): void {
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   if (isCboCampaign && budget) {
-    throw new ValidationError(
-      'This ad set belongs to a Campaign Budget Optimization (CBO) campaign. The budget must be managed at the campaign level, so do not provide a budget for the ad set.'
-    );
+    issues.push({
+      field: 'budget',
+      message:
+        'This ad set belongs to a Campaign Budget Optimization (CBO) campaign. The budget must be managed at the campaign level, so do not provide a budget for the ad set.',
+      code: 'BUDGET_PROVIDED_FOR_CBO_ADSET',
+    });
   }
 
   if (!isCboCampaign && !budget) {
-    throw new ValidationError(
-      'This ad set belongs to a campaign without budget optimization. You must provide a budget (either daily or lifetime) for the ad set.'
-    );
+    issues.push({
+      field: 'budget',
+      message:
+        'This ad set belongs to a campaign without budget optimization. You must provide a budget (either daily or lifetime) for the ad set.',
+      code: 'BUDGET_REQUIRED_FOR_ABO_ADSET',
+    });
   }
+
+  return issues;
 }
 
 function validateSacCompliance(params: {
@@ -79,7 +93,7 @@ function validateSacCompliance(params: {
   targetsCalifornia: boolean;
   isSacCfcaTermsCertified?: boolean;
   isEligibleForSacCampaigns?: boolean;
-}): void {
+}): ValidationIssue[] {
   const {
     isSpecialAdCategory,
     optimizationGoal,
@@ -87,6 +101,8 @@ function validateSacCompliance(params: {
     isSacCfcaTermsCertified,
     isEligibleForSacCampaigns,
   } = params;
+
+  const issues: ValidationIssue[] = [];
 
   if (
     isSpecialAdCategory &&
@@ -96,16 +112,23 @@ function validateSacCompliance(params: {
     targetsCalifornia &&
     isSacCfcaTermsCertified !== true
   ) {
-    throw new ValidationError(
-      `For Special Ad Category campaigns with '${optimizationGoal}' goal targeting California, 'isSacCfcaTermsCertified' must be set to true.`
-    );
+    issues.push({
+      field: 'isSacCfcaTermsCertified',
+      message: `For Special Ad Category campaigns with '${optimizationGoal}' goal targeting California, 'isSacCfcaTermsCertified' must be set to true.`,
+      code: 'SAC_CFCA_CERTIFICATION_REQUIRED',
+    });
   }
 
   if (isSpecialAdCategory && isEligibleForSacCampaigns !== true) {
-    throw new ValidationError(
-      "For Special Ad Category campaigns, 'isEligibleForSacCampaigns' must be set to true as required by Meta's enhanced compliance framework from January 2025."
-    );
+    issues.push({
+      field: 'isEligibleForSacCampaigns',
+      message:
+        "For Special Ad Category campaigns, 'isEligibleForSacCampaigns' must be set to true as required by Meta's enhanced compliance framework from January 2025.",
+      code: 'SAC_ELIGIBILITY_REQUIRED',
+    });
   }
+
+  return issues;
 }
 
 /**
@@ -113,15 +136,15 @@ function validateSacCompliance(params: {
  * Based on Meta Marketing API v22+ requirements for Campaign Budget Optimization (CBO) campaigns.
  * @param campaignBidStrategy The bid_strategy of the parent campaign
  * @param adSetBidStrategy The bid_strategy proposed for the new ad set
- * @throws {ValidationError} If the strategies are incompatible
+ * @returns Array of validation issues, empty if valid
  */
 function validateBidStrategyCompatibility(
   campaignBidStrategy: string | undefined,
   adSetBidStrategy: string | undefined
-): void {
+): ValidationIssue[] {
   // If the campaign has no specific bid strategy, no validation is needed
   if (!campaignBidStrategy) {
-    return;
+    return [];
   }
 
   // Check if the campaign's bid strategy has defined restrictions
@@ -134,12 +157,18 @@ function validateBidStrategyCompatibility(
     const effectiveAdSetStrategy = adSetBidStrategy || 'LOWEST_COST_WITHOUT_CAP';
 
     if (!(compatibleAdSetStrategies as readonly string[]).includes(effectiveAdSetStrategy)) {
-      throw new ValidationError(
-        `Bid strategy conflict: The ad set's bid strategy '${effectiveAdSetStrategy}' is not compatible with the campaign's bid strategy '${campaignBidStrategy}'. ` +
-          `For this campaign, you must use one of the following strategies for the ad set: ${compatibleAdSetStrategies.join(', ')}.`
-      );
+      return [
+        {
+          field: 'bidStrategy',
+          message: `Bid strategy conflict: The ad set's bid strategy '${effectiveAdSetStrategy}' is not compatible with the campaign's bid strategy '${campaignBidStrategy}'. For this campaign, you must use one of the following strategies for the ad set: ${compatibleAdSetStrategies.join(', ')}.`,
+          code: 'BID_STRATEGY_INCOMPATIBLE_WITH_CAMPAIGN',
+          validOptions: compatibleAdSetStrategies as readonly string[],
+        },
+      ];
     }
   }
+
+  return [];
 }
 
 export class MetaAdSetHandler {
@@ -191,7 +220,13 @@ export class MetaAdSetHandler {
 
     // Bid strategy validation (only if a bid strategy update is requested)
     if (params.bidStrategy) {
-      validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy);
+      const bidStrategyIssues = validateBidStrategyCompatibility(
+        campaign.bid_strategy,
+        params.bidStrategy
+      );
+      if (bidStrategyIssues.length > 0) {
+        throw new ValidationError(bidStrategyIssues[0].message);
+      }
     }
   }
 
@@ -300,27 +335,38 @@ export class MetaAdSetHandler {
           'bid_strategy',
         ]);
 
+        // Aggregate all validation issues before throwing
+        const validationIssues: ValidationIssue[] = [];
+
         // Bid strategy compatibility validation (requires async campaign data)
-        validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy);
+        validationIssues.push(
+          ...validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy)
+        );
 
         const isSpecialAdCategory = hasSpecialAdCategory(campaign);
 
         // Campaign vs. Ad Set Budget Validation (requires async campaign data)
         const isCboCampaign = isCampaignBudgetOptimized(campaign);
-
-        validateBudgetConstraints(isCboCampaign, params.budget);
+        validationIssues.push(...validateBudgetConstraints(isCboCampaign, params.budget));
 
         // Check for California targeting (async validation)
         const targetsCalifornia = isTargetingCalifornia(params.targeting);
 
         // Enforce SAC-CFCA compliance rule (requires async data)
-        validateSacCompliance({
-          isSpecialAdCategory,
-          optimizationGoal: params.optimizationGoal,
-          targetsCalifornia,
-          isSacCfcaTermsCertified: params.isSacCfcaTermsCertified,
-          isEligibleForSacCampaigns: params.isEligibleForSacCampaigns,
-        });
+        validationIssues.push(
+          ...validateSacCompliance({
+            isSpecialAdCategory,
+            optimizationGoal: params.optimizationGoal,
+            targetsCalifornia,
+            isSacCfcaTermsCertified: params.isSacCfcaTermsCertified,
+            isEligibleForSacCampaigns: params.isEligibleForSacCampaigns,
+          })
+        );
+
+        // If any validation issues exist, throw aggregated error
+        if (validationIssues.length > 0) {
+          throw new AggregatedValidationError(validationIssues);
+        }
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,

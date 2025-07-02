@@ -29,9 +29,36 @@ export class AuthorizationError extends BambooError {
   }
 }
 
+/**
+ * Represents a single, specific validation failure.
+ */
+export interface ValidationIssue {
+  field: string;
+  message: string;
+  code?: string;
+  validOptions?: readonly string[];
+}
+
 export class ValidationError extends BambooError {
-  constructor(message = 'Invalid input') {
-    super(message, 'VALIDATION_ERROR', 400);
+  constructor(message = 'Invalid input', code = 'VALIDATION_ERROR') {
+    super(message, code, 400);
+  }
+}
+
+/**
+ * An error class that aggregates multiple validation issues into a single error.
+ * This is used to report all validation failures to the user at once,
+ * improving the user experience by avoiding multiple round trips.
+ */
+export class AggregatedValidationError extends ValidationError {
+  public readonly issues: readonly ValidationIssue[];
+
+  constructor(issues: ValidationIssue[]) {
+    const issueCount = issues.length;
+    const message = `Invalid input: ${issueCount} issue(s) found. Please correct all issues and try again.`;
+    super(message, 'AGGREGATED_VALIDATION_ERROR');
+    this.name = 'AggregatedValidationError';
+    this.issues = issues;
   }
 }
 

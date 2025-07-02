@@ -1,6 +1,7 @@
 import type { CallToolResult, TextContent } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
+  AggregatedValidationError,
   AuthenticationError,
   AuthorizationError,
   MetaApiError,
@@ -8,6 +9,7 @@ import {
   TimeoutError,
   TokenError,
   ValidationError,
+  type ValidationIssue,
   isBambooError,
 } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -59,6 +61,7 @@ export interface McpStructuredError {
   type: 'error';
   message: string;
   error: McpErrorMetadata;
+  issues?: readonly ValidationIssue[];
   [key: string]: unknown;
 }
 
@@ -148,6 +151,7 @@ export function deriveUnknownErrorDetails(error: unknown): {
 export function deriveErrorDetails(error: unknown): {
   message: string;
   metadata: McpErrorMetadata;
+  issues?: readonly ValidationIssue[];
 } {
   if (error instanceof AuthenticationError || error instanceof TokenError) {
     return {
@@ -181,6 +185,19 @@ export function deriveErrorDetails(error: unknown): {
         errorCode: error.code,
         category: 'rate_limit',
       },
+    };
+  }
+
+  // Handle AggregatedValidationError before ValidationError for proper specificity
+  if (error instanceof AggregatedValidationError) {
+    return {
+      message: error.message,
+      metadata: {
+        retryable: false,
+        errorCode: error.code,
+        category: 'validation',
+      },
+      issues: error.issues,
     };
   }
 
@@ -227,7 +244,7 @@ export function deriveErrorDetails(error: unknown): {
 }
 
 export function createMcpErrorResult(error: unknown): CallToolResult {
-  const { message, metadata } = deriveErrorDetails(error);
+  const { message, metadata, issues } = deriveErrorDetails(error);
 
   const errorContent: TextContent = {
     type: 'text',
@@ -245,6 +262,11 @@ export function createMcpErrorResult(error: unknown): CallToolResult {
       category: metadata.category,
     },
   };
+
+  // Add issues array for aggregated validation errors
+  if (issues) {
+    structuredError.issues = issues;
+  }
 
   // Always wrap errors in { result: ... } format for discriminated union compatibility
   return {

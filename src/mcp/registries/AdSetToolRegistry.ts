@@ -15,6 +15,50 @@ import { DeletionConfirmationSchema, createMcpTool } from './registryHelper.js';
 // Bid strategies that require bid_amount - Meta API v22+ requirements
 const BID_STRATEGIES_REQUIRING_BID_AMOUNT = new Set(['LOWEST_COST_WITH_BID_CAP', 'COST_CAP']);
 
+/**
+ * Validates billing event and optimization goal compatibility
+ * @param billingEvent The billing event from the input
+ * @param optimizationGoal The optimization goal from the input
+ * @param ctx The Zod refinement context
+ */
+function validateBillingOptimizationCompatibility(
+  billingEvent: string,
+  optimizationGoal: string,
+  ctx: z.RefinementCtx
+): void {
+  if (!(billingEvent in ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP)) {
+    return; // No validation rules for this billing event
+  }
+
+  const compatibleGoals =
+    ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP[
+      billingEvent as keyof typeof ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP
+    ];
+
+  if (compatibleGoals.includes(optimizationGoal as never)) {
+    return; // Compatible combination
+  }
+
+  // Find which billing events would be compatible with the chosen optimization goal
+  const compatibleBillingEvents: string[] = [];
+  for (const [billing, goals] of Object.entries(ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP)) {
+    if (goals.includes(optimizationGoal as never)) {
+      compatibleBillingEvents.push(billing);
+    }
+  }
+
+  const billingEventSuggestion =
+    compatibleBillingEvents.length > 0
+      ? ` To use '${optimizationGoal}' optimization, use one of these billing events: '${compatibleBillingEvents.join("', '")}'.`
+      : '';
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: `Optimization goal '${optimizationGoal}' is not compatible with billing event '${billingEvent}'. Valid optimization goals for '${billingEvent}' billing are: '${compatibleGoals.join("', '")}'.${billingEventSuggestion}`,
+    path: ['optimizationGoal'],
+  });
+}
+
 // Targeting schema definition - the single source of truth for targeting structure
 export const MetaTargetingSchema = z.object({
   geoLocations: z.object({
@@ -191,10 +235,10 @@ export const CreateAdSetSchema = z
       "Targeting criteria for the ad set. Geographic targeting (geoLocations) is REQUIRED. **2025 Best Practice:** For many objectives (e.g., Sales/Conversions), Meta's AI performs best with broad targeting (e.g., only location and age). Use interests/behaviors for niche products or specific strategies. Combining multiple criteria narrows your audience. Example: Target US users aged 25-45 interested in coffee and exclude existing customers."
     ),
     billingEvent: AdSetBillingEventSchema.describe(
-      "What you pay for when your ad is served. This choice strictly limits the available 'optimizationGoal' values. **Our server enforces these compatibility rules based on Meta API v22+ requirements to prevent API errors.** For example: 'IMPRESSIONS' billing is compatible with 'IMPRESSIONS' or 'REACH' optimization, while 'THRUPLAY' billing is only compatible with 'THRUPLAY' optimization."
+      "What you pay for when your ad is served. This choice strictly limits the available 'optimizationGoal' values. **Our server enforces these compatibility rules based on Meta API v22+ requirements to prevent API errors.** For example: 'IMPRESSIONS' billing is only compatible with 'IMPRESSIONS' and 'REACH' optimization goals, while 'LINK_CLICKS' billing is compatible with 'LINK_CLICKS' and 'LANDING_PAGE_VIEWS' optimization goals."
     ),
     optimizationGoal: AdSetOptimizationGoalSchema.describe(
-      'How Meta optimizes ad delivery to find the best users for your campaign objective. Must be compatible with billingEvent - server validates this compatibility. Special requirements: APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id, VALUE/CONVERSIONS work best with conversion tracking and attribution specs. iOS 14.5+ campaigns may need minimum 3-day duration for value optimization.'
+      "How Meta optimizes ad delivery to find the best users for your campaign objective. This choice MUST be compatible with the selected 'billingEvent'. **Our server validates this compatibility to prevent API errors.** For example: 'LANDING_PAGE_VIEWS' optimization goal is compatible with 'IMPRESSIONS' or 'LINK_CLICKS' billing events. 'CONVERSIONS' optimization is compatible with 'IMPRESSIONS' or 'PURCHASE' billing events. Special requirements: APP_INSTALLS requires promotedObject.application_id, LEAD_GENERATION requires promotedObject.page_id, VALUE/CONVERSIONS work best with conversion tracking and attribution specs. iOS 14.5+ campaigns may need minimum 3-day duration for value optimization."
     ),
     bidStrategy: AdSetBidStrategySchema.default('LOWEST_COST_WITHOUT_CAP').describe(
       'Controls how Meta bids in the ad auction. Defaults to LOWEST_COST_WITHOUT_CAP. LOWEST_COST_WITHOUT_CAP is automatic bidding. LOWEST_COST_WITH_BID_CAP uses automatic bidding with a max bid limit (requires bidAmount). COST_CAP targets an average cost per result (requires bidAmount). TARGET_COST was fully deprecated in v9.0 and is no longer a valid option. Choose based on your budget control needs.'
@@ -264,19 +308,7 @@ export const CreateAdSetSchema = z
 
     // 3. Billing event compatibility matrix validation (business logic)
     const billingEvent = data.billingEvent;
-    if (billingEvent in ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP) {
-      const compatibleGoals =
-        ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP[
-          billingEvent as keyof typeof ADSET_COMPATIBILITY.BILLING_OPTIMIZATION_MAP
-        ];
-      if (!compatibleGoals.includes(data.optimizationGoal as never)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Optimization goal '${data.optimizationGoal}' is not compatible with billing event '${billingEvent}'. Valid optimization goals for '${billingEvent}' are: ${compatibleGoals.join(', ')}.`,
-          path: ['optimizationGoal'],
-        });
-      }
-    }
+    validateBillingOptimizationCompatibility(billingEvent, data.optimizationGoal, ctx);
   });
 
 // UpdateAdSet schema - single source of truth for ad set updates

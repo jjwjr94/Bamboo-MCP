@@ -37,20 +37,20 @@ export const ADSET_COMPATIBILITY = {
   /**
    * Maps billing_event values to their compatible optimization_goal values.
    * Based on Meta Marketing API v22+ compatibility matrix research.
-   * Only enforces validation for billing events with known restrictions.
+   * Updated for 2025 to reflect current Meta API requirements.
    */
   BILLING_OPTIMIZATION_MAP: {
-    /** APP_INSTALLS billing event only supports APP_INSTALLS optimization */
-    APP_INSTALLS: ['APP_INSTALLS'],
-    /** IMPRESSIONS billing event supports awareness and reach goals */
+    /** IMPRESSIONS billing only supports awareness-based optimization goals per Meta API v22+ requirements */
     IMPRESSIONS: ['IMPRESSIONS', 'REACH'],
     /** LINK_CLICKS billing event supports traffic-focused goals */
     LINK_CLICKS: ['LINK_CLICKS', 'LANDING_PAGE_VIEWS'],
-    /** THRUPLAY billing event only supports video view optimization */
+    /** THRUPLAY billing event supports video view optimization */
     THRUPLAY: ['THRUPLAY'],
-    /** PURCHASE billing event supports conversion-focused goals */
-    PURCHASE: ['CONVERSIONS', 'VALUE', 'LEAD_GENERATION'],
-    // Note: NONE, POST_ENGAGEMENT, and LISTING_INTERACTION billing events
+    /** PAGE_LIKES billing event supports engagement goals */
+    PAGE_LIKES: ['PAGE_LIKES'],
+    /** POST_ENGAGEMENT billing event supports engagement goals */
+    POST_ENGAGEMENT: ['POST_ENGAGEMENT', 'PAGE_LIKES'],
+    // Note: NONE, OFFER_CLAIMS, and LISTING_INTERACTION billing events
     // are not restricted here as they have broader compatibility
   } as const,
 
