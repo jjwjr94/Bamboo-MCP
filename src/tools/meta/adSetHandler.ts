@@ -208,25 +208,24 @@ export class MetaAdSetHandler {
       'bid_strategy',
     ]);
 
+    const validationIssues: ValidationIssue[] = [];
+
     // Budget validation (only if a budget update is requested)
     if (params.budget && (params.budget.daily || params.budget.lifetime)) {
       const isCboCampaign = isCampaignBudgetOptimized(campaign);
-      if (isCboCampaign) {
-        throw new ValidationError(
-          'Cannot update the budget of an ad set that belongs to a Campaign Budget Optimization (CBO) campaign. Budget must be managed at the campaign level.'
-        );
-      }
+      validationIssues.push(...validateBudgetConstraints(isCboCampaign, params.budget));
     }
 
     // Bid strategy validation (only if a bid strategy update is requested)
     if (params.bidStrategy) {
-      const bidStrategyIssues = validateBidStrategyCompatibility(
-        campaign.bid_strategy,
-        params.bidStrategy
+      validationIssues.push(
+        ...validateBidStrategyCompatibility(campaign.bid_strategy, params.bidStrategy)
       );
-      if (bidStrategyIssues.length > 0) {
-        throw new ValidationError(bidStrategyIssues[0].message);
-      }
+    }
+
+    // If any validation issues were found, throw an aggregated error
+    if (validationIssues.length > 0) {
+      throw new AggregatedValidationError(validationIssues);
     }
   }
 

@@ -55,7 +55,15 @@ export class AggregatedValidationError extends ValidationError {
 
   constructor(issues: ValidationIssue[]) {
     const issueCount = issues.length;
-    const message = `Invalid input: ${issueCount} issue(s) found. Please correct all issues and try again.`;
+    const pluralS = issueCount === 1 ? '' : 's';
+    const header = `Invalid input: ${issueCount} issue${pluralS} found. Please correct the following and try again:`;
+
+    const issueDetails = issues
+      .map((issue) => `  • For field '${issue.field}': ${issue.message}`)
+      .join('\n');
+
+    const message = `${header}\n${issueDetails}`;
+
     super(message, 'AGGREGATED_VALIDATION_ERROR');
     this.name = 'AggregatedValidationError';
     this.issues = issues;
