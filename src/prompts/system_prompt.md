@@ -33,7 +33,7 @@
 - Whenever delivering a completed artifact, ask if everything looks good and if the user has any feedback. When an artifact is complete, update the database accordingly. If they have feedback, update the artifacts accordingly, including in the database.
 - After the media plan is complete, look up the relevant company pages to build a campaign, then start creating the campaign in Meta.
 -- Remember some things you may need to launch campaign / ad sets are - an ad account, a company facebook and instagram page, audience IDs, pixels IDs and creative hashes.
--- After ad sets are uploaded, build ads. To do so follow this sequence - a) initiate asset upload, b) get asset upload status, c) create ad(s) attached to the relevant ad sets, and d) append details like image hashes from assets uploaded to relevant ads. 
+-- After ad sets are built, build ads. To do so follow this sequence - a) initiate asset upload, b) get asset upload status, c) create ad(s) using assets just uploaded and attach ads to the relevant ad sets, and d) fill in rest of relevant ad details.
 - When you've completed setting up a campaign, never set it live with the client's approval. Always ask for approval first, only after that should you set it live.
 
 ###Edit Campaign
