@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
-import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
+import { createMCPAuthRouter } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
 import { CoreServices } from './mcp/coreServices.js';
@@ -160,130 +160,31 @@ export async function build(opts = {}) {
     return reply.send(healthStatus);
   });
 
+  // Debug endpoint to check environment configuration
+  app.get('/debug/env', async (_request, reply) => {
+    const envCheck = {
+      hasDatabaseUrl: !!env.DATABASE_URL,
+      hasFacebookAppId: !!env.FACEBOOK_APP_ID,
+      hasFacebookAppSecret: !!env.FACEBOOK_APP_SECRET,
+      hasFacebookCallbackUrl: !!env.FACEBOOK_CALLBACK_URL,
+      hasJwtPrivateKey: !!env.JWT_PRIVATE_KEY,
+      hasJwtPublicKey: !!env.JWT_PUBLIC_KEY,
+      hasBaseUrl: !!env.BASE_URL,
+      nodeEnv: env.NODE_ENV,
+      baseUrl: env.BASE_URL,
+      facebookCallbackUrl: env.FACEBOOK_CALLBACK_URL,
+      metaApiVersion: env.META_API_VERSION,
+    };
+
+    return reply.send(envCheck);
+  });
+
   // Initialize CoreServices once at startup
   const coreServices = await CoreServices.initialize();
 
-  // OAuth authorization endpoint - redirects to the real Meta OAuth flow
-  app.get('/authorize', async (request, reply) => {
-    const { 
-      client_id, 
-      redirect_uri, 
-      response_type, 
-      scope, 
-      state, 
-      code_challenge
-    } = request.query as any;
-
-    logger.info('OAuth authorization request received', {
-      client_id,
-      redirect_uri,
-      response_type,
-      scope,
-      state: state ? 'present' : 'missing',
-      code_challenge: code_challenge ? 'present' : 'missing'
-    });
-
-    // Validate required parameters
-    if (!client_id || !redirect_uri || response_type !== 'code') {
-      logger.warn('Invalid OAuth authorization request', {
-        client_id: !!client_id,
-        redirect_uri: !!redirect_uri,
-        response_type
-      });
-      
-      return reply.status(400).send({
-        error: 'invalid_request',
-        error_description: 'Missing or invalid required parameters'
-      });
-    }
-
-    try {
-      // Redirect to the real Meta OAuth flow
-      const provider = createMCPOAuthProvider();
-      await provider.authorize(
-        {
-          client_id,
-          redirect_uris: [redirect_uri],
-          grant_types: ['authorization_code'],
-          response_types: ['code'],
-          token_endpoint_auth_method: 'client_secret_post',
-          scope: env.FACEBOOK_OAUTH_SCOPES.replace(/,/g, ' '),
-          client_id_issued_at: Math.floor(Date.now() / 1000),
-        },
-        {
-          scopes: scope ? scope.split(' ') : undefined,
-          state,
-          codeChallenge: code_challenge,
-          redirectUri: redirect_uri,
-        },
-        reply
-      );
-    } catch (error) {
-      logger.error('OAuth authorization error', {
-        client_id,
-        redirect_uri,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      
-      return reply.status(500).send({
-        error: 'server_error',
-        error_description: 'Internal server error during authorization'
-      });
-    }
-  });
-
-  // OAuth token endpoint - delegates to the real Meta OAuth flow
-  app.post('/token', async (request, reply) => {
-    const { client_id, code, redirect_uri, grant_type } = request.body as Record<string, string>;
-
-    // 1. Basic validation
-    if (grant_type !== 'authorization_code' || !code) {
-      return reply.code(400).send({ error: 'unsupported_grant_type' });
-    }
-
-    try {
-      // Delegate to the real Meta OAuth flow
-      const provider = createMCPOAuthProvider();
-      const tokens = await provider.exchangeAuthorizationCode(
-        {
-          client_id,
-          redirect_uris: [redirect_uri],
-          grant_types: ['authorization_code'],
-          response_types: ['code'],
-          token_endpoint_auth_method: 'client_secret_post',
-          scope: env.FACEBOOK_OAUTH_SCOPES.replace(/,/g, ' '),
-          client_id_issued_at: Math.floor(Date.now() / 1000),
-        },
-        code
-      );
-
-      return reply.send(tokens);
-    } catch (error) {
-      logger.error('Token exchange error', { error });
-      return reply.code(400).send({ 
-        error: 'invalid_grant',
-        error_description: error instanceof Error ? error.message : 'Token exchange failed'
-      });
-    }
-  });
-
-  app.get('/oauth/callback', async (request, reply) => {
-    const { code, state } = request.query as { code?: string; state?: string };
-
-    if (!code || !state) {
-      return reply.status(400).send({ error: 'Missing code or state parameter' });
-    }
-
-    const provider = createMCPOAuthProvider();
-    const result = await provider.handleCallback(code, state);
-
-    if (result.success) {
-      return reply.redirect(result.redirectUrl);
-    }
-
-    logger.error('OAuth callback failed', { error: result.error });
-    return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
-  });
+  // Mount the MCP OAuth router at the root level (not legacy)
+  const mcpAuthRouter = createMCPAuthRouter();
+  app.use('/', mcpAuthRouter);
 
   // Initialize the MetaToolsHandler for upload processing
   const metaToolsHandler = new MetaToolsHandler();
@@ -292,42 +193,6 @@ export async function build(opts = {}) {
   app.register(async function (fastify) {
     setupMCPHttpTransport(fastify, coreServices);
   }, { prefix: '/mcp' });
-
-  // Mount the auth router at a different prefix to avoid conflicts
-  const mcpAuthRouter = createMCPAuthRouter();
-  app.use('/legacy-oauth', mcpAuthRouter);
-
-  // Override the OAuth metadata to use /authorize endpoint
-  app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
-    const baseUrl = env.BASE_URL || 'https://bamboo-mcp-dev.onrender.com';
-    
-    return reply.send({
-      issuer: baseUrl,
-      service_documentation: 'https://docs.meta.com/',
-      authorization_endpoint: `${baseUrl}/authorize`,
-      response_types_supported: ['code'],
-      code_challenge_methods_supported: ['S256'],
-      token_endpoint: `${baseUrl}/token`,
-      token_endpoint_auth_methods_supported: ['client_secret_post'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      scopes_supported: env.FACEBOOK_OAUTH_SCOPES.split(','),
-      revocation_endpoint: `${baseUrl}/revoke`,
-      revocation_endpoint_auth_methods_supported: ['client_secret_post'],
-      registration_endpoint: `${baseUrl}/register`
-    });
-  });
-
-  // Add protected resource metadata endpoint
-  app.get('/.well-known/oauth-protected-resource', async (_request, reply) => {
-    const baseUrl = env.BASE_URL || 'https://bamboo-mcp-dev.onrender.com';
-    
-    return reply.send({
-      resource: baseUrl,
-      authorization_servers: [baseUrl],
-      scopes_supported: env.FACEBOOK_OAUTH_SCOPES.split(','),
-      bearer_methods_supported: ['header']
-    });
-  });
 
   // Creative asset upload endpoints
 
