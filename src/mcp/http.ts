@@ -261,16 +261,123 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
     }
   );
 
-  // Method not allowed for MCP endpoint
-  fastify.get('/', async (_request, reply) => {
-    return reply.status(405).send({
-      jsonrpc: '2.0',
-      error: {
-        code: -32000,
-        message: 'Method not allowed. Use POST for MCP requests.',
-      },
-      id: null,
-    });
+  // GET endpoint for SSE streams (required by MCP specification)
+  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+    const acceptHeader = request.headers.accept;
+    
+    // Check if client is requesting Server-Sent Events
+    if (acceptHeader && acceptHeader.includes('text/event-stream')) {
+      try {
+        // Extract and verify JWT token for authentication
+        const token = extractTokenFromHeader(request.headers.authorization);
+        const authPayload = await verifyJWT(token);
+        
+        logger.info(`HTTP MCP SSE: Authenticated user ${authPayload.userId}`, {
+          requestId: request.id,
+        });
+
+        // Set up SSE headers
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Cache-Control',
+        });
+
+        // Create a new server instance for this SSE connection
+        const bambooServer = new BambooMCPServer(coreServices, request.id);
+        const mcpServer = bambooServer.getServer();
+
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: false, // SSE mode
+        });
+
+        // Set up cleanup when connection closes
+        setupTransportCleanup(reply, bambooServer, request.id);
+
+        try {
+          await mcpServer.connect(transport);
+          
+          const authInfo: AuthInfo = {
+            token: token,
+            clientId: authPayload.clientId,
+            scopes: authPayload.scopes,
+            expiresAt: authPayload.exp,
+            extra: { authPayload },
+          };
+
+          const reqWithAuth = Object.assign(request.raw, { auth: authInfo });
+
+          // Handle the SSE stream
+          await pTimeout(transport.handleRequest(reqWithAuth, reply.raw, null), {
+            milliseconds: env.MCP_REQUEST_TIMEOUT,
+            message: `MCP SSE stream timed out after ${env.MCP_REQUEST_TIMEOUT}ms`,
+          });
+        } catch (error) {
+          logger.error('MCP SSE transport error', {
+            userId: authPayload.userId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            requestId: request.id,
+          });
+          
+          if (!reply.raw.headersSent) {
+            reply.raw.writeHead(500, { 'Content-Type': 'application/json' });
+            reply.raw.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: {
+                code: -32603,
+                message: 'SSE stream error',
+              },
+              id: null,
+            }));
+          }
+        }
+      } catch (error) {
+        // Authentication failed
+        if (error instanceof TokenError || error instanceof AuthenticationError) {
+          logger.warn('SSE authentication failed', {
+            error: error.message,
+            requestId: request.id,
+          });
+          
+          return reply.status(401).send({
+            jsonrpc: '2.0',
+            error: {
+              code: -32001,
+              message: error.message,
+            },
+            id: null,
+          });
+        }
+        
+        // Other errors
+        logger.error('SSE setup error', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          requestId: request.id,
+        });
+        
+        return reply.status(500).send({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error',
+          },
+          id: null,
+        });
+      }
+    } else {
+      // If not requesting SSE, return method not allowed
+      return reply.status(405).send({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: 'Method not allowed. Use POST for MCP requests or include text/event-stream in Accept header.',
+        },
+        id: null,
+      });
+    }
   });
 
   fastify.delete('/', async (_request, reply) => {
