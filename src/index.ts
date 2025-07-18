@@ -42,21 +42,6 @@ process.on('unhandledRejection', (reason, promise) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// ─── OAuth temp-code store ───────────────────────────────────────────
-type AuthCodeRecord = {
-  clientId: string;
-  redirectUri: string;
-  expiry: number; // epoch ms
-};
-
-const authCodes = new Map<string, AuthCodeRecord>();
-
-function generateAuthCode(rec: AuthCodeRecord): string {
-  const code = `ac_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  authCodes.set(code, rec);
-  return code;
-}
-
 // Upload template utilities have been extracted to src/utils/uploadTemplates.ts
 
 export async function build(opts = {}) {
@@ -178,7 +163,7 @@ export async function build(opts = {}) {
   // Initialize CoreServices once at startup
   const coreServices = await CoreServices.initialize();
 
-  // OAuth authorization endpoint for Claude compatibility
+  // OAuth authorization endpoint - redirects to the real Meta OAuth flow
   app.get('/authorize', async (request, reply) => {
     const { 
       client_id, 
@@ -213,28 +198,26 @@ export async function build(opts = {}) {
     }
 
     try {
-      // For now, generate a simple authorization code and redirect
-      // This is a simplified implementation - you may need to integrate with your existing OAuth flow
-      const authCode = generateAuthCode({
-        clientId: client_id,
-        redirectUri: redirect_uri,
-        expiry: Date.now() + 5 * 60_000, // 5 minutes
-      });
-      
-      // Build redirect URL with authorization code
-      const redirectUrl = new URL(redirect_uri);
-      redirectUrl.searchParams.set('code', authCode);
-      if (state) {
-        redirectUrl.searchParams.set('state', state);
-      }
-
-      logger.info('OAuth authorization successful, redirecting', {
-        client_id,
-        redirect_uri,
-        authCode
-      });
-      
-      return reply.status(302).redirect(redirectUrl.toString());
+      // Redirect to the real Meta OAuth flow
+      const provider = createMCPOAuthProvider();
+      await provider.authorize(
+        {
+          client_id,
+          redirect_uris: [redirect_uri],
+          grant_types: ['authorization_code'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'client_secret_post',
+          scope: env.FACEBOOK_OAUTH_SCOPES.replace(/,/g, ' '),
+          client_id_issued_at: Math.floor(Date.now() / 1000),
+        },
+        {
+          scopes: scope ? scope.split(' ') : undefined,
+          state,
+          codeChallenge: code_challenge,
+          redirectUri: redirect_uri,
+        },
+        reply
+      );
     } catch (error) {
       logger.error('OAuth authorization error', {
         client_id,
@@ -249,7 +232,7 @@ export async function build(opts = {}) {
     }
   });
 
-  // ─── OAuth token endpoint ────────────────────────────────────────────
+  // OAuth token endpoint - delegates to the real Meta OAuth flow
   app.post('/token', async (request, reply) => {
     const { client_id, code, redirect_uri, grant_type } = request.body as Record<string, string>;
 
@@ -258,28 +241,30 @@ export async function build(opts = {}) {
       return reply.code(400).send({ error: 'unsupported_grant_type' });
     }
 
-    const record = authCodes.get(code);
-    if (
-      !record ||
-      record.clientId !== client_id ||
-      record.redirectUri !== redirect_uri ||
-      Date.now() > record.expiry
-    ) {
-      return reply.code(400).send({ error: 'invalid_grant' });
+    try {
+      // Delegate to the real Meta OAuth flow
+      const provider = createMCPOAuthProvider();
+      const tokens = await provider.exchangeAuthorizationCode(
+        {
+          client_id,
+          redirect_uris: [redirect_uri],
+          grant_types: ['authorization_code'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'client_secret_post',
+          scope: env.FACEBOOK_OAUTH_SCOPES.replace(/,/g, ' '),
+          client_id_issued_at: Math.floor(Date.now() / 1000),
+        },
+        code
+      );
+
+      return reply.send(tokens);
+    } catch (error) {
+      logger.error('Token exchange error', { error });
+      return reply.code(400).send({ 
+        error: 'invalid_grant',
+        error_description: error instanceof Error ? error.message : 'Token exchange failed'
+      });
     }
-
-    // Optional: delete the code so it can't be reused
-    authCodes.delete(code);
-
-    // 2. Mint a throw-away access token (static string is fine for dev)
-    const accessToken = `at_${Math.random().toString(36).slice(2)}`;
-
-    return reply.send({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: 3600,
-      scope: 'mcp'
-    });
   });
 
   app.get('/oauth/callback', async (request, reply) => {
@@ -311,21 +296,6 @@ export async function build(opts = {}) {
   // Mount the auth router at a different prefix to avoid conflicts
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/legacy-oauth', mcpAuthRouter);
-
-  // Stub dynamic registration endpoint
-  app.post('/register', async (_request, reply) => {
-    return reply.code(201).send({
-      client_id: `cid_${Math.random().toString(36).slice(2)}`,
-      client_secret: `cs_${Math.random().toString(36).slice(2)}`,
-      client_id_issued_at: Math.floor(Date.now() / 1000),
-      token_endpoint_auth_method: 'client_secret_basic',
-    });
-  });
-
-  // Stub revocation endpoint
-  app.post('/revoke', async (_request, reply) => {
-    return reply.code(200).send({});
-  });
 
   // Override the OAuth metadata to use /authorize endpoint
   app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
