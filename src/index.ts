@@ -17,6 +17,7 @@ import { MetaToolsHandler } from './tools/meta/toolsHandler.js';
 import { env } from './utils/env.js';
 import { ValidationError } from './utils/errors.js';
 import { logger } from './utils/logger.js';
+import type { AuthorizationParams } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 
 import {
   categorizeUploadError,
@@ -108,12 +109,22 @@ export async function build(opts = {}) {
     );
   }
 
+  // Updated CORS configuration for Claude compatibility
   app.register(cors, {
-    // If origins are defined, use them. Otherwise, fall back to permissive mode in non-production.
-    origin: env.ALLOWED_ORIGINS.length > 0 ? env.ALLOWED_ORIGINS : env.NODE_ENV !== 'production',
+    origin: env.ALLOWED_ORIGINS.length > 0 ? [
+      ...env.ALLOWED_ORIGINS,
+      'https://claude.ai',
+      'https://api.claude.ai'
+    ] : env.NODE_ENV !== 'production',
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'MCP-Protocol-Version',
+      'Accept',
+      'Cache-Control'
+    ],
   });
 
   await app.register(multipart, {
@@ -141,6 +152,101 @@ export async function build(opts = {}) {
     return reply.send(healthStatus);
   });
 
+  // Initialize CoreServices once at startup
+  const coreServices = await CoreServices.initialize();
+
+  // OAuth authorization endpoint for Claude compatibility
+  app.get('/authorize', async (request, reply) => {
+    const { 
+      client_id, 
+      redirect_uri, 
+      response_type, 
+      scope, 
+      state, 
+      code_challenge, 
+      code_challenge_method 
+    } = request.query as any;
+
+    logger.info('OAuth authorization request received', {
+      client_id,
+      redirect_uri,
+      response_type,
+      scope,
+      state: state ? 'present' : 'missing',
+      code_challenge: code_challenge ? 'present' : 'missing'
+    });
+
+    // Validate required parameters
+    if (!client_id || !redirect_uri || response_type !== 'code') {
+      logger.warn('Invalid OAuth authorization request', {
+        client_id: !!client_id,
+        redirect_uri: !!redirect_uri,
+        response_type
+      });
+      
+      return reply.status(400).send({
+        error: 'invalid_request',
+        error_description: 'Missing or invalid required parameters'
+      });
+    }
+
+    try {
+      // Get the auth provider from CoreServices
+      const authProvider = coreServices.authProvider;
+      
+      // Use the existing authorization logic from your MetaServerAuthProvider
+      const authParams: AuthorizationParams = {
+        clientId: client_id,
+        redirectUri: redirect_uri,
+        responseType: response_type,
+        scope: scope || '',
+        state: state || '',
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method
+      };
+
+      // Call the provider's authorize method
+      const authResult = await authProvider.authorize(authParams);
+      
+      if (authResult.redirectUrl) {
+        logger.info('OAuth authorization successful, redirecting', {
+          client_id,
+          redirect_uri
+        });
+        
+        return reply.redirect(302, authResult.redirectUrl);
+      } else {
+        logger.error('OAuth authorization failed - no redirect URL', {
+          client_id,
+          redirect_uri
+        });
+        
+        return reply.status(400).send({
+          error: 'authorization_failed',
+          error_description: 'Authorization could not be completed'
+        });
+      }
+    } catch (error) {
+      logger.error('OAuth authorization error', {
+        client_id,
+        redirect_uri,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      if (error instanceof ValidationError) {
+        return reply.status(400).send({
+          error: 'invalid_client',
+          error_description: error.message
+        });
+      }
+      
+      return reply.status(500).send({
+        error: 'server_error',
+        error_description: 'Internal server error during authorization'
+      });
+    }
+  });
+
   app.get('/oauth/callback', async (request, reply) => {
     const { code, state } = request.query as { code?: string; state?: string };
 
@@ -159,18 +265,52 @@ export async function build(opts = {}) {
     return reply.status(400).send({ error: result.error || 'OAuth callback failed' });
   });
 
-  // Initialize CoreServices once at startup
-  const coreServices = await CoreServices.initialize();
-
   // Initialize the MetaToolsHandler for upload processing
   const metaToolsHandler = new MetaToolsHandler();
 
   // Pass the CoreServices instance to the transport setup
   setupMCPHttpTransport(app, coreServices);
 
+  // Add MCP endpoint at /mcp path for Claude compatibility
+  app.register(async function (fastify) {
+    setupMCPHttpTransport(fastify, coreServices);
+  }, { prefix: '/mcp' });
+
   // Auth routes
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
+
+  // Override the OAuth metadata to use /authorize endpoint
+  app.get('/.well-known/oauth-authorization-server', async (request, reply) => {
+    const baseUrl = env.BASE_URL || 'https://bamboo-mcp-dev.onrender.com';
+    
+    return reply.send({
+      issuer: baseUrl,
+      service_documentation: 'https://docs.meta.com/',
+      authorization_endpoint: `${baseUrl}/authorize`, // Changed from baseUrl to baseUrl/authorize
+      response_types_supported: ['code'],
+      code_challenge_methods_supported: ['S256'],
+      token_endpoint: `${baseUrl}/token`,
+      token_endpoint_auth_methods_supported: ['client_secret_post'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      scopes_supported: env.FACEBOOK_OAUTH_SCOPES.split(','),
+      revocation_endpoint: `${baseUrl}/revoke`,
+      revocation_endpoint_auth_methods_supported: ['client_secret_post'],
+      registration_endpoint: `${baseUrl}/register`
+    });
+  });
+
+  // Add protected resource metadata endpoint
+  app.get('/.well-known/oauth-protected-resource', async (request, reply) => {
+    const baseUrl = env.BASE_URL || 'https://bamboo-mcp-dev.onrender.com';
+    
+    return reply.send({
+      resource: baseUrl,
+      authorization_servers: [baseUrl],
+      scopes_supported: env.FACEBOOK_OAUTH_SCOPES.split(','),
+      bearer_methods_supported: ['header']
+    });
+  });
 
   // Creative asset upload endpoints
 
