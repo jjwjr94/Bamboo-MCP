@@ -186,8 +186,7 @@ export async function build(opts = {}) {
       response_type, 
       scope, 
       state, 
-      code_challenge, 
-      code_challenge_method 
+      code_challenge
     } = request.query as any;
 
     logger.info('OAuth authorization request received', {
@@ -235,7 +234,7 @@ export async function build(opts = {}) {
         authCode
       });
       
-      return reply.redirect(302, redirectUrl.toString());
+      return reply.status(302).redirect(redirectUrl.toString());
     } catch (error) {
       logger.error('OAuth authorization error', {
         client_id,
@@ -444,7 +443,7 @@ export async function build(opts = {}) {
 
       try {
         // Set extended timeout for uploads
-        request.raw.setTimeout(env.FASTIFY_UPLOAD_REQUEST_TIMEOUT);
+        request.raw.setTimeout(Number(env.FASTIFY_UPLOAD_REQUEST_TIMEOUT));
 
         const data = await request.file();
         if (!data) {
