@@ -160,25 +160,6 @@ export async function build(opts = {}) {
     return reply.send(healthStatus);
   });
 
-  // Debug endpoint to check environment configuration
-  app.get('/debug/env', async (_request, reply) => {
-    const envCheck = {
-      hasDatabaseUrl: !!env.DATABASE_URL,
-      hasFacebookAppId: !!env.FACEBOOK_APP_ID,
-      hasFacebookAppSecret: !!env.FACEBOOK_APP_SECRET,
-      hasFacebookCallbackUrl: !!env.FACEBOOK_CALLBACK_URL,
-      hasJwtPrivateKey: !!env.JWT_PRIVATE_KEY,
-      hasJwtPublicKey: !!env.JWT_PUBLIC_KEY,
-      hasBaseUrl: !!env.BASE_URL,
-      nodeEnv: env.NODE_ENV,
-      baseUrl: env.BASE_URL,
-      facebookCallbackUrl: env.FACEBOOK_CALLBACK_URL,
-      metaApiVersion: env.META_API_VERSION,
-    };
-
-    return reply.send(envCheck);
-  });
-
   // Initialize CoreServices once at startup
   const coreServices = await CoreServices.initialize();
 
