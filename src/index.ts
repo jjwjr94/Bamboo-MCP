@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import fastifyExpress from '@fastify/express';
+import formbody from '@fastify/formbody';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
@@ -40,6 +41,21 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// ─── OAuth temp-code store ───────────────────────────────────────────
+type AuthCodeRecord = {
+  clientId: string;
+  redirectUri: string;
+  expiry: number; // epoch ms
+};
+
+const authCodes = new Map<string, AuthCodeRecord>();
+
+function generateAuthCode(rec: AuthCodeRecord): string {
+  const code = `ac_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  authCodes.set(code, rec);
+  return code;
+}
 
 // Upload template utilities have been extracted to src/utils/uploadTemplates.ts
 
@@ -126,11 +142,19 @@ export async function build(opts = {}) {
     ],
   });
 
+  // Register form body parser for OAuth token endpoint
+  await app.register(formbody);
+
   await app.register(multipart, {
     limits: {
       fileSize: 4 * 1024 * 1024 * 1024, // 4GB limit for creative assets (Meta's max video size)
       files: 1, // Only allow one file per upload
     },
+  });
+
+  // Root health probe
+  app.get('/', async (_request, reply) => {
+    return reply.send({ mcp: 'ready' });
   });
 
   app.get('/health', async (_request, reply) => {
@@ -192,7 +216,11 @@ export async function build(opts = {}) {
     try {
       // For now, generate a simple authorization code and redirect
       // This is a simplified implementation - you may need to integrate with your existing OAuth flow
-      const authCode = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const authCode = generateAuthCode({
+        clientId: client_id,
+        redirectUri: redirect_uri,
+        expiry: Date.now() + 5 * 60_000, // 5 minutes
+      });
       
       // Build redirect URL with authorization code
       const redirectUrl = new URL(redirect_uri);
@@ -222,6 +250,39 @@ export async function build(opts = {}) {
     }
   });
 
+  // ─── OAuth token endpoint ────────────────────────────────────────────
+  app.post('/token', async (request, reply) => {
+    const { client_id, code, redirect_uri, grant_type } = request.body as Record<string, string>;
+
+    // 1. Basic validation
+    if (grant_type !== 'authorization_code' || !code) {
+      return reply.code(400).send({ error: 'unsupported_grant_type' });
+    }
+
+    const record = authCodes.get(code);
+    if (
+      !record ||
+      record.clientId !== client_id ||
+      record.redirectUri !== redirect_uri ||
+      Date.now() > record.expiry
+    ) {
+      return reply.code(400).send({ error: 'invalid_grant' });
+    }
+
+    // Optional: delete the code so it can't be reused
+    authCodes.delete(code);
+
+    // 2. Mint a throw-away access token (static string is fine for dev)
+    const accessToken = `at_${Math.random().toString(36).slice(2)}`;
+
+    return reply.send({
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      scope: 'mcp'
+    });
+  });
+
   app.get('/oauth/callback', async (request, reply) => {
     const { code, state } = request.query as { code?: string; state?: string };
 
@@ -243,17 +304,29 @@ export async function build(opts = {}) {
   // Initialize the MetaToolsHandler for upload processing
   const metaToolsHandler = new MetaToolsHandler();
 
-  // Pass the CoreServices instance to the transport setup
-  setupMCPHttpTransport(app, coreServices);
-
   // Add MCP endpoint at /mcp path for Claude compatibility
   app.register(async function (fastify) {
     setupMCPHttpTransport(fastify, coreServices);
   }, { prefix: '/mcp' });
 
-  // Auth routes
+  // Mount the auth router at a different prefix to avoid conflicts
   const mcpAuthRouter = createMCPAuthRouter();
-  app.use('/', mcpAuthRouter);
+  app.use('/legacy-oauth', mcpAuthRouter);
+
+  // Stub dynamic registration endpoint
+  app.post('/register', async (_request, reply) => {
+    return reply.code(201).send({
+      client_id: `cid_${Math.random().toString(36).slice(2)}`,
+      client_secret: `cs_${Math.random().toString(36).slice(2)}`,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      token_endpoint_auth_method: 'client_secret_basic',
+    });
+  });
+
+  // Stub revocation endpoint
+  app.post('/revoke', async (_request, reply) => {
+    return reply.code(200).send({});
+  });
 
   // Override the OAuth metadata to use /authorize endpoint
   app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
@@ -262,7 +335,7 @@ export async function build(opts = {}) {
     return reply.send({
       issuer: baseUrl,
       service_documentation: 'https://docs.meta.com/',
-      authorization_endpoint: `${baseUrl}/authorize`, // Changed from baseUrl to baseUrl/authorize
+      authorization_endpoint: `${baseUrl}/authorize`,
       response_types_supported: ['code'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint: `${baseUrl}/token`,
