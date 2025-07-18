@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
-import { createMCPAuthRouter } from './auth/mcpOAuthSetup.js';
+import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
 import { CoreServices } from './mcp/coreServices.js';
@@ -185,6 +185,47 @@ export async function build(opts = {}) {
   // Mount the MCP OAuth router at the root level (not legacy)
   const mcpAuthRouter = createMCPAuthRouter();
   app.use('/', mcpAuthRouter);
+
+  // Add a custom callback endpoint that delegates to the MCP SDK
+  // This allows Meta to redirect to /oauth/callback as expected
+  app.get('/oauth/callback', async (request, reply) => {
+    const { code, state } = request.query as { code?: string; state?: string };
+
+    logger.info('OAuth callback received', { 
+      hasCode: !!code, 
+      hasState: !!state, 
+      state: state?.substring(0, 8) + '...' 
+    });
+
+    if (!code || !state) {
+      logger.error('OAuth callback missing required parameters', { code: !!code, state: !!state });
+      return reply.status(400).send({ error: 'Missing code or state parameter' });
+    }
+
+    try {
+      const provider = createMCPOAuthProvider();
+      logger.info('Created MCP OAuth provider, calling handleCallback');
+      
+      const result = await provider.handleCallback(code, state);
+      
+      logger.info('OAuth callback result', { 
+        success: result.success, 
+        hasRedirectUrl: !!result.redirectUrl,
+        error: result.error 
+      });
+
+      if (!result.success) {
+        logger.error('OAuth callback failed', { error: result.error });
+        return reply.status(400).send({ error: result.error });
+      }
+
+      // Redirect to the client's redirect URL with the authorization code
+      return reply.redirect(result.redirectUrl);
+    } catch (error) {
+      logger.error('OAuth callback error', { error });
+      return reply.status(500).send({ error: 'Internal server error during OAuth callback' });
+    }
+  });
 
   // Initialize the MetaToolsHandler for upload processing
   const metaToolsHandler = new MetaToolsHandler();
