@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { FixedMCPServer } from './mcp-server-fixed';
+import { FixedMCPServer } from './mcp-server';
 
 // Load environment variables
 dotenv.config();

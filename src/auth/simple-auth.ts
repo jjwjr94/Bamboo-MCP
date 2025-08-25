@@ -29,11 +29,12 @@ export class SimpleAuthService {
 
       const userData = await response.json();
       
-      this.logger.info(`Meta token verified for user: ${userData.id}`);
+      const userDataTyped = userData as { id: string; email?: string };
+      this.logger.info(`Meta token verified for user: ${userDataTyped.id}`);
       
       return {
-        userId: userData.id,
-        email: userData.email,
+        userId: userDataTyped.id,
+        email: userDataTyped.email,
         provider: 'meta',
         accessToken: token
       };

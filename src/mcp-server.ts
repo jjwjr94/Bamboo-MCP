@@ -116,7 +116,7 @@ export class FixedMCPServer {
   }
 
   // Handle HTTP Streamable transport requests
-  public async handleStreamableHTTP(req: Request, res: Response): Promise<void> {
+  public async handleStreamableHTTP(req: Request, res: Response): Promise<Response | void> {
     try {
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
@@ -146,7 +146,7 @@ export class FixedMCPServer {
   }
 
   // Handle POST requests (client-to-server messages)
-  private async handlePOST(req: Request, res: Response): Promise<void> {
+  private async handlePOST(req: Request, res: Response): Promise<Response | void> {
     // Authenticate user
     const token = this.authService.extractTokenFromHeader(req.headers.authorization);
     if (!token) {
@@ -220,7 +220,7 @@ export class FixedMCPServer {
   }
 
   // Handle GET requests (optional server-to-client streaming)
-  private async handleGET(req: Request, res: Response): Promise<void> {
+  private async handleGET(req: Request, res: Response): Promise<Response | void> {
     const acceptHeader = req.headers.accept || '';
     
     if (!acceptHeader.includes('text/event-stream')) {
@@ -346,7 +346,7 @@ export class FixedMCPServer {
       const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as any;
         throw new Error(`Meta API error: ${errorData.error?.message || response.statusText}`);
       }
 
@@ -366,7 +366,7 @@ export class FixedMCPServer {
         content: [
           {
             type: 'text',
-            text: `Error calling ${toolName}: ${error.message}`
+            text: `Error calling ${toolName}: ${(error as any).message}`
           }
         ]
       };
