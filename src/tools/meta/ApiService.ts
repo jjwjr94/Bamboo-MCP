@@ -31,6 +31,17 @@ export class MetaApiService {
     code: string
   ): Promise<{ accessToken: string; expiresIn?: number }> {
     return handleMetaApiCall(async () => {
+      // Check if OAuth is configured
+      if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET || !env.FACEBOOK_CALLBACK_URL) {
+        throw new MetaApiError(
+          'OAuth is not configured. Please set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_CALLBACK_URL.',
+          'OAUTH_NOT_CONFIGURED',
+          undefined,
+          500,
+          'ConfigurationError'
+        );
+      }
+
       const tokenResponse = await fetch(
         `https://graph.facebook.com/${env.META_API_VERSION}/oauth/access_token`,
         {

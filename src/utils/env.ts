@@ -36,6 +36,25 @@ const envSchema = z
     META_API_VERSION: z.string().default('v22.0'),
     META_API_TIMEOUT: z.string().transform(Number).default('15000'),
 
+    // OAuth Scopes (optional)
+    FACEBOOK_OAUTH_SCOPES: z
+      .string()
+      .default(
+        'ads_management,ads_read,business_management,pages_manage_ads,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,pages_manage_cta,pages_messaging,attribution_read'
+      ),
+
+    // OAuth Refresh Token Configuration (optional)
+    OAUTH_REFRESH_TOKEN_EXPIRATION_DAYS: z.string().transform(Number).default('90'),
+
+    // Database Connection Pool Configuration (optional)
+    DB_POOL_MAX: z.string().transform(Number).default('10'),
+    DB_POOL_IDLE_TIMEOUT: z.string().transform(Number).default('30'),
+    DB_POOL_MAX_LIFETIME: z.string().transform(Number).default('900'), // 15 minutes in seconds
+    DB_POOL_CONNECT_TIMEOUT: z.string().transform(Number).default('10'),
+
+    // Timeout Configurations
+    DB_STATEMENT_TIMEOUT: z.string().transform(Number).default('10000'),
+
     // Server Timeout Configurations
     FASTIFY_REQUEST_TIMEOUT: z.string().transform(Number).default('60000'),
     FASTIFY_CONNECTION_TIMEOUT: z.string().transform(Number).default('60000'),

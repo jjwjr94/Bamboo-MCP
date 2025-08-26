@@ -13,8 +13,9 @@ const jwtConfig = {
 };
 
 // Key import promises - loaded once at module startup for performance
-const privateKeyPromise = importPKCS8(env.JWT_PRIVATE_KEY, 'EdDSA');
-const publicKeyPromise = importSPKI(env.JWT_PUBLIC_KEY, 'EdDSA');
+// Only load keys if they are provided
+const privateKeyPromise = env.JWT_PRIVATE_KEY ? importPKCS8(env.JWT_PRIVATE_KEY, 'EdDSA') : null;
+const publicKeyPromise = env.JWT_PUBLIC_KEY ? importSPKI(env.JWT_PUBLIC_KEY, 'EdDSA') : null;
 
 export interface CreateTokenOptions {
   userId: string;
@@ -25,6 +26,10 @@ export interface CreateTokenOptions {
 
 export async function createJWT(options: CreateTokenOptions): Promise<string> {
   const { userId, clientId, adAccountId, scopes } = options;
+
+  if (!privateKeyPromise) {
+    throw new TokenError('JWT_PRIVATE_KEY not configured');
+  }
 
   try {
     const privateKey = await privateKeyPromise;
@@ -52,6 +57,10 @@ export async function createJWT(options: CreateTokenOptions): Promise<string> {
 }
 
 export async function verifyJWT(token: string): Promise<JWTPayload> {
+  if (!publicKeyPromise) {
+    throw new TokenError('JWT_PUBLIC_KEY not configured');
+  }
+
   try {
     const publicKey = await publicKeyPromise;
 
