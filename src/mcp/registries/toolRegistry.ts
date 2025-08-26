@@ -21,15 +21,10 @@ export const GetAdAccountsInputSchema = z.object({
   adAccountId: z.string().optional().describe('Optional specific ad account ID to retrieve'),
 });
 
-export const SelectAdAccountInputSchema = z.object({
-  adAccountId: z.string().describe("The ID of the ad account to select (e.g., 'act_12345')"),
-});
-
 export const GetToolManifestInputSchema = z.object({});
 
 // Export inferred types
 export type GetAdAccountsRequest = z.infer<typeof GetAdAccountsInputSchema>;
-export type SelectAdAccountRequest = z.infer<typeof SelectAdAccountInputSchema>;
 export type GetToolManifestRequest = z.infer<typeof GetToolManifestInputSchema>;
 
 export class ToolRegistry {
@@ -114,7 +109,7 @@ export class ToolRegistry {
   }
 
   private getMainToolNames(): string[] {
-    return ['get_ad_accounts', 'select_ad_account', 'get_tool_manifest'];
+    return ['get_ad_accounts', 'get_tool_manifest'];
   }
 
   private validateNoDuplicateMainTools(
@@ -131,7 +126,6 @@ export class ToolRegistry {
 
   private registerMainTools(allToolNames: string[]): void {
     this.registerGetAdAccounts(allToolNames);
-    this.registerSelectAdAccount();
     this.registerGetToolManifest(allToolNames);
   }
 
@@ -168,35 +162,7 @@ export class ToolRegistry {
     );
   }
 
-  private registerSelectAdAccount(): void {
-    const selectAdAccountSuccessDataSchema = z.object({
-      selectedAccount: z.string(),
-    });
 
-    createMcpTool(
-      this.server,
-      'select_ad_account',
-      {
-        title: 'Select Ad Account',
-        description:
-          'Select an ad account for subsequent operations. This allows you to set a default account for campaigns and other operations.',
-        inputSchema: SelectAdAccountInputSchema,
-        successDataSchema: selectAdAccountSuccessDataSchema,
-      },
-      async (authPayload, params) => {
-        const { adAccountId } = params;
-
-        logger.info('Executing select_ad_account', { userId: authPayload.userId, adAccountId });
-
-        await accountManager.selectAccount(authPayload.userId, adAccountId);
-
-        return {
-          selectedAccount: adAccountId,
-        };
-      },
-      'Successfully selected ad account.'
-    );
-  }
 
   private registerGetToolManifest(allToolNames: string[]): void {
     const getToolManifestSuccessDataSchema = z.object({
