@@ -59,7 +59,7 @@ export class MetaCustomAudienceHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for get_custom_audiences');
+          throw new Error('adAccountId is required for get_custom_audiences. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const customAudiencesCursor = await new MetaAdAccountSDK(
@@ -156,7 +156,7 @@ export class MetaCustomAudienceHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for create_custom_audience');
+          throw new Error('adAccountId is required for create_custom_audience. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         // Create a consolidated, camelCased object for API parameters

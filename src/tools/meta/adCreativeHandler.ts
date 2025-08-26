@@ -46,7 +46,7 @@ export class MetaAdCreativeHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for get_ad_creatives');
+          throw new Error('adAccountId is required for get_ad_creatives. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const fields = [
@@ -115,7 +115,7 @@ export class MetaAdCreativeHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for create_ad_creative');
+          throw new Error('adAccountId is required for create_ad_creative. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const adCreativeData: Record<string, unknown> = {

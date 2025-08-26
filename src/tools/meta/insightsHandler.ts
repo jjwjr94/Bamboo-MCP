@@ -140,7 +140,7 @@ export class MetaInsightsHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for get_ad_account_insights');
+          throw new Error('adAccountId is required for get_ad_account_insights. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         // Use metrics from the typed input, which has a default from the registry schema

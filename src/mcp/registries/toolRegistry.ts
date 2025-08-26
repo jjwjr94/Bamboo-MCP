@@ -13,7 +13,7 @@ import { CampaignToolRegistry } from './CampaignToolRegistry.js';
 import { CustomAudienceToolRegistry } from './CustomAudienceToolRegistry.js';
 import { InsightsToolRegistry } from './InsightsToolRegistry.js';
 import { PagesToolRegistry } from './PagesToolRegistry.js';
-import { TargetingToolRegistry } from './TargetingToolRegistry.js';
+
 import { createMcpTool } from './registryHelper.js';
 
 // Schemas for main tools
@@ -51,7 +51,7 @@ export class ToolRegistry {
       new PagesToolRegistry(server, toolsHandler),
       new BusinessManagerToolRegistry(server, toolsHandler),
       new AdsArchiveToolRegistry(server, toolsHandler),
-      new TargetingToolRegistry(server, toolsHandler),
+
     ];
   }
 

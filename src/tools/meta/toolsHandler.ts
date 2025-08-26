@@ -45,6 +45,9 @@ import { MetaCustomAudienceHandler } from './customAudienceHandler.js';
 import { MetaInsightsHandler } from './insightsHandler.js';
 import { MetaPagesHandler } from './pagesHandler.js';
 import { MetaTargetingSearchHandler } from './targetingSearchHandler.js';
+import { targetingHandler } from './targetingHandler.js';
+import { budgetHandler } from './budgetHandler.js';
+import { searchHandler } from './searchHandler.js';
 
 export class MetaToolsHandler {
   private adAccountHandler = new MetaAdAccountHandler();
@@ -260,5 +263,121 @@ export class MetaToolsHandler {
     }
   ) {
     return this.targetingSearchHandler.validateTargetingOptions(authPayload, params);
+  }
+
+  // Enhanced Targeting methods - delegated to targetingHandler
+  async searchInterestsEnhanced(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      limit?: number;
+    }
+  ) {
+    return targetingHandler.searchInterests(authPayload, {
+      ...params,
+      limit: params.limit || 25,
+    });
+  }
+
+  async searchBehaviorsEnhanced(
+    authPayload: JWTPayload,
+    params: {
+      limit?: number;
+    }
+  ) {
+    return targetingHandler.searchBehaviors(authPayload, {
+      ...params,
+      limit: params.limit || 50,
+    });
+  }
+
+  async searchDemographics(
+    authPayload: JWTPayload,
+    params: {
+      demographicClass: 'demographics' | 'life_events' | 'industries' | 'income' | 'family_statuses' | 'user_device' | 'user_os';
+      limit?: number;
+    }
+  ) {
+    return targetingHandler.searchDemographics(authPayload, {
+      ...params,
+      limit: params.limit || 50,
+    });
+  }
+
+  async searchGeoLocations(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      locationTypes?: ('country' | 'region' | 'city' | 'zip' | 'geo_market' | 'electoral_district')[];
+      limit?: number;
+    }
+  ) {
+    return targetingHandler.searchGeoLocations(authPayload, {
+      ...params,
+      locationTypes: params.locationTypes || ['country', 'region', 'city'],
+      limit: params.limit || 25,
+    });
+  }
+
+  async validateInterests(
+    authPayload: JWTPayload,
+    params: {
+      interestList?: string[];
+      interestFbidList?: string[];
+    }
+  ) {
+    return targetingHandler.validateInterests(authPayload, {
+      ...params,
+      interestList: params.interestList || [],
+    });
+  }
+
+  // Budget methods - delegated to budgetHandler
+  async createBudgetSchedule(
+    authPayload: JWTPayload,
+    params: {
+      campaignId: string;
+      budgetValue: number;
+      budgetValueType: 'ABSOLUTE' | 'MULTIPLIER';
+      timeStart: number;
+      timeEnd: number;
+    }
+  ) {
+    return budgetHandler.createBudgetSchedule(authPayload, params);
+  }
+
+  async updateCampaignBudget(
+    authPayload: JWTPayload,
+    params: {
+      campaignId: string;
+      dailyBudget?: number;
+      lifetimeBudget?: number;
+      spendCap?: number;
+    }
+  ) {
+    return budgetHandler.updateCampaignBudget(authPayload, params);
+  }
+
+  async getCampaignBudget(
+    authPayload: JWTPayload,
+    params: {
+      campaignId: string;
+    }
+  ) {
+    return budgetHandler.getCampaignBudget(authPayload, params);
+  }
+
+  // Enhanced Search methods - delegated to searchHandler
+  async enhancedSearch(
+    authPayload: JWTPayload,
+    params: {
+      query: string;
+      limit?: number;
+    }
+  ) {
+    return searchHandler.enhancedSearch(authPayload, {
+      ...params,
+      limit: params.limit || 25,
+    });
   }
 }

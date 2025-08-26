@@ -226,7 +226,7 @@ export class MetaPagesHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for get_pages');
+          throw new Error('adAccountId is required for get_pages. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const creativeData: Record<string, unknown> = {

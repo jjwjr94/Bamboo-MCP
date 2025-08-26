@@ -47,7 +47,7 @@ export class MetaCampaignHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for get_campaigns');
+          throw new Error('adAccountId is required for get_campaigns. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const fields = [
@@ -124,7 +124,7 @@ export class MetaCampaignHandler {
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
         if (!adAccountId) {
-          throw new Error('adAccountId is required for create_campaign');
+          throw new Error('adAccountId is required for create_campaign. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         // Create a consolidated, camelCased object for API parameters
