@@ -5,6 +5,7 @@ export interface JWTPayload extends JoseJWTPayload {
   clientId: string;
   adAccountId?: string;
   scopes: string[];
+  token?: string; // Meta access token for direct authentication
   // Override optional fields from jose that we always set
   exp: number;
   iat: number;

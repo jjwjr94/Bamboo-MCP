@@ -22,7 +22,7 @@ import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, getApiInstanceToken, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateAdResult,
@@ -43,7 +43,21 @@ export class MetaAdHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        logger.info('About to create Meta API instance for get_ads', { 
+          userId: authPayload.userId 
+        });
+        
+        // Use the token directly from authPayload since we're bypassing JWT
+        const token = authPayload.token;
+        if (!token) {
+          throw new Error('Meta access token is required. Please provide a valid token.');
+        }
+        
+        const api = await createMetaApiInstance(`token:${token}`);
+        
+        logger.info('Meta API instance created successfully for get_ads', { 
+          userId: authPayload.userId 
+        });
 
         // For deployed environment, use direct token authentication
         // This bypasses database access which is causing ECONNREFUSED errors

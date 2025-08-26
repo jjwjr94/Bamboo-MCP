@@ -44,6 +44,13 @@ export function getApiInstanceUserId(authPayload: { userId: string; token?: stri
 }
 
 /**
+ * Helper function to get the token from authPayload if available.
+ */
+export function getApiInstanceToken(authPayload: { userId: string; token?: string }): string | undefined {
+  return authPayload.token;
+}
+
+/**
  * Creates a new FacebookAdsApi instance from an access token.
  * This is used for creating isolated API instances with specific tokens (e.g., page tokens).
  */
