@@ -39,7 +39,14 @@ export class MetaAdHandler {
     authPayload: JWTPayload,
     params: { adAccountId?: string; adSetId?: string; campaignId?: string }
   ): Promise<GetAdsResult> {
-    logger.info('Executing get_ads', { userId: authPayload.userId, params });
+    logger.info('Executing get_ads', { 
+      userId: authPayload.userId, 
+      params,
+      hasAdAccountId: !!params.adAccountId,
+      hasCampaignId: !!params.campaignId,
+      hasAdSetId: !!params.adSetId,
+      authPayloadKeys: Object.keys(authPayload)
+    });
 
     return await handleMetaApiCall(
       async () => {
@@ -157,7 +164,13 @@ export class MetaAdHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        // Use the token directly from authPayload since we're bypassing JWT
+        const token = authPayload.token;
+        if (!token) {
+          throw new Error('Meta access token is required. Please provide a valid token.');
+        }
+        
+        const api = await createMetaApiInstance(`token:${token}`);
 
         // For deployed environment, use direct token authentication
         // This bypasses database access which is causing ECONNREFUSED errors
@@ -210,7 +223,13 @@ export class MetaAdHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        // Use the token directly from authPayload since we're bypassing JWT
+        const token = authPayload.token;
+        if (!token) {
+          throw new Error('Meta access token is required. Please provide a valid token.');
+        }
+        
+        const api = await createMetaApiInstance(`token:${token}`);
 
         // Separate adId from fields to be updated
         const { adId, ...updateFields } = params;
@@ -255,7 +274,13 @@ export class MetaAdHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        // Use the token directly from authPayload since we're bypassing JWT
+        const token = authPayload.token;
+        if (!token) {
+          throw new Error('Meta access token is required. Please provide a valid token.');
+        }
+        
+        const api = await createMetaApiInstance(`token:${token}`);
 
         const ad = new MetaAdSDK(params.adId, {}, null, api);
         const deleteResponse = await ad.delete([]);
