@@ -124,29 +124,36 @@ export async function build(opts = {}) {
     },
   });
 
-  // Database connection test
-  try {
-    await testConnection();
-    logger.info('Database connection successful');
-  } catch (error) {
-    logger.error('Database connection failed:', error);
-    if (env.NODE_ENV === 'production') {
-      process.exit(1);
+  // Database connection test (optional)
+  if (env.DATABASE_URL) {
+    try {
+      await testConnection();
+      logger.info('Database connection successful');
+    } catch (error) {
+      logger.warn('Database connection failed (continuing without database):', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't exit in production, just log a warning
     }
+  } else {
+    logger.info('No DATABASE_URL provided, running without database features');
   }
 
   // Initialize core services
-  const coreServices = new CoreServices();
+  const coreServices = await CoreServices.initialize();
   const toolsHandler = new MetaToolsHandler();
 
   // Setup MCP HTTP transport
-  await setupMCPHttpTransport(app, coreServices, toolsHandler);
+  await setupMCPHttpTransport(app, coreServices);
 
   // Health check endpoint
   app.get('/health', async (request, reply) => {
-    const dbStatus = await testConnection()
-      .then(() => 'connected')
-      .catch(() => 'disconnected');
+    let dbStatus = 'not-configured';
+    if (env.DATABASE_URL) {
+      dbStatus = await testConnection()
+        .then(() => 'connected')
+        .catch(() => 'disconnected');
+    }
 
     return reply.send({
       status: 'healthy',
@@ -236,7 +243,10 @@ async function start() {
     logger.info('      - Token: [Your Meta access token]');
 
   } catch (err) {
-    logger.error('Error starting server:', err);
+    logger.error('Error starting server:', {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     process.exit(1);
   }
 }

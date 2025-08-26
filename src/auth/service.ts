@@ -3,6 +3,15 @@ import passport from 'passport';
 import FacebookTokenStrategy from 'passport-facebook-token';
 import jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
+
+// Extend Express Request to include user property
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
 import { ConfigService } from '../core/config';
 import { Logger } from '../core/logger';
 

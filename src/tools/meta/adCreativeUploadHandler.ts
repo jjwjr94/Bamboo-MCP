@@ -153,7 +153,6 @@ export class AdCreativeUploadHandler {
         method: 'POST',
         headers: form.getHeaders(),
         body: form,
-        maxRedirections: 0,
         headersTimeout: env.META_UPLOAD_TIMEOUT,
       });
 
