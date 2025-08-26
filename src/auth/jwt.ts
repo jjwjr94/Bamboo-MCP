@@ -133,6 +133,7 @@ export async function verifyMetaToken(token: string): Promise<JWTPayload> {
     iss: 'bamboo-mcp-direct',
     aud: 'bamboo-mcp-client',
     jti: `meta-${Date.now()}`,
+    token: token, // Include the token in the payload for direct access
   };
 }
 

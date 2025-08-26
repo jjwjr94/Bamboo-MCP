@@ -14,7 +14,7 @@ import { TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { validateBusinessContextForBatch } from '../../utils/metaBatchHelper.js';
 import { AdAccountPermissionsProcessor } from './AdAccountPermissionsProcessor.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, createApiInstanceFromToken, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type { GetAdAccountsResult } from './types.js';
 
@@ -228,39 +228,74 @@ export class MetaAdAccountHandler {
   ): Promise<GetAdAccountsResult> {
     logger.info('Executing get_ad_accounts', { userId: authPayload.userId, params });
 
-    // --- Step 1: DB Read (Minimal Transaction) ---
-    // Fetch the user's most recent access token and their Meta ID
-    const tokenAndMetaId = await withUserContext(authPayload.userId, async (tx) => {
-      return await tx
-        .select({
-          accessToken: oauthTokens.accessToken,
-          metaUserId: users.facebookUserId,
-        })
-        .from(oauthTokens)
-        .innerJoin(users, eq(oauthTokens.userId, users.id))
-        .where(eq(oauthTokens.userId, authPayload.userId))
-        .orderBy(desc(oauthTokens.createdAt))
-        .limit(1);
-    });
-
-    if (!tokenAndMetaId.length || !tokenAndMetaId[0].accessToken || !tokenAndMetaId[0].metaUserId) {
-      throw new TokenError(
-        'Could not find a valid Meta access token or Meta User ID for the user.'
-      );
+    // For direct token authentication, we need to extract the token from the auth payload
+    // The token should be available in the auth payload for direct authentication
+    const accessToken = authPayload.token || authPayload.accessToken;
+    
+    if (!accessToken || typeof accessToken !== 'string') {
+      throw new TokenError('No valid access token found in authentication payload.');
     }
-    const { accessToken, metaUserId } = tokenAndMetaId[0];
 
-    // --- Step 2: All Network Operations (No Transaction) ---
-    const finalAccountsData = await this.fetchAndProcessAccountsFromMeta(
-      authPayload.userId,
-      accessToken,
-      metaUserId
-    );
+    // For direct token authentication, we'll use a simple approach without database storage
+    try {
+      // Create API instance directly with the token
+      const api = createApiInstanceFromToken(accessToken);
 
-    // --- Step 3: DB Write (Minimal Transaction) ---
-    const accountsToStore = await this.storeFinalAccountData(authPayload.userId, finalAccountsData);
+      const fields = [
+        MetaAdAccountSDK.Fields.id,
+        MetaAdAccountSDK.Fields.name,
+        MetaAdAccountSDK.Fields.account_status,
+        MetaAdAccountSDK.Fields.currency,
+        MetaAdAccountSDK.Fields.timezone_name,
+        MetaAdAccountSDK.Fields.business,
+      ];
 
-    logger.info('Ad accounts retrieved and stored', { count: accountsToStore.length });
-    return { adAccounts: accountsToStore };
+      const adAccountsCursor = await new MetaUserSDK('me', {}, null, api).getAdAccounts(fields);
+
+      const allRawAccounts = await fetchAllPaginatedData<unknown>({
+        cursor: adAccountsCursor,
+        limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
+        entityName: 'ad accounts',
+        userId: 'direct-token-user', // Use a placeholder for logging
+      });
+
+      // Extract and validate accounts
+      const accounts: Array<{
+        id: string;
+        name: string;
+        status: string;
+        currency: string;
+        timezone: string;
+        businessId: string | null;
+        permissions: string[];
+      }> = [];
+
+      for (const account of allRawAccounts) {
+        const parsed = MetaAdAccountResponseSchema.safeParse(account);
+        if (parsed.success) {
+          const extracted = this.extractAccountData(parsed.data);
+          accounts.push({
+            id: extracted.id,
+            name: extracted.name,
+            status: extracted.status,
+            currency: extracted.currency,
+            timezone: extracted.timezone,
+            businessId: extracted.businessId || null,
+            permissions: ['UNKNOWN'], // Default permissions for direct token auth
+          });
+        } else {
+          logger.warn('Skipping invalid ad account data received from Meta API', {
+            accountId: (account as { id?: string }).id || 'Unknown ID',
+            errors: parsed.error.errors,
+          });
+        }
+      }
+
+      logger.info('Ad accounts retrieved successfully', { count: accounts.length });
+      return { adAccounts: accounts };
+    } catch (error) {
+      logger.error('Failed to fetch ad accounts', { error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
   }
 }
