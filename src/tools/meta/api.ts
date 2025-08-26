@@ -238,8 +238,20 @@ export async function handleMetaApiCall<T>(
   }
 ): Promise<T> {
   try {
-    const requestScopedPolicy = createMetaResiliencePolicy();
-    return await requestScopedPolicy.execute(apiCall);
+    logger.info('Starting Meta API call', { 
+      toolName: context?.toolName, 
+      userId: context?.userId 
+    });
+    
+    // Temporarily bypass resilience policy to see raw error
+    const result = await apiCall();
+    
+    logger.info('Meta API call completed successfully', { 
+      toolName: context?.toolName, 
+      userId: context?.userId 
+    });
+    
+    return result;
   } catch (error: unknown) {
     const parsedError = parseMetaApiError(error);
 

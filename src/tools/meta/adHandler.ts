@@ -80,7 +80,27 @@ export class MetaAdHandler {
           adsCursor = await new MetaCampaignSDK(params.campaignId, {}, null, api).getAds(fields);
         } else {
           // Get all ads from ad account
-          adsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAds(fields);
+          logger.info('About to call MetaAdAccountSDK.getAds', { 
+            adAccountId, 
+            userId: authPayload.userId,
+            fieldsCount: fields.length
+          });
+          
+          try {
+            adsCursor = await new MetaAdAccountSDK(adAccountId, {}, null, api).getAds(fields);
+            logger.info('MetaAdAccountSDK.getAds call succeeded', { 
+              adAccountId, 
+              userId: authPayload.userId 
+            });
+          } catch (apiError) {
+            logger.error('MetaAdAccountSDK.getAds call failed', { 
+              adAccountId, 
+              userId: authPayload.userId,
+              error: apiError instanceof Error ? apiError.message : String(apiError),
+              errorType: apiError?.constructor?.name
+            });
+            throw apiError;
+          }
         }
 
         const allRawAds = await fetchAllPaginatedData<unknown>({
