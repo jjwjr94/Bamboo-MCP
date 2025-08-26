@@ -215,7 +215,7 @@ async function handleMCPRequest(
 
 export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: CoreServices): void {
   fastify.post(
-    '/',
+    '/mcp',
     {
       config: {
         disableRequestLogging: false,
