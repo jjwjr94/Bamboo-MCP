@@ -262,7 +262,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
   );
 
   // GET endpoint for SSE streams (required by MCP specification)
-  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
     const acceptHeader = request.headers.accept;
     
     // Check if client is requesting Server-Sent Events
@@ -380,7 +380,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
     }
   });
 
-  fastify.delete('/', async (_request, reply) => {
+  fastify.delete('/mcp', async (_request, reply) => {
     return reply.status(405).send({
       jsonrpc: '2.0',
       error: {
