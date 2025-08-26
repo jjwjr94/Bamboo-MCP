@@ -18,7 +18,8 @@ export class PromptRegistry {
     const bestPracticesPromptContent = promptContentCache.getBestPracticesPromptContent();
 
     if (!systemPromptContent || !bestPracticesPromptContent) {
-      throw new Error('Prompt content cache is not properly initialized');
+      logger.warn('Prompt content not available, skipping prompt registration');
+      return;
     }
 
     // Register system prompt
