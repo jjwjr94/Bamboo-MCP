@@ -5,6 +5,7 @@ import { oauthTokens } from '../../db/schema.js';
 import { MetaApiError, TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaResiliencePolicy } from '../../utils/resiliencePolicy.js';
+import { env } from '../../utils/env.js';
 
 // Circuit breaker is now request-scoped to prevent cross-user impact
 
