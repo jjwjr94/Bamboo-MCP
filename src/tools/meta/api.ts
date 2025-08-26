@@ -35,6 +35,15 @@ export async function fetchUserTokenString(userId: string): Promise<string> {
  * This is used for creating isolated API instances with specific tokens (e.g., page tokens).
  */
 export function createApiInstanceFromToken(accessToken: string): FacebookAdsApi {
+  // Initialize the Facebook Ads SDK if app credentials are available
+  if (env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET) {
+    FacebookAdsApi.init(env.FACEBOOK_APP_ID, env.FACEBOOK_APP_SECRET, accessToken);
+  } else {
+    // For direct token usage without app credentials, we need to initialize with minimal config
+    // This is a workaround for cases where we only have the access token
+    FacebookAdsApi.init('direct-token', 'direct-token', accessToken);
+  }
+  
   return new FacebookAdsApi(accessToken);
 }
 
