@@ -7,7 +7,7 @@ import {
 import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type { GetBusinessAccountsResult, GetBusinessUsersResult } from './types.js';
 
@@ -17,7 +17,7 @@ export class MetaBusinessManagerHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const fields = ['id', 'name', 'verification_status', 'vertical', 'link'];
 
@@ -82,7 +82,7 @@ export class MetaBusinessManagerHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         // Instantiate Business object once and reuse it to fetch users
         const business = new MetaBusinessSDK(params.businessId, {}, null, api);

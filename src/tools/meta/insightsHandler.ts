@@ -16,7 +16,7 @@ import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type { GetAdAccountInsightsResult, GetAdInsightsResult } from './types.js';
 
@@ -38,7 +38,7 @@ export class MetaInsightsHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         // Use metrics from the typed input, which has a default from the registry schema
         const insightsFields = params.metrics;
@@ -134,7 +134,7 @@ export class MetaInsightsHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,

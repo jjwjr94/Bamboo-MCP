@@ -3,7 +3,7 @@ import type { JWTPayload } from '../../types/auth.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
-import { createMetaApiErrorFromResponse, createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiErrorFromResponse, createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import type {
   SearchBehaviorsResult,
   SearchInterestsResult,
@@ -132,7 +132,7 @@ export class MetaTargetingSearchHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const searchUrl = `${META_GRAPH_URL}/search`;
         const searchParams = new URLSearchParams({
@@ -216,7 +216,7 @@ export class MetaTargetingSearchHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const searchUrl = `${META_GRAPH_URL}/search`;
         const searchParams = new URLSearchParams({
@@ -285,7 +285,7 @@ export class MetaTargetingSearchHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const searchUrl = `${META_GRAPH_URL}/search`;
         const searchParams = new URLSearchParams({
@@ -354,7 +354,7 @@ export class MetaTargetingSearchHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const searchUrl = `${META_GRAPH_URL}/search`;
         const searchParams = new URLSearchParams({

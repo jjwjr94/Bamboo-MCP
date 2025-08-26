@@ -19,7 +19,7 @@ import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateAdCreativeResult,
@@ -40,7 +40,7 @@ export class MetaAdCreativeHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId =
           params.adAccountId ||
@@ -106,7 +106,7 @@ export class MetaAdCreativeHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId =
           params.adAccountId ||
@@ -158,7 +158,7 @@ export class MetaAdCreativeHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const updateData = {
           [MetaAdCreativeSDK.Fields.name]: params.name,
@@ -202,7 +202,7 @@ export class MetaAdCreativeHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adCreative = new MetaAdCreativeSDK(params.adCreativeId, {}, null, api);
         const response = await adCreative.delete([]);

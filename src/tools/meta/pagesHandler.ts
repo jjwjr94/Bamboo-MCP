@@ -17,7 +17,7 @@ import { env } from '../../utils/env.js';
 import { AuthorizationError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createApiInstanceFromToken, createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createApiInstanceFromToken, createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type { CreatePagePostAdResult, GetPagePostsResult, GetPagesResult } from './types.js';
 
@@ -31,7 +31,7 @@ export class MetaPagesHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
         const fields = [
           MetaPageSDK.Fields.id,
           MetaPageSDK.Fields.name,
@@ -108,7 +108,7 @@ export class MetaPagesHandler {
 
     return handleMetaApiCall(
       async () => {
-        const userApi = await createMetaApiInstance(authPayload.userId);
+        const userApi = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         logger.info('Fetching page access token', {
           userId: authPayload.userId,
@@ -220,7 +220,7 @@ export class MetaPagesHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,

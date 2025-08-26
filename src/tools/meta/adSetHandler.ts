@@ -25,7 +25,7 @@ import {
 } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { ADSET_COMPATIBILITY, META_LOCATION_KEYS, SAC_COMPLIANCE } from './constants.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
@@ -237,7 +237,7 @@ export class MetaAdSetHandler {
 
     return handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const fields = [
           MetaAdSetSDK.Fields.id,
@@ -321,7 +321,7 @@ export class MetaAdSetHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         // Asynchronous Validation Step: Fetch the parent campaign to validate rules that
         // depend on its state (e.g., CBO status, bid strategy restrictions).
@@ -442,7 +442,7 @@ export class MetaAdSetHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         // Perform async validation for fields that depend on the parent campaign's state
         await this.performUpdateValidations(api, params);
@@ -501,7 +501,7 @@ export class MetaAdSetHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adSet = new MetaAdSetSDK(params.adSetId, {}, null, api);
         const deleteResponse = await adSet.delete([]);
