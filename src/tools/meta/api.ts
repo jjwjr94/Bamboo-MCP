@@ -248,6 +248,8 @@ export async function handleMetaApiCall<T>(
       userId: context?.userId,
       error: parsedError.message,
       fbtrace_id: parsedError.fbtrace_id,
+      originalError: error instanceof Error ? error.message : String(error),
+      errorType: error?.constructor?.name,
     });
 
     throw new MetaApiError(
