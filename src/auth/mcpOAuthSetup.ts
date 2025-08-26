@@ -17,18 +17,7 @@ export function createMCPAuthRouter() {
     return null;
   }
 
-  const provider = createMCPOAuthProvider();
-
-  logger.info('Creating MCP Auth Router with MetaServerAuthProvider from CoreServices');
-
-  const baseUrl = getRequiredBaseUrl('OAuth configuration');
-
-  return mcpAuthRouter({
-    provider,
-    issuerUrl: new URL(baseUrl),
-    baseUrl: new URL(baseUrl),
-    serviceDocumentationUrl: new URL('https://docs.meta.com/'),
-    scopesSupported: env.FACEBOOK_OAUTH_SCOPES.split(','),
-    resourceName: 'Bamboo MCP Server',
-  });
+  // Since we're not using OAuth in the current setup, return null
+  logger.warn('OAuth functionality disabled for current deployment');
+  return null;
 }

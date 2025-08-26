@@ -44,7 +44,7 @@ export interface MetaServerAuthProviderDependencies {
  * - Integration with existing Meta OAuth business logic
  * - JWT-based internal token system
  */
-export class MetaServerAuthProvider implements OAuthServerProvider {
+export class MetaServerAuthProvider {
   // OAuth authorization codes are now stored in database via SessionManager
   // to support horizontal scaling across multiple server instances
 
