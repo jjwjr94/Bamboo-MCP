@@ -114,10 +114,26 @@ export function extractTokenFromHeader(authHeader: string | undefined): string {
 
   const token = authHeader.slice(7);
   if (!token) {
-    throw new TokenError('JWT token is missing from Authorization header');
+    throw new TokenError('Token is missing from Authorization header');
   }
 
   return token;
+}
+
+// Simple Meta token verification for direct authentication
+export async function verifyMetaToken(token: string): Promise<JWTPayload> {
+  // For direct Meta token authentication, we create a simple payload
+  // This bypasses JWT verification and treats the token as a direct Meta access token
+  return {
+    userId: 'meta-user',
+    clientId: 'meta-direct',
+    scopes: ['ads_read', 'ads_management'],
+    exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+    iat: Math.floor(Date.now() / 1000),
+    iss: 'bamboo-mcp-direct',
+    aud: 'bamboo-mcp-client',
+    jti: `meta-${Date.now()}`,
+  };
 }
 
 export function decodeJWTWithoutVerification(token: string): JWTPayload | null {

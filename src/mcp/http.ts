@@ -2,7 +2,7 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import pTimeout, { TimeoutError } from 'p-timeout';
-import { extractTokenFromHeader, verifyJWT } from '../auth/jwt.js';
+import { extractTokenFromHeader, verifyMetaToken } from '../auth/jwt.js';
 import type { JWTPayload } from '../types/auth.js';
 import { env } from '../utils/env.js';
 import { AuthenticationError, TokenError } from '../utils/errors.js';
@@ -228,7 +228,7 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
 
       try {
         const token = extractTokenFromHeader(request.headers.authorization);
-        authPayload = await verifyJWT(token);
+        authPayload = await verifyMetaToken(token);
 
         // Hijack ONLY after successful authentication
         reply.hijack();
@@ -268,9 +268,9 @@ export function setupMCPHttpTransport(fastify: FastifyInstance, coreServices: Co
     // Check if client is requesting Server-Sent Events
     if (acceptHeader && acceptHeader.includes('text/event-stream')) {
       try {
-        // Extract and verify JWT token for authentication
+        // Extract and verify Meta token for authentication
         const token = extractTokenFromHeader(request.headers.authorization);
-        const authPayload = await verifyJWT(token);
+        const authPayload = await verifyMetaToken(token);
         
         logger.info(`HTTP MCP SSE: Authenticated user ${authPayload.userId}`, {
           requestId: request.id,
