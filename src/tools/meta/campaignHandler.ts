@@ -45,7 +45,8 @@ export class MetaCampaignHandler {
 
         // For deployed environment, use direct token authentication
         // This bypasses database access which is causing ECONNREFUSED errors
-        const adAccountId = params.adAccountId;
+        // Handle both camelCase and snake_case parameter formats
+        const adAccountId = params.adAccountId || (params as any).ad_account_id;
         if (!adAccountId) {
           throw new Error('adAccountId is required for get_campaigns. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }

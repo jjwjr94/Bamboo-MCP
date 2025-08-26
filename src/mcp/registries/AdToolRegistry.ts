@@ -13,6 +13,12 @@ export const CreateAdSchema = z.object({
     .describe(
       "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
     ),
+  ad_account_id: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Alternative format for compatibility."
+    ),
   adsetId: z.string().describe('The ID of the ad set to create the ad in.'),
   name: z.string().describe('The name of the ad.'),
   creativeId: z.string().describe('The ID of the ad creative to use for this ad.'),
@@ -33,7 +39,10 @@ export const CreateAdSchema = z.object({
     .describe(
       'Specification for Advantage+ creative features. Required in Meta API v22 if using any Advantage+ features. Individual features must be explicitly opted into.'
     ),
-});
+}).transform((data) => ({
+  ...data,
+  adAccountId: data.adAccountId || data.ad_account_id,
+}));
 
 // UpdateAd schema - single source of truth for ad updates
 export const UpdateAdSchema = z
@@ -59,9 +68,18 @@ export const GetAdsInputSchema = z.object({
     .describe(
       "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
     ),
+  ad_account_id: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Alternative format for compatibility."
+    ),
   adSetId: z.string().optional().describe('The ID of the ad set to get ads from.'),
   campaignId: z.string().optional().describe('The ID of the campaign to get ads from.'),
-});
+}).transform((data) => ({
+  ...data,
+  adAccountId: data.adAccountId || data.ad_account_id,
+}));
 
 // DeleteAd schema - single source of truth for ad deletion
 export const DeleteAdInputSchema = z.object({

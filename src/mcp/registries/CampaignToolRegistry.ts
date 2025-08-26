@@ -18,7 +18,16 @@ export const GetCampaignsInputSchema = z.object({
     .describe(
       "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
     ),
-});
+  ad_account_id: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Alternative format for compatibility."
+    ),
+}).transform((data) => ({
+  ...data,
+  adAccountId: data.adAccountId || data.ad_account_id,
+}));
 
 // Campaign budget schema - shared structure for campaign budget configuration
 const CampaignBudgetSchema = z
@@ -81,6 +90,12 @@ export const CreateCampaignSchema = z.object({
     .describe(
       "The ID of the ad account (e.g., 'act_12345'). Optional if account was previously selected."
     ),
+  ad_account_id: z
+    .string()
+    .optional()
+    .describe(
+      "The ID of the ad account (e.g., 'act_12345'). Alternative format for compatibility."
+    ),
   name: z.string().describe('The name of the campaign.'),
   objective: CampaignObjectiveSchema.describe('The campaign objective.'),
   buying_type: z
@@ -94,7 +109,10 @@ export const CreateCampaignSchema = z.object({
     'Budget configuration for the campaign. Provide either daily or lifetime budget.'
   ),
   specialAd: SpecialAdSchema.describe('Special ad category configuration.'),
-});
+}).transform((data) => ({
+  ...data,
+  adAccountId: data.adAccountId || data.ad_account_id,
+}));
 
 // UpdateCampaign schema - single source of truth for campaign updates
 export const UpdateCampaignSchema = z.object({
