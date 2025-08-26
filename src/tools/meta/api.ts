@@ -32,6 +32,18 @@ export async function fetchUserTokenString(userId: string): Promise<string> {
 }
 
 /**
+ * Helper function to get the appropriate userId parameter for createMetaApiInstance.
+ * For direct token authentication, returns "token:accessToken".
+ * For database authentication, returns the userId.
+ */
+export function getApiInstanceUserId(authPayload: { userId: string; token?: string }): string {
+  if (authPayload.token) {
+    return `token:${authPayload.token}`;
+  }
+  return authPayload.userId;
+}
+
+/**
  * Creates a new FacebookAdsApi instance from an access token.
  * This is used for creating isolated API instances with specific tokens (e.g., page tokens).
  */
@@ -51,8 +63,18 @@ export function createApiInstanceFromToken(accessToken: string): FacebookAdsApi 
 /**
  * Creates a new request-scoped Meta API instance for a user.
  * This replaces the global singleton pattern with safe per-request instances.
+ * 
+ * For direct token authentication, pass the token directly in the userId parameter
+ * prefixed with "token:". This bypasses database lookup.
  */
 export async function createMetaApiInstance(userId: string): Promise<FacebookAdsApi> {
+  // Check if this is a direct token authentication (token: prefix)
+  if (userId.startsWith('token:')) {
+    const accessToken = userId.substring(6); // Remove "token:" prefix
+    return createApiInstanceFromToken(accessToken);
+  }
+
+  // Regular database-based authentication
   const tokenRecord = await fetchUserToken(userId);
 
   if (tokenRecord.expiresAt && new Date() >= new Date(tokenRecord.expiresAt)) {

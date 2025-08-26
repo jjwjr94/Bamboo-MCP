@@ -19,7 +19,7 @@ import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
-import { createMetaApiInstance, handleMetaApiCall } from './api.js';
+import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
 import type {
   CreateCampaignResult,
@@ -40,7 +40,7 @@ export class MetaCampaignHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,
@@ -115,7 +115,7 @@ export class MetaCampaignHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const adAccountId = await accountManager.requireAccountSelection(
           authPayload.userId,
@@ -183,7 +183,7 @@ export class MetaCampaignHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         // Separate campaignId from fields to be updated
         const { campaignId, budget, ...otherUpdateFields } = params;
@@ -240,7 +240,7 @@ export class MetaCampaignHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const api = await createMetaApiInstance(authPayload.userId);
+        const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
         const campaign = new MetaCampaignSDK(params.campaignId, {}, null, api);
 
