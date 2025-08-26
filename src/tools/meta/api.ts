@@ -38,11 +38,11 @@ export async function fetchUserTokenString(userId: string): Promise<string> {
 export function createApiInstanceFromToken(accessToken: string): FacebookAdsApi {
   // Initialize the Facebook Ads SDK if app credentials are available
   if (env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET) {
-    FacebookAdsApi.init(env.FACEBOOK_APP_ID, env.FACEBOOK_APP_SECRET, accessToken);
+    FacebookAdsApi.init(env.FACEBOOK_APP_ID, env.FACEBOOK_APP_SECRET);
   } else {
     // For direct token usage without app credentials, we need to initialize with minimal config
     // This is a workaround for cases where we only have the access token
-    FacebookAdsApi.init('direct-token', 'direct-token', accessToken);
+    FacebookAdsApi.init('direct-token', 'direct-token');
   }
   
   return new FacebookAdsApi(accessToken);
