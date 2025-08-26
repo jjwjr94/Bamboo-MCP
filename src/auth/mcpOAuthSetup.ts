@@ -11,6 +11,12 @@ export function createMCPOAuthProvider(): MetaServerAuthProvider {
 }
 
 export function createMCPAuthRouter() {
+  // Check if OAuth is configured
+  if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET || !env.FACEBOOK_CALLBACK_URL) {
+    logger.warn('OAuth not configured, skipping MCP Auth Router creation');
+    return null;
+  }
+
   const provider = createMCPOAuthProvider();
 
   logger.info('Creating MCP Auth Router with MetaServerAuthProvider from CoreServices');

@@ -150,6 +150,11 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
 
       await this.sessionManager.storeSessionData(state, sessionData);
 
+      // Check if OAuth is configured
+      if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_CALLBACK_URL) {
+        throw new Error('OAuth is not configured. Please set FACEBOOK_APP_ID and FACEBOOK_CALLBACK_URL.');
+      }
+
       // Redirect to Meta OAuth with the granted Facebook API scopes
       const metaAuthUrl = new URL(`https://www.facebook.com/${env.META_API_VERSION}/dialog/oauth`);
       metaAuthUrl.searchParams.append('client_id', env.FACEBOOK_APP_ID);
@@ -222,7 +227,7 @@ export class MetaServerAuthProvider implements OAuthServerProvider {
           user.id,
           accessToken,
           sessionData.grantedScopes || env.FACEBOOK_OAUTH_SCOPES.split(','),
-          expiresIn
+          expiresIn || 0
         ),
         MetaApiService.syncUserAdAccounts(user.id, accessToken),
       ]);

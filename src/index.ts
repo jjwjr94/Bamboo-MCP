@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
-import { createMCPAuthRouter, createMCPOAuthProvider } from './auth/mcpOAuthSetup.js';
+
 import { closeDatabase, db, testConnection } from './db/client.js';
 import { creativeAssetUploads } from './db/schema.js';
 import { CoreServices } from './mcp/coreServices.js';
