@@ -48,8 +48,11 @@ export class MetaAdHandler {
         // For deployed environment, use direct token authentication
         // This bypasses database access which is causing ECONNREFUSED errors
         const adAccountId = params.adAccountId;
-        if (!adAccountId) {
-          throw new Error('adAccountId is required for get_ads. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
+        
+        // Only require adAccountId if we're not filtering by campaign or ad set
+        // When filtering by campaign or ad set, we can get ads without the ad account ID
+        if (!adAccountId && !params.campaignId && !params.adSetId) {
+          throw new Error('adAccountId is required for get_ads when not filtering by campaign or ad set. Please provide the Meta Ads account ID (format: act_XXXXXXXXX)');
         }
 
         const fields = [
@@ -85,7 +88,7 @@ export class MetaAdHandler {
           limit: env.META_MAX_ADS_TO_FETCH,
           entityName: 'ads',
           userId: authPayload.userId,
-          apiContext: { adAccountId, adSetId: params.adSetId, campaignId: params.campaignId },
+          apiContext: { adAccountId: adAccountId || 'unknown', adSetId: params.adSetId, campaignId: params.campaignId },
         });
 
         const validatedAds: MetaAd[] = [];
@@ -98,7 +101,7 @@ export class MetaAdHandler {
               error: result.error.format(),
               ad,
               userId: authPayload.userId,
-              adAccountId,
+              adAccountId: adAccountId || 'unknown',
             });
           }
         }
