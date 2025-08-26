@@ -84,7 +84,16 @@ Use this context to provide expert guidance on Meta advertising operations, camp
   private static async performInitialization(): Promise<CoreServices> {
     logger.info('Initializing CoreServices with MCP server singleton');
     try {
-      await promptContentCache.initialize();
+      // Try to initialize prompt cache, but don't fail if it's not available
+      try {
+        await promptContentCache.initialize();
+        logger.info('Prompt content cache initialized successfully');
+      } catch (promptError) {
+        logger.warn('Prompt content cache initialization failed, continuing without prompts', {
+          error: promptError instanceof Error ? promptError.message : String(promptError),
+        });
+      }
+      
       CoreServices.instance = new CoreServices();
       logger.info('CoreServices initialization completed', {
         toolCount: CoreServices.instance.toolNames.length,
