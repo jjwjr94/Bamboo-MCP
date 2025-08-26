@@ -21,6 +21,7 @@ import { logger } from '../../utils/logger.js';
 import { convertKeysToSnakeCase, removeUndefinedProperties } from '../../utils/objectUtils.js';
 import { createMetaApiInstance, getApiInstanceUserId, handleMetaApiCall } from './api.js';
 import { fetchAllPaginatedData } from './paginationHelper.js';
+
 import type {
   CreateCampaignResult,
   DeleteCampaignResult,
@@ -42,10 +43,12 @@ export class MetaCampaignHandler {
       async () => {
         const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
-        const adAccountId = await accountManager.requireAccountSelection(
-          authPayload.userId,
-          params.adAccountId
-        );
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for get_campaigns');
+        }
 
         const fields = [
           MetaCampaignSDK.Fields.id,
@@ -117,10 +120,12 @@ export class MetaCampaignHandler {
       async () => {
         const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
-        const adAccountId = await accountManager.requireAccountSelection(
-          authPayload.userId,
-          params.adAccountId
-        );
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for create_campaign');
+        }
 
         // Create a consolidated, camelCased object for API parameters
         const apiParams = {

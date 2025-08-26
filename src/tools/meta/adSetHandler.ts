@@ -257,10 +257,12 @@ export class MetaAdSetHandler {
           MetaAdSetSDK.Fields.updated_time,
         ];
 
-        const adAccountId = await accountManager.requireAccountSelection(
-          authPayload.userId,
-          params.adAccountId
-        );
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for get_adsets');
+        }
 
         let adSetsCursor: unknown;
 
@@ -367,10 +369,12 @@ export class MetaAdSetHandler {
           throw new AggregatedValidationError(validationIssues);
         }
 
-        const adAccountId = await accountManager.requireAccountSelection(
-          authPayload.userId,
-          params.adAccountId
-        );
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for create_adset');
+        }
 
         // Create a consolidated, camelCased object for API parameters
         const apiParams = {

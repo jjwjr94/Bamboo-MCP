@@ -23,9 +23,12 @@ export class AdCreativeUploadHandler {
 
     return await handleMetaApiCall(
       async () => {
-        const adAccountId =
-          params.adAccountId ||
-          (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for initiate_asset_upload');
+        }
 
         const newUploadRequest = await withUserContext(authPayload.userId, async (tx) => {
           const [result] = await tx

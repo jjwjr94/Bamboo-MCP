@@ -45,10 +45,12 @@ export class MetaAdHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const adAccountId = await accountManager.requireAccountSelection(
-          authPayload.userId,
-          params.adAccountId
-        );
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for get_ads');
+        }
 
         const fields = [
           MetaAdSDK.Fields.id,
@@ -120,9 +122,12 @@ export class MetaAdHandler {
       async () => {
         const api = await createMetaApiInstance(authPayload.userId);
 
-        const adAccountId =
-          params.adAccountId ||
-          (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for create_ad');
+        }
 
         // Create a consolidated, camelCased object for API parameters
         const apiParams = {

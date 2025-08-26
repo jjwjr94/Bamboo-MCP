@@ -42,9 +42,12 @@ export class MetaAdCreativeHandler {
       async () => {
         const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
-        const adAccountId =
-          params.adAccountId ||
-          (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for get_ad_creatives');
+        }
 
         const fields = [
           MetaAdCreativeSDK.Fields.id,
@@ -108,9 +111,12 @@ export class MetaAdCreativeHandler {
       async () => {
         const api = await createMetaApiInstance(getApiInstanceUserId(authPayload));
 
-        const adAccountId =
-          params.adAccountId ||
-          (await accountManager.requireAccountSelection(authPayload.userId, params.adAccountId));
+        // For deployed environment, use direct token authentication
+        // This bypasses database access which is causing ECONNREFUSED errors
+        const adAccountId = params.adAccountId;
+        if (!adAccountId) {
+          throw new Error('adAccountId is required for create_ad_creative');
+        }
 
         const adCreativeData: Record<string, unknown> = {
           [MetaAdCreativeSDK.Fields.name]: params.name,
