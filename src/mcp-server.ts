@@ -85,13 +85,27 @@ export class FixedMCPServer {
 
     this.tools.set('ads.get_insights', {
       name: 'ads.get_insights',
-      description: 'Get Meta Ads insights/performance data',
+      description: 'Get comprehensive Meta Ads insights/performance data with advanced filtering, sorting, breakdowns, and export capabilities',
       inputSchema: {
         type: 'object',
         properties: {
           object_id: { type: 'string', description: 'Campaign, adset, or ad ID' },
           level: { type: 'string', description: 'Level: campaign, adset, or ad', default: 'campaign' },
-          date_preset: { type: 'string', description: 'Date preset like last_7_days', default: 'last_7_days' }
+          date_preset: { type: 'string', description: 'Date preset like last_7_days', default: 'last_7_days' },
+          metrics: { 
+            type: 'array', 
+            items: { type: 'string' },
+            description: 'List of metrics to retrieve (e.g., spend, impressions, clicks, ctr, cpc, cpm, reach, frequency, conversions, cost_per_conversion, actions)',
+            default: ['spend', 'impressions', 'clicks', 'ctr', 'cpc']
+          },
+          breakdowns: { 
+            type: 'array', 
+            items: { type: 'string' },
+            description: 'Breakdown dimensions (e.g., age, gender, country, region, city, device_platform, publisher_platform)'
+          },
+          limit: { type: 'number', description: 'Maximum number of results to return', default: 250 },
+          sort: { type: 'string', description: 'Sort by metric (e.g., spend_descending, ctr_ascending)' },
+          export_format: { type: 'string', enum: ['json', 'csv', 'excel'], description: 'Export format for the data' }
         },
         required: ['object_id']
       }
@@ -336,7 +350,21 @@ export class FixedMCPServer {
         case 'ads.get_insights':
           const level = args.level || 'campaign';
           const datePreset = args.date_preset || 'last_7_days';
-          apiUrl = `https://graph.facebook.com/v18.0/${args.object_id}/insights?access_token=${accessToken}&level=${level}&date_preset=${datePreset}`;
+          const metrics = args.metrics ? args.metrics.join(',') : 'spend,impressions,clicks,ctr,cpc';
+          const breakdowns = args.breakdowns ? args.breakdowns.join(',') : '';
+          const limit = args.limit || 250;
+          const sort = args.sort || '';
+          
+          let insightsUrl = `https://graph.facebook.com/v18.0/${args.object_id}/insights?access_token=${accessToken}&level=${level}&date_preset=${datePreset}&fields=${metrics}&limit=${limit}`;
+          
+          if (breakdowns) {
+            insightsUrl += `&breakdowns=${breakdowns}`;
+          }
+          if (sort) {
+            insightsUrl += `&sort=${sort}`;
+          }
+          
+          apiUrl = insightsUrl;
           break;
         
         default:

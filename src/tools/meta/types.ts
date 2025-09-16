@@ -145,10 +145,31 @@ export interface GetAssetUploadStatusResult {
 // Insights Handler Results
 export interface GetAdInsightsResult {
   insights: MetaInsights[];
+  summary: {
+    totalRecords: number;
+    dateRange?: {
+      start?: string;
+      end?: string;
+    };
+    metrics: string[];
+    breakdowns?: string[];
+  };
+  exportData?: string;
 }
 
 export interface GetAdAccountInsightsResult {
   insights: MetaInsights[];
+  summary: {
+    totalRecords: number;
+    dateRange?: {
+      start?: string;
+      end?: string;
+    };
+    metrics: string[];
+    breakdowns?: string[];
+    accountId: string;
+  };
+  exportData?: string;
 }
 
 // Custom Audience Handler Results

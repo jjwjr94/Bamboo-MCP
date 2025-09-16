@@ -48,8 +48,11 @@ export class MetaInsightsHandler {
           fields: insightsFields,
           time_range: params.timeRange,
           date_preset: params.datePreset || 'last_30d',
-          level: 'ad', // Fixed level for this method
+          level: params.level || 'ad', // Use provided level or default to 'ad'
           breakdowns: params.breakdowns,
+          limit: params.limit || 250,
+          sort: params.sort,
+          filtering: params.filtering,
         };
 
         // Remove undefined properties in-place to prevent Meta API errors
@@ -107,7 +110,21 @@ export class MetaInsightsHandler {
           }
         }
 
-        const response = { insights: validatedInsights };
+        // Create enhanced response with summary and export capabilities
+        const response = {
+          insights: validatedInsights,
+          summary: {
+            totalRecords: validatedInsights.length,
+            dateRange: validatedInsights.length > 0 ? {
+              start: validatedInsights[0].date_start as string | undefined,
+              end: validatedInsights[0].date_stop as string | undefined,
+            } : undefined,
+            metrics: insightsFields,
+            breakdowns: params.breakdowns,
+          },
+          exportData: params.exportFormat ? this.formatExportData(validatedInsights, params.exportFormat) : undefined,
+        };
+
         logger.info('Successfully retrieved insights', {
           userId: authPayload.userId,
           count: validatedInsights.length,
@@ -151,7 +168,11 @@ export class MetaInsightsHandler {
           fields: insightsFields,
           time_range: params.timeRange,
           date_preset: params.datePreset || 'last_30d',
-          level: 'account',
+          level: params.level || 'account',
+          breakdowns: params.breakdowns,
+          limit: params.limit || 250,
+          sort: params.sort,
+          filtering: params.filtering,
         };
 
         // Remove undefined properties in-place to prevent Meta API errors
@@ -188,7 +209,22 @@ export class MetaInsightsHandler {
           }
         }
 
-        const response = { insights: validatedInsights };
+        // Create enhanced response with summary and export capabilities
+        const response = {
+          insights: validatedInsights,
+          summary: {
+            totalRecords: validatedInsights.length,
+            dateRange: validatedInsights.length > 0 ? {
+              start: validatedInsights[0].date_start as string | undefined,
+              end: validatedInsights[0].date_stop as string | undefined,
+            } : undefined,
+            metrics: insightsFields,
+            breakdowns: params.breakdowns,
+            accountId: adAccountId,
+          },
+          exportData: params.exportFormat ? this.formatExportData(validatedInsights, params.exportFormat) : undefined,
+        };
+
         logger.info('Successfully retrieved account insights', {
           userId: authPayload.userId,
           adAccountId,
@@ -202,5 +238,47 @@ export class MetaInsightsHandler {
         userId: authPayload.userId,
       }
     );
+  }
+
+  /**
+   * Formats insights data for export in various formats
+   */
+  private formatExportData(insights: z.infer<typeof MetaAdsInsightsResponseSchema>[], format: 'csv' | 'excel' | 'json'): string {
+    if (format === 'json') {
+      return JSON.stringify(insights, null, 2);
+    }
+
+    if (format === 'csv') {
+      if (insights.length === 0) return '';
+      
+      // Get all unique keys from all insights records
+      const allKeys = new Set<string>();
+      insights.forEach(insight => {
+        Object.keys(insight).forEach(key => allKeys.add(key));
+      });
+      
+      const headers = Array.from(allKeys);
+      const csvRows = [headers.join(',')];
+      
+      insights.forEach(insight => {
+        const values = headers.map(header => {
+          const value = insight[header];
+          if (value === null || value === undefined) return '';
+          if (typeof value === 'object') return JSON.stringify(value);
+          return String(value).replace(/,/g, ';'); // Replace commas to avoid CSV issues
+        });
+        csvRows.push(values.join(','));
+      });
+      
+      return csvRows.join('\n');
+    }
+
+    if (format === 'excel') {
+      // For Excel format, we'll return a simplified CSV that can be opened in Excel
+      // In a production environment, you might want to use a library like 'xlsx' to create proper Excel files
+      return this.formatExportData(insights, 'csv');
+    }
+
+    return JSON.stringify(insights, null, 2);
   }
 }
