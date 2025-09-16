@@ -117,7 +117,7 @@ const constantsToGenerate = [
   { name: 'CustomAudienceCustomerFileSource', constant: CustomAudience.CustomerFileSource },
   { name: 'AdsInsightsDatePreset', constant: AdsInsights.DatePreset },
   { name: 'AdsInsightsLevel', constant: AdsInsights.Level },
-  { name: 'AdsInsightsBreakdowns', constant: AdsInsights.Breakdowns },
+  { name: 'AdsInsightsBreakdowns', constant: AdsInsights.Breakdowns, enhanceWithCommon: true },
   { name: 'ProductCatalogVertical', constant: ProductCatalog.Vertical },
 ];
 
@@ -249,6 +249,23 @@ const INSIGHT_METRICS = [
   'cost_per_inline_link_click',
   'video_30_sec_watched_actions',
   'video_thruplay_watched_actions',
+];
+
+// Common breakdowns that are available in Meta Ads API but missing from SDK
+// These are frequently used breakdown dimensions for insights reporting
+const COMMON_BREAKDOWNS = [
+  'month',
+  'day', 
+  'week',
+  'hour',
+  'campaign_id',
+  'adset_id',
+  'ad_id',
+  'action_type',
+  'action_device',
+  'placement',
+  'city',
+  'action_destination'
 ];
 
 /**
@@ -397,7 +414,7 @@ export type InsightMetric = z.infer<typeof InsightMetricSchema>;
 function generateEnumSchemaAndType(
   name: string,
   constant: unknown,
-  options: { filterDeprecated?: boolean } = {}
+  options: { filterDeprecated?: boolean; enhanceWithCommon?: boolean } = {}
 ) {
   let values: string[];
 
@@ -418,6 +435,17 @@ function generateEnumSchemaAndType(
   // Apply deprecation filtering if enabled
   if (options.filterDeprecated) {
     values = filterDeprecatedValues(name, values);
+  }
+
+  // Enhance with common breakdowns if enabled
+  if (options.enhanceWithCommon && name === 'AdsInsightsBreakdowns') {
+    const originalCount = values.length;
+    values = [...new Set([...values, ...COMMON_BREAKDOWNS])]; // Remove duplicates
+    const addedCount = values.length - originalCount;
+    console.info(`\n${name} Enhancement:`);
+    console.info(`Original breakdowns: ${originalCount}`);
+    console.info(`Added common breakdowns: ${addedCount}`);
+    console.info(`Total breakdowns: ${values.length}`);
   }
 
   // Sort values for consistent output
@@ -448,10 +476,14 @@ function generateEnumSchemaAndType(
     deprecationNotice = `
 // Note: Deprecated optimization goals like OFFSITE_CONVERSIONS, PAGE_LIKES, and NONE have been filtered out
 // Please use current, outcome-based optimization goals`;
+  } else if (name === 'AdsInsightsBreakdowns') {
+    deprecationNotice = `
+// Note: Enhanced with common breakdowns (month, day, week, hour, campaign_id, adset_id, ad_id, etc.)
+// These are available in Meta Ads API but missing from the official SDK`;
   }
 
   return `${deprecationNotice}
-// ${name} enum from Meta SDK
+// ${name} enum from Meta SDK${options.enhanceWithCommon ? ' - Enhanced with common breakdowns' : ''}
 export const ${name}Schema = z.enum([${enumValues}]);
 export type ${name} = z.infer<typeof ${name}Schema>;
 `;
@@ -461,8 +493,8 @@ export type ${name} = z.infer<typeof ${name}Schema>;
 let generatedEnumsContent = '';
 
 // Generate from SDK constants
-for (const { name, constant, filterDeprecated } of constantsToGenerate) {
-  generatedEnumsContent += generateEnumSchemaAndType(name, constant, { filterDeprecated });
+for (const { name, constant, filterDeprecated, enhanceWithCommon } of constantsToGenerate) {
+  generatedEnumsContent += generateEnumSchemaAndType(name, constant, { filterDeprecated, enhanceWithCommon });
 }
 
 // Generate from manual constants
