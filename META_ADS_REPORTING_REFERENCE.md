@@ -106,17 +106,68 @@ The Bamboo MCP Gateway provides comprehensive Meta Ads reporting capabilities th
 - `day` - Day of week
 - `week` - Week breakdown
 - `month` - Month breakdown
+- `hourly_stats_aggregated_by_advertiser_time_zone` - Hourly stats by advertiser timezone
+- `hourly_stats_aggregated_by_audience_time_zone` - Hourly stats by audience timezone
 
 ### Campaign/Ad Structure
 - `campaign_id` - Campaign breakdown
 - `adset_id` - Ad set breakdown
 - `ad_id` - Ad breakdown
+- `breakdown_ad_objective` - Ad objective breakdown
+- `breakdown_reporting_ad_id` - Reporting ad ID breakdown
+
+### Actions & Conversions
+- `action_type` - Type of action taken
+- `action_device` - Device where action occurred
+- `action_destination` - Where the action led
+- `conversion_destination` - Where conversions occurred
+- `coarse_conversion_value` - Conversion value ranges
 
 ### Advanced Breakdowns
-- `conversion_destination` - Where conversions occurred
-- `action_type` - Type of action taken
 - `frequency_value` - Frequency bucket
-- `coarse_conversion_value` - Conversion value ranges
+- `app_id` - App ID breakdown
+- `product_id` - Product ID breakdown
+- `place_page_id` - Place page ID breakdown
+- `media_type` - Media type breakdown
+- `media_format` - Media format breakdown
+- `media_creator` - Media creator breakdown
+- `media_origin_url` - Media origin URL breakdown
+- `media_destination_url` - Media destination URL breakdown
+- `media_asset_url` - Media asset URL breakdown
+- `media_text_content` - Media text content breakdown
+- `video_asset` - Video asset breakdown
+- `image_asset` - Image asset breakdown
+- `body_asset` - Body asset breakdown
+- `title_asset` - Title asset breakdown
+- `description_asset` - Description asset breakdown
+- `call_to_action_asset` - Call to action asset breakdown
+- `link_url_asset` - Link URL asset breakdown
+- `ad_format_asset` - Ad format asset breakdown
+- `landing_destination` - Landing destination breakdown
+- `mdsa_landing_destination` - MDSA landing destination breakdown
+- `marketing_messages_btn_name` - Marketing messages button name breakdown
+- `user_persona_id` - User persona ID breakdown
+- `user_persona_name` - User persona name breakdown
+- `dma` - Designated Market Area breakdown
+- `fidelity_type` - Fidelity type breakdown
+- `hsid` - HSID breakdown
+- `mmm` - MMM breakdown
+- `platform_position` - Platform position breakdown
+- `postback_sequence_index` - Postback sequence index breakdown
+- `redownload` - Redownload breakdown
+- `signal_source_bucket` - Signal source bucket breakdown
+- `skan_campaign_id` - SKAN campaign ID breakdown
+- `skan_conversion_id` - SKAN conversion ID breakdown
+- `skan_version` - SKAN version breakdown
+- `sot_attribution_model_type` - SOT attribution model type breakdown
+- `sot_attribution_window` - SOT attribution window breakdown
+- `sot_channel` - SOT channel breakdown
+- `sot_event_type` - SOT event type breakdown
+- `sot_source` - SOT source breakdown
+- `standard_event_content_type` - Standard event content type breakdown
+- `is_conversion_id_modeled` - Is conversion ID modeled breakdown
+- `is_rendered_as_delayed_skip_ad` - Is rendered as delayed skip ad breakdown
+- `impression_view_time_advertiser_hour_v2` - Impression view time advertiser hour v2 breakdown
 
 ## Date Presets
 
