@@ -5,10 +5,8 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "prebuild:schemas": "tsx scripts/generateSchemas.ts",
-    "prebuild": "npm run prebuild:schemas",
-    "dev": "npm run prebuild && tsx watch src/index.ts",
-    "build": "npm run prebuild && tsc && copyfiles -u 1 'src/**/*.md' dist && cp -r public dist/",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && copyfiles -u 1 'src/**/*.md' dist && cp -r public dist/",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:ui": "vitest --ui",
