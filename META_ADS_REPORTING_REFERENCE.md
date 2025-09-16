@@ -18,42 +18,23 @@ The Bamboo MCP Gateway provides comprehensive Meta Ads reporting capabilities th
 
 | Parameter | Type | Required | Description | Example |
 |-----------|------|----------|-------------|---------|
-| `campaignId` | string | No* | Campaign ID to get insights for | `"123456789"` |
-| `adSetId` | string | No* | Ad set ID to get insights for | `"987654321"` |
-| `adId` | string | No* | Ad ID to get insights for | `"456789123"` |
-| `adAccountId` | string | No* | Ad account ID (for account insights) | `"act_123456789"` |
-
-*At least one of `campaignId`, `adSetId`, `adId`, or `adAccountId` must be provided.
+| `adAccountId` | string | Yes | Meta Ad Account ID (act_123456789) | `"act_123456789"` |
+| `adId` | string | No | Specific ad ID for ad-level insights | `"123456789"` |
+| `adSetId` | string | No | Ad set ID for ad set-level insights | `"123456789"` |
+| `campaignId` | string | No | Campaign ID for campaign-level insights | `"123456789"` |
+| `level` | string | No | Aggregation level: account, campaign, adset, ad | `"campaign"` |
+| `datePreset` | string | No | Predefined date range | `"this_year"` |
+| `timeRange` | object | No | Custom date range | `{"since": "2024-01-01", "until": "2024-12-31"}` |
 
 ### Metrics Parameters
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `metrics` | array | No | `["spend", "impressions", "clicks", "ctr", "cpc", "reach", "frequency"]` | List of metrics to retrieve |
-| `level` | string | No | `"ad"` or `"account"` | Aggregation level: `"account"`, `"campaign"`, `"adset"`, `"ad"` |
-
-### Time Range Parameters
-
-| Parameter | Type | Required | Description | Example |
+| Parameter | Type | Required | Description | Default |
 |-----------|------|----------|-------------|---------|
-| `datePreset` | string | No | Predefined date range | `"last_7d"`, `"last_30d"`, `"this_year"` |
-| `timeRange` | object | No | Custom date range | `{"since": "2024-01-01", "until": "2024-01-31"}` |
+| `metrics` | array | No | List of metrics to retrieve | `["spend", "impressions", "clicks", "ctr", "cpc"]` |
 
-**Note**: Use either `datePreset` OR `timeRange`, not both.
+### Available Metrics (23 total)
 
-### Advanced Parameters
-
-| Parameter | Type | Required | Description | Example |
-|-----------|------|----------|-------------|---------|
-| `breakdowns` | array | No | Breakdown dimensions | `["age", "gender", "country"]` |
-| `limit` | number | No | 250 | Maximum results (max: 1000) | `1000` |
-| `sort` | string | No | Sort by metric | `"spend_descending"`, `"ctr_ascending"` |
-| `filtering` | array | No | Filter criteria | See filtering section below |
-| `exportFormat` | string | No | Export format | `"json"`, `"csv"`, `"excel"` |
-
-## Available Metrics (23 total)
-
-### Standard Performance Metrics
+#### Core Performance Metrics
 - `spend` - Total amount spent
 - `impressions` - Number of times ads were shown
 - `clicks` - Number of clicks on ads
@@ -63,27 +44,25 @@ The Bamboo MCP Gateway provides comprehensive Meta Ads reporting capabilities th
 - `reach` - Number of unique people reached
 - `frequency` - Average number of times each person saw the ad
 
-### Conversion Metrics
+#### Conversion Metrics
 - `conversions` - Number of conversions
-- `cost_per_conversion` - Cost per conversion (CPA)
+- `cost_per_conversion` - Cost per conversion
+- `actions` - Total number of actions taken
 
-### Advanced Click Metrics
-- `actions` - All actions taken on ads
-- `inline_link_clicks` - Clicks on links within ads
-- `outbound_clicks` - Clicks that take users off Meta platforms
+#### Advanced Click Metrics
 - `unique_clicks` - Number of unique people who clicked
 - `unique_ctr` - Unique click-through rate
-
-### Cost Metrics
-- `cost_per_inline_link_click` - Cost per inline link click
 - `cost_per_unique_click` - Cost per unique click
+- `inline_link_clicks` - Number of inline link clicks
+- `cost_per_inline_link_click` - Cost per inline link click
+- `outbound_clicks` - Number of outbound clicks
 
-### Video Engagement Metrics
+#### Video Metrics
 - `video_30_sec_watched_actions` - 30-second video views
-- `video_p100_watched_actions` - 100% video completion
 - `video_p25_watched_actions` - 25% video completion
 - `video_p50_watched_actions` - 50% video completion
 - `video_p75_watched_actions` - 75% video completion
+- `video_p100_watched_actions` - 100% video completion
 - `video_thruplay_watched_actions` - ThruPlay video views
 
 ## Available Breakdowns
@@ -106,123 +85,171 @@ The Bamboo MCP Gateway provides comprehensive Meta Ads reporting capabilities th
 - `day` - Day of week
 - `week` - Week breakdown
 - `month` - Month breakdown
+- `hourly_stats_aggregated_by_advertiser_time_zone` - Hourly stats by advertiser timezone
+- `hourly_stats_aggregated_by_audience_time_zone` - Hourly stats by audience timezone
 
 ### Campaign/Ad Structure
 - `campaign_id` - Campaign breakdown
 - `adset_id` - Ad set breakdown
 - `ad_id` - Ad breakdown
+- `breakdown_ad_objective` - Ad objective breakdown
+- `breakdown_reporting_ad_id` - Reporting ad ID breakdown
+
+### Actions & Conversions
+- `action_type` - Type of action taken
+- `action_device` - Device where action occurred
+- `action_destination` - Where the action led
+- `conversion_destination` - Where conversions occurred
+- `coarse_conversion_value` - Conversion value ranges
 
 ### Advanced Breakdowns
-- `conversion_destination` - Where conversions occurred
-- `action_type` - Type of action taken
 - `frequency_value` - Frequency bucket
-- `coarse_conversion_value` - Conversion value ranges
+- `app_id` - App ID breakdown
+- `product_id` - Product ID breakdown
+- `place_page_id` - Place page ID breakdown
+- `media_type` - Media type breakdown
+- `media_format` - Media format breakdown
+- `media_creator` - Media creator breakdown
+- `media_origin_url` - Media origin URL breakdown
+- `media_destination_url` - Media destination URL breakdown
+- `media_asset_url` - Media asset URL breakdown
+- `media_text_content` - Media text content breakdown
+- `video_asset` - Video asset breakdown
+- `image_asset` - Image asset breakdown
+- `body_asset` - Body asset breakdown
+- `title_asset` - Title asset breakdown
+- `description_asset` - Description asset breakdown
+- `call_to_action_asset` - Call to action asset breakdown
+- `link_url_asset` - Link URL asset breakdown
+- `ad_format_asset` - Ad format asset breakdown
+- `landing_destination` - Landing destination breakdown
+- `mdsa_landing_destination` - MDSA landing destination breakdown
+- `marketing_messages_btn_name` - Marketing messages button name breakdown
+- `user_persona_id` - User persona ID breakdown
+- `user_persona_name` - User persona name breakdown
+- `dma` - Designated Market Area breakdown
+- `fidelity_type` - Fidelity type breakdown
+- `hsid` - HSID breakdown
+- `mmm` - MMM breakdown
+- `platform_position` - Platform position breakdown
+- `postback_sequence_index` - Postback sequence index breakdown
+- `redownload` - Redownload breakdown
+- `signal_source_bucket` - Signal source bucket breakdown
+- `skan_campaign_id` - SKAN campaign ID breakdown
+- `skan_conversion_id` - SKAN conversion ID breakdown
+- `skan_version` - SKAN version breakdown
+- `sot_attribution_model_type` - SOT attribution model type breakdown
+- `sot_attribution_window` - SOT attribution window breakdown
+- `sot_channel` - SOT channel breakdown
+- `sot_event_type` - SOT event type breakdown
+- `sot_source` - SOT source breakdown
+- `standard_event_content_type` - Standard event content type breakdown
+- `is_conversion_id_modeled` - Is conversion ID modeled breakdown
+- `is_rendered_as_delayed_skip_ad` - Is rendered as delayed skip ad breakdown
+- `impression_view_time_advertiser_hour_v2` - Impression view time advertiser hour v2 breakdown
 
 ## Date Presets
 
 | Preset | Description |
 |--------|-------------|
-| `today` | Today only |
-| `yesterday` | Yesterday only |
-| `last_3d` | Last 3 days |
-| `last_7d` | Last 7 days |
-| `last_14d` | Last 14 days |
-| `last_28d` | Last 28 days |
-| `last_30d` | Last 30 days |
-| `last_90d` | Last 90 days |
-| `this_month` | Current month |
-| `last_month` | Previous month |
-| `this_quarter` | Current quarter |
-| `last_quarter` | Previous quarter |
-| `this_year` | Current year |
-| `last_year` | Previous year |
-| `maximum` | All available data |
-| `data_maximum` | All data with maximum available range |
+| `today` | Today's data |
+| `yesterday` | Yesterday's data |
+| `this_week_sun_today` | This week (Sunday to today) |
+| `this_week_mon_today` | This week (Monday to today) |
+| `last_week_sun_sat` | Last week (Sunday to Saturday) |
+| `last_week_mon_sun` | Last week (Monday to Sunday) |
+| `this_month` | This month |
+| `last_month` | Last month |
+| `this_quarter` | This quarter |
+| `last_quarter` | Last quarter |
+| `this_year` | This year |
+| `last_year` | Last year |
+| `last_3_days` | Last 3 days |
+| `last_7_days` | Last 7 days |
+| `last_14_days` | Last 14 days |
+| `last_30_days` | Last 30 days |
+| `last_90_days` | Last 90 days |
 
-## Filtering
+## Filtering System
 
-The `filtering` parameter allows you to filter results based on specific criteria:
-
+### Filter Structure
 ```json
 {
-  "filtering": [
-    {
-      "field": "campaign.status",
-      "operator": "IN",
-      "value": ["ACTIVE", "PAUSED"]
-    },
-    {
-      "field": "ad.effective_status",
-      "operator": "NOT_IN", 
-      "value": ["DELETED", "ARCHIVED"]
-    },
-    {
-      "field": "spend",
-      "operator": "GREATER_THAN",
-      "value": "100"
-    }
-  ]
+  "field": "campaign.name",
+  "operator": "CONTAIN",
+  "value": "Holiday"
 }
 ```
 
 ### Available Operators
-- `IN` - Value is in the list
-- `NOT_IN` - Value is not in the list
-- `EQUAL` - Value equals the specified value
-- `NOT_EQUAL` - Value does not equal the specified value
-- `GREATER_THAN` - Value is greater than specified value
-- `LESS_THAN` - Value is less than specified value
+- `EQUAL` - Exact match
+- `NOT_EQUAL` - Not equal
+- `IN` - Value in list
+- `NOT_IN` - Value not in list
+- `GREATER_THAN` - Greater than value
+- `LESS_THAN` - Less than value
+- `CONTAIN` - Contains substring
+- `NOT_CONTAIN` - Does not contain substring
 
 ### Common Filter Fields
+- `campaign.name` - Campaign name
 - `campaign.status` - Campaign status
+- `adset.name` - Ad set name
 - `adset.status` - Ad set status
-- `ad.effective_status` - Ad effective status
+- `ad.name` - Ad name
+- `ad.status` - Ad status
 - `spend` - Amount spent
 - `impressions` - Number of impressions
 - `clicks` - Number of clicks
 
-## Sorting
+## Sorting Options
 
-Use the `sort` parameter to order results:
+### Sort Format
+```
+"metric_name_direction"
+```
 
-### Format
-- `{metric_name}_ascending` - Sort ascending
-- `{metric_name}_descending` - Sort descending
+### Available Directions
+- `ascending` - Ascending order
+- `descending` - Descending order
 
-### Examples
-- `"spend_descending"` - Highest spend first
-- `"ctr_ascending"` - Lowest CTR first
-- `"impressions_descending"` - Most impressions first
-- `"cost_per_conversion_ascending"` - Lowest CPA first
+### Common Sort Examples
+- `"spend_descending"` - Sort by spend (highest first)
+- `"ctr_ascending"` - Sort by CTR (lowest first)
+- `"impressions_descending"` - Sort by impressions (highest first)
+- `"cpc_ascending"` - Sort by CPC (lowest first)
 
 ## Export Formats
 
-### JSON (Default)
-Returns structured JSON data with insights, summary, and metadata.
+### Available Formats
+- `json` - JSON format (default)
+- `csv` - CSV format for Excel/spreadsheets
+- `excel` - Excel-compatible format
 
-### CSV
-Returns comma-separated values suitable for spreadsheet import.
-
-### Excel
-Returns CSV format that can be opened in Excel (basic implementation).
+### Export Usage
+```json
+{
+  "exportFormat": "csv"
+}
+```
 
 ## Response Structure
 
-### Standard Response
+### Success Response
 ```json
 {
   "insights": [
     {
       "date_start": "2024-01-01",
       "date_stop": "2024-01-31",
+      "campaign_id": "123456789",
+      "campaign_name": "Holiday Campaign",
       "spend": "1500.00",
       "impressions": "50000",
       "clicks": "2500",
       "ctr": "5.00",
       "cpc": "0.60",
-      "cpm": "30.00",
-      "reach": "25000",
-      "frequency": "2.00"
+      "cpm": "30.00"
     }
   ],
   "summary": {
@@ -231,190 +258,237 @@ Returns CSV format that can be opened in Excel (basic implementation).
       "start": "2024-01-01",
       "end": "2024-01-31"
     },
-    "metrics": ["spend", "impressions", "clicks", "ctr", "cpc", "cpm", "reach", "frequency"],
-    "breakdowns": ["age", "gender"],
-    "accountId": "act_123456789"
+    "metrics": ["spend", "impressions", "clicks", "ctr", "cpc", "cpm"],
+    "breakdowns": ["month", "campaign_id"]
   },
-  "exportData": "spend,impressions,clicks,ctr,cpc,cpm,reach,frequency\n1500.00,50000,2500,5.00,0.60,30.00,25000,2.00"
+  "exportData": "spend,impressions,clicks,ctr,cpc,cpm\n1500.00,50000,2500,5.00,0.60,30.00"
 }
 ```
 
 ## Usage Examples
 
-### 1. Basic Performance Report
-```json
-{
-  "campaignId": "123456789",
-  "metrics": ["spend", "impressions", "clicks", "ctr", "cpc", "cpm", "reach", "frequency"],
-  "datePreset": "last_7d"
-}
-```
-
-### 2. Advanced Demographic Analysis
-```json
-{
-  "campaignId": "123456789",
-  "metrics": ["spend", "impressions", "clicks", "conversions", "cost_per_conversion"],
-  "breakdowns": ["age", "gender", "country"],
-  "datePreset": "last_30d",
-  "sort": "spend_descending",
-  "limit": 500
-}
-```
-
-### 3. Year-to-Date Report with Monthly Breakdown
+### 1. Basic Campaign Performance Report
 ```json
 {
   "adAccountId": "act_123456789",
-  "metrics": ["spend", "impressions", "clicks", "cpm", "cpc", "conversions", "cost_per_conversion"],
-  "breakdowns": ["month", "campaign_id"],
+  "metrics": ["spend", "impressions", "clicks", "ctr", "cpc"],
   "level": "campaign",
-  "datePreset": "this_year",
-  "sort": "spend_descending",
-  "limit": 1000
+  "datePreset": "last_30_days"
 }
 ```
 
-### 4. Device & Platform Analysis
+### 2. Monthly Performance by Campaign
 ```json
 {
-  "adSetId": "987654321",
-  "metrics": ["spend", "impressions", "clicks", "ctr", "cpc"],
+  "adAccountId": "act_123456789",
+  "metrics": ["spend", "impressions", "clicks", "cpm", "cpc"],
+  "breakdowns": ["month", "campaign_id"],
+  "level": "campaign",
+  "datePreset": "this_year"
+}
+```
+
+### 3. Demographic Performance Analysis
+```json
+{
+  "adAccountId": "act_123456789",
+  "metrics": ["spend", "impressions", "clicks", "ctr", "conversions"],
+  "breakdowns": ["age", "gender", "country"],
+  "level": "campaign",
+  "datePreset": "last_90_days"
+}
+```
+
+### 4. Device and Platform Performance
+```json
+{
+  "adAccountId": "act_123456789",
+  "metrics": ["spend", "impressions", "clicks", "ctr", "cpm"],
   "breakdowns": ["device_platform", "publisher_platform"],
-  "datePreset": "last_14d",
+  "level": "campaign",
+  "datePreset": "last_30_days"
+}
+```
+
+### 5. Conversion Analysis with Filtering
+```json
+{
+  "adAccountId": "act_123456789",
+  "metrics": ["spend", "conversions", "cost_per_conversion", "ctr"],
+  "breakdowns": ["campaign_id"],
+  "level": "campaign",
+  "datePreset": "last_30_days",
   "filtering": [
     {
       "field": "spend",
       "operator": "GREATER_THAN",
-      "value": "50"
+      "value": "100"
     }
-  ]
-}
-```
-
-### 5. Export for Analysis
-```json
-{
-  "campaignId": "123456789",
-  "metrics": ["spend", "impressions", "clicks", "conversions", "cost_per_conversion"],
-  "breakdowns": ["age", "gender", "country"],
-  "datePreset": "last_30d",
-  "exportFormat": "csv"
-}
-```
-
-### 6. Video Campaign Analysis
-```json
-{
-  "campaignId": "123456789",
-  "metrics": [
-    "spend", 
-    "impressions", 
-    "video_30_sec_watched_actions",
-    "video_p50_watched_actions",
-    "video_p100_watched_actions",
-    "video_thruplay_watched_actions"
   ],
-  "breakdowns": ["age", "gender"],
-  "datePreset": "last_30d"
-}
-```
-
-### 7. Conversion-Focused Report
-```json
-{
-  "adAccountId": "act_123456789",
-  "metrics": [
-    "spend",
-    "conversions", 
-    "cost_per_conversion",
-    "actions",
-    "inline_link_clicks",
-    "outbound_clicks"
-  ],
-  "breakdowns": ["conversion_destination", "action_type"],
-  "level": "campaign",
-  "datePreset": "last_30d",
   "sort": "cost_per_conversion_ascending"
 }
 ```
 
-### 8. Custom Date Range Analysis
+### 6. Video Performance Analysis
 ```json
 {
-  "campaignId": "123456789",
-  "metrics": ["spend", "impressions", "clicks", "ctr", "cpc"],
+  "adAccountId": "act_123456789",
+  "metrics": [
+    "spend", 
+    "impressions", 
+    "video_30_sec_watched_actions",
+    "video_p25_watched_actions",
+    "video_p50_watched_actions",
+    "video_p75_watched_actions",
+    "video_p100_watched_actions"
+  ],
+  "breakdowns": ["campaign_id"],
+  "level": "campaign",
+  "datePreset": "last_30_days"
+}
+```
+
+### 7. Export to CSV
+```json
+{
+  "adAccountId": "act_123456789",
+  "metrics": ["spend", "impressions", "clicks", "ctr", "cpc", "cpm"],
+  "breakdowns": ["month", "campaign_id"],
+  "level": "campaign",
+  "datePreset": "this_year",
+  "exportFormat": "csv"
+}
+```
+
+### 8. Custom Date Range with Advanced Metrics
+```json
+{
+  "adAccountId": "act_123456789",
+  "metrics": [
+    "spend", 
+    "impressions", 
+    "clicks", 
+    "ctr", 
+    "cpc", 
+    "cpm", 
+    "reach", 
+    "frequency",
+    "conversions",
+    "cost_per_conversion"
+  ],
+  "breakdowns": ["day", "campaign_id"],
+  "level": "campaign",
   "timeRange": {
     "since": "2024-01-01",
     "until": "2024-01-31"
   },
-  "breakdowns": ["day"],
-  "sort": "spend_descending"
+  "sort": "spend_descending",
+  "limit": 100
 }
 ```
 
 ## Best Practices
 
 ### 1. Metric Selection
-- Start with basic metrics for overview reports
-- Add conversion metrics for performance analysis
-- Include video metrics for video campaigns
-- Use cost metrics for budget analysis
+- **Start with core metrics**: spend, impressions, clicks, ctr, cpc
+- **Add conversion metrics** for performance analysis
+- **Include video metrics** for video campaigns
+- **Use reach and frequency** for audience analysis
 
 ### 2. Breakdown Strategy
-- Use demographic breakdowns for audience analysis
-- Use placement breakdowns for optimization
-- Use time breakdowns for trend analysis
-- Limit breakdowns to avoid data overload
+- **Time-based breakdowns**: month, day, week for trend analysis
+- **Demographic breakdowns**: age, gender, country for audience insights
+- **Campaign structure**: campaign_id, adset_id, ad_id for performance comparison
+- **Device/placement**: device_platform, publisher_platform for optimization
 
 ### 3. Date Range Selection
-- Use `last_7d` for recent performance
-- Use `last_30d` for monthly analysis
-- Use `this_year` for annual reports
-- Use custom ranges for specific periods
+- **Use date presets** for standard periods
+- **Custom timeRange** for specific analysis periods
+- **Consider data freshness** (Meta data can have 24-48 hour delays)
 
-### 4. Filtering Guidelines
-- Filter out inactive campaigns for active performance
-- Use spend filters to focus on significant campaigns
-- Filter by status to exclude deleted/archived items
+### 4. Filtering and Sorting
+- **Filter by spend** to focus on significant campaigns
+- **Sort by performance metrics** to identify top performers
+- **Use multiple filters** for precise analysis
 
 ### 5. Export Considerations
-- Use CSV for spreadsheet analysis
-- Use JSON for API integration
-- Limit results when exporting large datasets
-- Include relevant breakdowns for detailed analysis
+- **CSV format** for spreadsheet analysis
+- **JSON format** for programmatic processing
+- **Limit results** for large datasets
 
 ## Error Handling
 
-### Common Issues
-1. **Invalid Campaign ID**: Ensure the campaign ID exists and you have access
-2. **Invalid Metrics**: Use only supported metric names
-3. **Invalid Breakdowns**: Use only supported breakdown dimensions
-4. **Date Range Conflicts**: Don't use both `datePreset` and `timeRange`
-5. **Rate Limiting**: Meta API has rate limits; use appropriate delays
+### Common Errors
 
-### Troubleshooting
-- Check campaign/ad set/ad IDs are correct
-- Verify you have the necessary permissions
-- Ensure date ranges are valid
-- Check that requested metrics are available for the time period
+#### 1. Invalid Ad Account ID
+```json
+{
+  "error": "Invalid ad account ID format",
+  "code": "INVALID_PARAMETER"
+}
+```
+**Solution**: Ensure ad account ID starts with "act_" prefix
 
-## API Limits
+#### 2. Invalid Metrics
+```json
+{
+  "error": "Invalid metric: invalid_metric",
+  "code": "INVALID_PARAMETER"
+}
+```
+**Solution**: Use only metrics from the available metrics list
 
-- **Maximum results**: 1000 per request
-- **Rate limits**: Follow Meta API rate limiting guidelines
-- **Data availability**: Some metrics may not be available for all time periods
-- **Breakdown limits**: Too many breakdowns may cause timeouts
+#### 3. Invalid Breakdowns
+```json
+{
+  "error": "Invalid breakdown: invalid_breakdown",
+  "code": "INVALID_PARAMETER"
+}
+```
+**Solution**: Use only breakdowns from the available breakdowns list
 
-## Support
+#### 4. Date Range Issues
+```json
+{
+  "error": "Date range too large",
+  "code": "INVALID_PARAMETER"
+}
+```
+**Solution**: Use shorter date ranges or add more specific filters
 
-For issues or questions:
-1. Check this reference document
-2. Verify your Meta access token has necessary permissions
-3. Ensure campaign/ad IDs are correct
-4. Check Meta Ads API documentation for latest updates
+### Troubleshooting Tips
 
----
+1. **Check ad account permissions** - Ensure you have access to the ad account
+2. **Verify date ranges** - Meta has data retention limits
+3. **Use appropriate breakdowns** - Some breakdowns may not be available for all metrics
+4. **Check rate limits** - Meta API has rate limiting
+5. **Validate parameters** - Ensure all required parameters are provided
 
-*Last updated: September 2024*
-*Version: 0.1.0*
+## Rate Limits and Best Practices
+
+### Rate Limits
+- **600 calls per hour** per ad account
+- **50 calls per hour** per user
+- **Burst limit**: 10 calls per second
+
+### Optimization Tips
+1. **Batch requests** when possible
+2. **Use appropriate date ranges** to minimize data volume
+3. **Cache results** for repeated queries
+4. **Monitor rate limit headers** in responses
+5. **Implement exponential backoff** for retries
+
+## Support and Resources
+
+### Documentation
+- [Meta Marketing API Documentation](https://developers.facebook.com/docs/marketing-api/)
+- [Insights API Reference](https://developers.facebook.com/docs/marketing-api/insights/)
+- [Breakdowns Reference](https://developers.facebook.com/docs/marketing-api/insights/breakdowns/)
+
+### Community
+- [Meta Developer Community](https://developers.facebook.com/community/)
+- [Marketing API Group](https://www.facebook.com/groups/marketingapi/)
+
+### Support
+- [Meta Business Support](https://business.facebook.com/support/)
+- [API Support](https://developers.facebook.com/support/)
