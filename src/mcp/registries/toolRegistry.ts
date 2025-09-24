@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetaToolsHandler } from '../../tools/meta/toolsHandler.js';
-import { accountManager } from '../../utils/accountManager.js';
 import { logger } from '../../utils/logger.js';
 import type { IToolRegistry } from '../types.js';
 import { AdCreativeToolRegistry } from './AdCreativeToolRegistry.js';
