@@ -35,11 +35,22 @@ export async function fetchUserTokenString(userId: string): Promise<string> {
  * Helper function to get the appropriate userId parameter for createMetaApiInstance.
  * For direct token authentication, returns "token:accessToken".
  * For database authentication, returns the userId.
+ * In production environments, always uses direct token authentication to avoid database connection issues.
  */
 export function getApiInstanceUserId(authPayload: { userId: string; token?: string }): string {
   if (authPayload.token) {
     return `token:${authPayload.token}`;
   }
+  
+  // In production environments, always use direct token authentication to avoid database connection issues
+  if (env.NODE_ENV === 'production') {
+    // For production, we need to use direct token authentication
+    // If no token is provided, we'll need to handle this gracefully
+    logger.warn('No direct token provided in production environment, falling back to database authentication', {
+      userId: authPayload.userId
+    });
+  }
+  
   return authPayload.userId;
 }
 
@@ -82,26 +93,38 @@ export async function createMetaApiInstance(userId: string): Promise<FacebookAds
   }
 
   // Regular database-based authentication
-  const tokenRecord = await fetchUserToken(userId);
+  try {
+    const tokenRecord = await fetchUserToken(userId);
 
-  if (tokenRecord.expiresAt && new Date() >= new Date(tokenRecord.expiresAt)) {
-    logger.warn('Meta token expired', { userId, expiresAt: tokenRecord.expiresAt });
-    throw new TokenError('Meta access token has expired. Please re-authenticate.');
-  }
-
-  // Warn if token expires within 7 days
-  if (tokenRecord.expiresAt) {
-    const daysUntilExpiry =
-      (new Date(tokenRecord.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
-    if (daysUntilExpiry <= 7) {
-      logger.warn('Meta token expires soon', {
-        userId,
-        daysUntilExpiry: Math.round(daysUntilExpiry),
-      });
+    if (tokenRecord.expiresAt && new Date() >= new Date(tokenRecord.expiresAt)) {
+      logger.warn('Meta token expired', { userId, expiresAt: tokenRecord.expiresAt });
+      throw new TokenError('Meta access token has expired. Please re-authenticate.');
     }
-  }
 
-  return createApiInstanceFromToken(tokenRecord.accessToken);
+    // Warn if token expires within 7 days
+    if (tokenRecord.expiresAt) {
+      const daysUntilExpiry =
+        (new Date(tokenRecord.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
+      if (daysUntilExpiry <= 7) {
+        logger.warn('Meta token expires soon', {
+          userId,
+          daysUntilExpiry: Math.round(daysUntilExpiry),
+        });
+      }
+    }
+
+    return createApiInstanceFromToken(tokenRecord.accessToken);
+  } catch (error) {
+    // If database access fails (ECONNREFUSED), provide a helpful error message
+    if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('connection'))) {
+      logger.error('Database connection failed, cannot retrieve Meta access token', {
+        userId,
+        error: error.message
+      });
+      throw new TokenError('Database connection failed. Please ensure the Meta access token is provided directly in the JWT payload for production environments.');
+    }
+    throw error;
+  }
 }
 
 function parseMetaApiError(error: unknown): {

@@ -50,6 +50,7 @@ export class InsightsToolRegistry implements IToolRegistry {
       adId: z.string().optional().describe('The ID of the ad to get insights for.'),
       adSetId: z.string().optional().describe('The ID of the ad set to get insights for.'),
       campaignId: z.string().optional().describe('The ID of the campaign to get insights for.'),
+      adAccountId: z.string().optional().describe('The ID of the ad account (e.g., act_12345). Required for account-level insights.'),
       datePreset: z
         .enum([
           'today',
@@ -125,6 +126,15 @@ export class InsightsToolRegistry implements IToolRegistry {
           code: z.ZodIssueCode.custom,
           message: 'You must provide at least one of campaignId, adSetId, or adId for non-account level insights.',
           path: ['campaignId'],
+        });
+      }
+
+      // Validate that adAccountId is provided for account-level insights
+      if (data.level === 'account' && !data.adAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'adAccountId is required for account-level insights.',
+          path: ['adAccountId'],
         });
       }
 
@@ -269,7 +279,7 @@ export class InsightsToolRegistry implements IToolRegistry {
       {
         title: 'Get Comprehensive Ad Insights Report',
         description:
-          'Retrieves comprehensive performance metrics (insights) for campaigns, ad sets, ads, or account-level data. This enhanced tool provides detailed analytics data with advanced filtering, sorting, breakdowns, and export capabilities. Supports all Meta Ads API insights features including custom date ranges, multiple metrics, demographic/placement breakdowns, and data export in various formats. For account-level insights, set level to "account" and no specific IDs are required.',
+          'Retrieves comprehensive performance metrics (insights) for campaigns, ad sets, ads, or account-level data. This enhanced tool provides detailed analytics data with advanced filtering, sorting, breakdowns, and export capabilities. Supports all Meta Ads API insights features including custom date ranges, multiple metrics, demographic/placement breakdowns, and data export in various formats. For account-level insights, set level to "account" and provide adAccountId parameter.',
         inputSchema: InsightsToolRegistry.GetAdInsightsInputSchema,
         successDataSchema,
       },

@@ -81,15 +81,16 @@ export class MetaInsightsHandler {
           ) as unknown as InsightsGetter;
           insightsCursor = await apiObject.getInsights([], insightsParams);
         } else if (params.level === 'account') {
-          // Handle account-level insights - need to get adAccountId from user context
-          const accountContext = await accountManager.getAccountContext(authPayload.userId);
-          if (!accountContext.selectedAccountId) {
+          // Handle account-level insights - use provided adAccountId
+          // This bypasses database access which is causing ECONNREFUSED errors
+          const adAccountId = params.adAccountId;
+          if (!adAccountId) {
             throw new ValidationError(
-              'Account-level insights require a selected ad account. Please select an account first or use get_ad_account_insights tool with adAccountId parameter.'
+              'adAccountId is required for account-level insights. Please provide the Meta Ads account ID (format: act_XXXXXXXXX).'
             );
           }
           const apiObject = new MetaAdAccountSDK(
-            accountContext.selectedAccountId,
+            adAccountId,
             {},
             null,
             api
