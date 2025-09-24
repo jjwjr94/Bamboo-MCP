@@ -35,46 +35,129 @@ export type InsightMetric = z.infer<typeof InsightMetricSchema>;
 // Breakdown dimensions from Meta Ads API
 export const AdsInsightsBreakdownsSchema = z.enum([
   // Time-based breakdowns
-  'month',
   'day',
-  'week', 
+  'month',
+  'week',
   'hour',
-  
-  // Campaign structure breakdowns
-  'campaign_id',
-  'adset_id',
-  'ad_id',
+  'hourly_stats_aggregated_by_advertiser_time_zone',
+  'hourly_stats_aggregated_by_audience_time_zone',
   
   // Demographic breakdowns
   'age',
   'gender',
+  
+  // Geographic breakdowns
   'country',
   'region',
   'city',
+  'dma',
   
-  // Device and placement breakdowns
+  // Device and platform breakdowns
   'device_platform',
   'publisher_platform',
-  'placement',
+  'platform_position',
   'impression_device',
   
-  // Action breakdowns
-  'action_type',
-  'action_device',
-  'action_destination',
-  'conversion_destination',
+  // Placement breakdowns
+  'placement',
   
-  // Advanced breakdowns (commonly used)
+  // Product breakdowns
+  'product_id',
+  'product_set_id_breakdown',
+  'product_brand_breakdown',
+  'product_category_breakdown',
+  'product_custom_label_0_breakdown',
+  'product_custom_label_1_breakdown',
+  'product_custom_label_2_breakdown',
+  'product_custom_label_3_breakdown',
+  'product_custom_label_4_breakdown',
+  'product_group_content_id_breakdown',
+  
+  // Creative and ad format breakdowns
+  'ad_format_asset',
+  'body_asset',
+  'call_to_action_asset',
+  'description_asset',
+  'image_asset',
+  'link_url_asset',
+  'title_asset',
+  'video_asset',
+  'media_asset_url',
+  'media_creator',
+  'media_destination_url',
+  'media_format',
+  'media_origin_url',
+  'media_text_content',
+  'media_type',
+  
+  // Advanced tracking breakdowns
   'frequency_value',
   'coarse_conversion_value',
   'app_id',
-  'product_id',
-  'media_type',
-  'media_format',
   'landing_destination',
-  'dma',
-  'platform_position'
+  'conversion_destination',
+  'standard_event_content_type',
+  'signal_source_bucket',
+  
+  // Attribution and reporting breakdowns
+  'breakdown_ad_objective',
+  'breakdown_reporting_ad_id',
+  'skan_campaign_id',
+  'skan_conversion_id',
+  'skan_version',
+  'mmm',
+  
+  // Extension and automation breakdowns
+  'ad_extension_domain',
+  'ad_extension_url',
+  'creative_automation_asset_id',
+  'creative_relaxation_asset_type',
+  'flexible_format_asset_type',
+  'gen_ai_asset_type',
+  
+  // Business and CRM breakdowns
+  'crm_advertiser_l12_territory_ids',
+  'crm_advertiser_subvertical_id',
+  'crm_advertiser_vertical_id',
+  'crm_ult_advertiser_id',
+  
+  // Behavioral and interaction breakdowns
+  'fidelity_type',
+  'is_auto_advance',
+  'is_conversion_id_modeled',
+  'is_rendered_as_delayed_skip_ad',
+  'redownload',
+  
+  // Messaging and communication breakdowns
+  'marketing_messages_btn_name',
+  
+  // Location and venue breakdowns
+  'place_page_id',
+  'comscore_market',
+  
+  // User and persona breakdowns
+  'user_persona_id',
+  'user_persona_name',
+  'hsid',
+  
+  // Rule and automation breakdowns
+  'rule_set_id',
+  'rule_set_name',
+  
+  // Specialized tracking breakdowns
+  'postback_sequence_index',
+  'rta_ugc_topic',
+  'sot_attribution_model_type',
+  'sot_attribution_window',
+  'sot_channel',
+  'sot_event_type',
+  'sot_source',
+  'impression_view_time_advertiser_hour_v2',
+  
+  // MDSA (Multi-Destination Shopping Ads) breakdowns
+  'mdsa_landing_destination'
 ]);
+
 
 export type AdsInsightsBreakdowns = z.infer<typeof AdsInsightsBreakdownsSchema>;
 
