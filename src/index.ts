@@ -39,6 +39,40 @@ process.on('unhandledRejection', (reason, promise) => {
   // For a server, it's often better to log and let a process manager restart it
 });
 
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', {
+    error: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  // Don't exit immediately - log and continue for server resilience
+});
+
+// Add graceful shutdown handlers
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  logger.info(`${signal} received, shutting down gracefully`);
+  
+  try {
+    // Close database connections
+    await closeDatabase();
+    logger.info('Database connections closed');
+  } catch (error) {
+    logger.error('Error closing database:', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

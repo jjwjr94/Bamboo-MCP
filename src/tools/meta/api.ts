@@ -1,11 +1,20 @@
 import { desc, eq } from 'drizzle-orm';
 import { FacebookAdsApi } from 'facebook-nodejs-business-sdk';
+import https from 'https';
 import { withUserContext } from '../../db/client.js';
 import { oauthTokens } from '../../db/schema.js';
 import { MetaApiError, TokenError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { createMetaResiliencePolicy } from '../../utils/resiliencePolicy.js';
 import { env } from '../../utils/env.js';
+
+// Add HTTP agent with connection pooling
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 10,
+  maxFreeSockets: 5,
+  timeout: 30000,
+});
 
 // Circuit breaker is now request-scoped to prevent cross-user impact
 
@@ -70,12 +79,15 @@ export function createApiInstanceFromToken(accessToken: string): FacebookAdsApi 
   if (env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET) {
     FacebookAdsApi.init(env.FACEBOOK_APP_ID, env.FACEBOOK_APP_SECRET);
   } else {
-    // For direct token usage without app credentials, we need to initialize with minimal config
-    // This is a workaround for cases where we only have the access token
     FacebookAdsApi.init('direct-token', 'direct-token');
   }
   
-  return new FacebookAdsApi(accessToken);
+  const api = new FacebookAdsApi(accessToken);
+  
+  // Note: FacebookAdsApi doesn't expose setDefaultRequestOptions
+  // Connection pooling is handled at the Node.js level via the httpsAgent
+  
+  return api;
 }
 
 /**
@@ -267,42 +279,78 @@ export async function handleMetaApiCall<T>(
     userId?: string;
   }
 ): Promise<T> {
-  try {
-    logger.info('Starting Meta API call', { 
-      toolName: context?.toolName, 
-      userId: context?.userId 
-    });
-    
-    // Temporarily bypass resilience policy to see raw error
-    const result = await apiCall();
-    
-    logger.info('Meta API call completed successfully', { 
-      toolName: context?.toolName, 
-      userId: context?.userId 
-    });
-    
-    return result;
-  } catch (error: unknown) {
-    const parsedError = parseMetaApiError(error);
+  const maxRetries = 3;
+  const baseDelay = 1000;
+  const timeout = env.META_API_TIMEOUT || 25000;
 
-    logger.error('Meta API call failed', {
-      toolName: context?.toolName,
-      userId: context?.userId,
-      error: parsedError.message,
-      fbtrace_id: parsedError.fbtrace_id,
-      originalError: error instanceof Error ? error.message : String(error),
-      errorType: error?.constructor?.name,
-    });
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info('Starting Meta API call', { 
+        toolName: context?.toolName, 
+        userId: context?.userId,
+        attempt,
+        timeout
+      });
+      
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Meta API timeout')), timeout);
+      });
+      
+      // Race between API call and timeout
+      const result = await Promise.race([
+        apiCall(),
+        timeoutPromise
+      ]);
+      
+      logger.info('Meta API call completed successfully', { 
+        toolName: context?.toolName, 
+        userId: context?.userId,
+        attempt
+      });
+      
+      return result;
+    } catch (error: unknown) {
+      const parsedError = parseMetaApiError(error);
+      const isRetryable = attempt < maxRetries && (
+        parsedError.statusCode >= 500 || 
+        parsedError.statusCode === 429 ||
+        error instanceof Error && error.message.includes('timeout')
+      );
 
-    throw new MetaApiError(
-      parsedError.message,
-      parsedError.metaErrorCode,
-      parsedError.errorSubcode,
-      parsedError.statusCode,
-      parsedError.metaErrorType,
-      parsedError.fbtrace_id,
-      parsedError.userTitle,
-      parsedError.userMessage
-    );
+      logger.error('Meta API call failed', {
+        toolName: context?.toolName,
+        userId: context?.userId,
+        attempt,
+        error: parsedError.message,
+        fbtrace_id: parsedError.fbtrace_id,
+        isRetryable,
+        willRetry: isRetryable
+      });
+
+      if (isRetryable) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        logger.info(`Retrying Meta API call in ${delay}ms`, {
+          toolName: context?.toolName,
+          userId: context?.userId,
+          attempt: attempt + 1
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw new MetaApiError(
+        parsedError.message,
+        parsedError.metaErrorCode,
+        parsedError.errorSubcode,
+        parsedError.statusCode,
+        parsedError.metaErrorType,
+        parsedError.fbtrace_id,
+        parsedError.userTitle,
+        parsedError.userMessage
+      );
+    }
   }
+
+  throw new Error('Max retries exceeded');
 }

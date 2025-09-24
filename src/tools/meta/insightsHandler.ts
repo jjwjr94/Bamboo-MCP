@@ -49,7 +49,7 @@ export class MetaInsightsHandler {
           date_preset: params.datePreset || 'last_30d',
           level: params.level || 'ad', // Use provided level or default to 'ad'
           breakdowns: params.breakdowns,
-          limit: params.limit || 250,
+          limit: params.limit || 25,
           sort: params.sort,
           filtering: params.filtering,
         };
@@ -185,7 +185,7 @@ export class MetaInsightsHandler {
           date_preset: params.datePreset || 'last_30d',
           level: params.level || 'account',
           breakdowns: params.breakdowns,
-          limit: params.limit || 250,
+          limit: params.limit || 25,
           sort: params.sort,
           filtering: params.filtering,
         };

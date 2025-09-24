@@ -36,6 +36,11 @@ const envSchema = z
     META_API_VERSION: z.string().default('v22.0'),
     META_API_TIMEOUT: z.string().transform(Number).default('15000'),
 
+    // Connection Pool Configuration
+    META_API_MAX_SOCKETS: z.string().transform(Number).default('10'),
+    META_API_MAX_FREE_SOCKETS: z.string().transform(Number).default('5'),
+    META_API_KEEP_ALIVE_TIMEOUT: z.string().transform(Number).default('30000'),
+
     // OAuth Scopes (optional)
     FACEBOOK_OAUTH_SCOPES: z
       .string()
@@ -77,11 +82,11 @@ const envSchema = z
 
     // Safety Limits
     META_MAX_BATCH_SIZE: z.string().transform(Number).default('50'),
-    META_MAX_CAMPAIGNS_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_ADS_TO_FETCH: z.string().transform(Number).default('1000'),
+    META_MAX_CAMPAIGNS_TO_FETCH: z.string().transform(Number).default('500'),
+    META_MAX_ADS_TO_FETCH: z.string().transform(Number).default('500'),
     META_MAX_ADSETS_TO_FETCH: z.string().transform(Number).default('1000'),
     META_MAX_CREATIVES_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_INSIGHTS_TO_FETCH: z.string().transform(Number).default('10000'),
+    META_MAX_INSIGHTS_TO_FETCH: z.string().transform(Number).default('1000'),
     META_MAX_AD_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
     META_MAX_BUSINESS_USERS_TO_FETCH: z.string().transform(Number).default('1000'),
     META_MAX_BUSINESS_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
