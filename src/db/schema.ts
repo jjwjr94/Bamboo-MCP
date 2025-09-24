@@ -23,16 +23,7 @@ export const users = pgTable(
     facebookUserId: text('facebook_user_id').notNull().unique(),
     createdAt: timestamp('created_at').defaultNow(),
     sessionState: jsonb('session_state').$type<Record<string, unknown>>(),
-    accountContext: jsonb('account_context').$type<{
-      selectedAccountId?: string;
-      availableAccounts?: Array<{
-        id: string;
-        name: string;
-        permissions: string[];
-        status: string;
-        currency?: string;
-      }>;
-    }>(),
+    accountContext: jsonb('account_context'),
   },
   (table) => [
     index('users_facebook_user_id_idx').on(table.facebookUserId),
@@ -281,17 +272,6 @@ export type CreativeAssetUpload = typeof creativeAssetUploads.$inferSelect;
 export type NewCreativeAssetUpload = typeof creativeAssetUploads.$inferInsert;
 
 // JSONB field types for type safety
-export type UserAccountContext = {
-  selectedAccountId?: string;
-  availableAccounts?: Array<{
-    id: string;
-    name: string;
-    permissions: string[];
-    status: string;
-    currency?: string;
-  }>;
-};
-
 export type UserSessionState = Record<string, unknown>;
 
 // Note: RLS is automatically enabled when policies are defined
