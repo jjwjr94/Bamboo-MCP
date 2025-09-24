@@ -30,6 +30,8 @@ import type {
 } from '../../mcp/registries/CustomAudienceToolRegistry.js';
 import type {
   GetAdAccountInsightsInput,
+  GetCampaignInsightsInput,
+  GetAdSetInsightsInput,
   GetAdInsightsInput,
 } from '../../mcp/registries/InsightsToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
@@ -155,13 +157,21 @@ export class MetaToolsHandler {
   }
 
   // Insights methods - delegated to MetaInsightsHandler
-  async getAdInsights(authPayload: JWTPayload, params: GetAdInsightsInput) {
-    return this.insightsHandler.getAdInsights(authPayload, params);
-  }
+async getAdAccountInsights(authPayload: JWTPayload, params: GetAdAccountInsightsInput) {
+  return this.insightsHandler.getAdAccountInsights(authPayload, params);
+}
 
-  async getAdAccountInsights(authPayload: JWTPayload, params: GetAdAccountInsightsInput) {
-    return this.insightsHandler.getAdAccountInsights(authPayload, params);
-  }
+async getCampaignInsights(authPayload: JWTPayload, params: GetCampaignInsightsInput) {
+  return this.insightsHandler.getCampaignInsights(authPayload, params);
+}
+
+async getAdSetInsights(authPayload: JWTPayload, params: GetAdSetInsightsInput) {
+  return this.insightsHandler.getAdSetInsights(authPayload, params);
+}
+
+async getAdInsights(authPayload: JWTPayload, params: GetAdInsightsInput) {
+  return this.insightsHandler.getAdInsights(authPayload, params);
+}
 
   // Custom Audience methods - delegated to MetaCustomAudienceHandler
   async getCustomAudiences(authPayload: JWTPayload, params: { adAccountId?: string }) {

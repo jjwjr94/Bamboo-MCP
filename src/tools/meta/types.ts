@@ -69,6 +69,31 @@ export interface CreateAdResult {
   status: string;
 }
 
+export interface GetCampaignInsightsResult {
+  insights: z.infer<typeof MetaAdsInsightsResponseSchema>[];
+  summary: {
+    totalRecords: number;
+    dateRange?: { start?: string; end?: string; };
+    metrics: string[];
+    breakdowns?: string[];
+    campaignId?: string;
+  };
+  exportData?: string;
+}
+
+export interface GetAdSetInsightsResult {
+  insights: z.infer<typeof MetaAdsInsightsResponseSchema>[];
+  summary: {
+    totalRecords: number;
+    dateRange?: { start?: string; end?: string; };
+    metrics: string[];
+    breakdowns?: string[];
+    adSetId?: string;
+    campaignId?: string;
+  };
+  exportData?: string;
+}
+
 export interface UpdateAdResult {
   adId: string;
   updatedFields: string[];
@@ -168,6 +193,37 @@ export interface GetAdAccountInsightsResult {
     metrics: string[];
     breakdowns?: string[];
     accountId: string;
+  };
+  exportData?: string;
+}
+
+export interface GetCampaignInsightsResult {
+  insights: MetaInsights[];
+  summary: {
+    totalRecords: number;
+    dateRange?: {
+      start?: string;
+      end?: string;
+    };
+    metrics: string[];
+    breakdowns?: string[];
+    campaignId?: string;
+  };
+  exportData?: string;
+}
+
+export interface GetAdSetInsightsResult {
+  insights: MetaInsights[];
+  summary: {
+    totalRecords: number;
+    dateRange?: {
+      start?: string;
+      end?: string;
+    };
+    metrics: string[];
+    breakdowns?: string[];
+    adSetId?: string;
+    campaignId?: string;
   };
   exportData?: string;
 }
