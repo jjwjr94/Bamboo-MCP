@@ -5,7 +5,6 @@ import { request as httpRequest } from 'undici';
 import { db, withUserContext } from '../../db/client.js';
 import { creativeAssetUploads } from '../../db/schema.js';
 import type { JWTPayload } from '../../types/auth.js';
-import { accountManager } from '../../utils/accountManager.js';
 import { getBusinessIdForAdAccount } from '../../utils/businessContextManager.js';
 import { env } from '../../utils/env.js';
 import { MetaApiError, NotFoundError, ValidationError } from '../../utils/errors.js';

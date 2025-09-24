@@ -17,7 +17,6 @@ import type {
   UpdateAdRequest,
 } from '../../mcp/registries/AdToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
-import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';

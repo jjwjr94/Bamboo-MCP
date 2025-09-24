@@ -16,7 +16,6 @@ import type {
   UpdateAdSetRequest,
 } from '../../mcp/registries/AdSetToolRegistry.js';
 import type { JWTPayload } from '../../types/auth.js';
-import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import {
   AggregatedValidationError,

@@ -12,7 +12,6 @@ import {
   MetaPageResponseSchema,
 } from '../../generated/schemas.js';
 import type { JWTPayload } from '../../types/auth.js';
-import { accountManager } from '../../utils/accountManager.js';
 import { env } from '../../utils/env.js';
 import { AuthorizationError, ValidationError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
