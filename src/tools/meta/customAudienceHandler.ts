@@ -70,7 +70,7 @@ export class MetaCustomAudienceHandler {
 
         const allRawAudiences = await fetchAllPaginatedData<unknown>({
           cursor: customAudiencesCursor,
-          limit: env.META_MAX_AUDIENCES_TO_FETCH,
+          limit: 1000,  // Max audiences to fetch
           entityName: 'custom audiences',
           userId: authPayload.userId,
           apiContext: { adAccountId },

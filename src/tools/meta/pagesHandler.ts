@@ -44,7 +44,7 @@ export class MetaPagesHandler {
         // Use the common pagination utility to handle all edge cases
         const allRawPages = await fetchAllPaginatedData<unknown>({
           cursor: pagesCursor,
-          limit: env.META_MAX_PAGES_TO_FETCH,
+          limit: 100,  // Max pages to fetch
           entityName: 'pages',
           userId: authPayload.userId,
         });
@@ -146,7 +146,7 @@ export class MetaPagesHandler {
 
         const allRawPosts = await fetchAllPaginatedData<unknown>({
           cursor: postsCursor,
-          limit: env.META_MAX_POSTS_TO_FETCH,
+          limit: 500,  // Max posts to fetch
           entityName: 'page posts',
           userId: authPayload.userId,
           apiContext: { pageId: params.pageId },

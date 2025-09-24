@@ -192,7 +192,7 @@ export class MetaAdsArchiveHandler {
           'currency',
         ];
 
-        const maxResults = Math.min(params.limit || 250, env.META_MAX_ADS_ARCHIVE_TO_FETCH);
+        const maxResults = Math.min(params.limit || 250, 5000);  // Max ads archive to fetch
 
         const rawResults = await this.fetchPaginatedArchiveData(
           accessToken,
@@ -264,7 +264,7 @@ export class MetaAdsArchiveHandler {
           'delivery_by_region', // Geographic transparency
         ];
 
-        const maxResults = Math.min(params.limit || 250, env.META_MAX_ADS_ARCHIVE_TO_FETCH);
+        const maxResults = Math.min(params.limit || 250, 5000);  // Max ads archive to fetch
 
         const rawResults = await this.fetchPaginatedArchiveData(
           accessToken,
@@ -341,7 +341,7 @@ export class MetaAdsArchiveHandler {
           'currency',
         ];
 
-        const maxResults = Math.min(params.limit || 250, env.META_MAX_ADS_ARCHIVE_TO_FETCH);
+        const maxResults = Math.min(params.limit || 250, 5000);  // Max ads archive to fetch
 
         const rawResults = await this.fetchPaginatedArchiveData(
           accessToken,
@@ -425,7 +425,7 @@ export class MetaAdsArchiveHandler {
           enhancedFields.push('funding_entity', 'bylines');
         }
 
-        const maxResults = Math.min(params.limit || 250, env.META_MAX_ADS_ARCHIVE_TO_FETCH);
+        const maxResults = Math.min(params.limit || 250, 5000);  // Max ads archive to fetch
 
         const rawResults = await this.fetchPaginatedArchiveData(
           accessToken,

@@ -105,7 +105,7 @@ export class MetaInsightsHandler {
         // Use the common pagination utility to handle all edge cases
         const allRawInsights = await fetchAllPaginatedData<unknown>({
           cursor: insightsCursor,
-          limit: env.META_MAX_INSIGHTS_TO_FETCH,
+          limit: 1000,  // Max insights to fetch
           entityName: 'insights',
           userId: authPayload.userId,
           apiContext: params,
@@ -204,7 +204,7 @@ export class MetaInsightsHandler {
         // Use the common pagination utility to handle all edge cases
         const allRawInsights = await fetchAllPaginatedData<unknown>({
           cursor: insightsCursor,
-          limit: env.META_MAX_INSIGHTS_TO_FETCH,
+          limit: 1000,  // Max insights to fetch
           entityName: 'account insights',
           userId: authPayload.userId,
           apiContext: { adAccountId },

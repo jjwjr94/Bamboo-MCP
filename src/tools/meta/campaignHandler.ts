@@ -74,7 +74,7 @@ export class MetaCampaignHandler {
 
         const allRawCampaigns = await fetchAllPaginatedData<unknown>({
           cursor: campaignsCursor,
-          limit: env.META_MAX_CAMPAIGNS_TO_FETCH,
+          limit: 500,  // Max campaigns to fetch
           entityName: 'campaigns',
           userId: authPayload.userId,
           apiContext: { adAccountId },

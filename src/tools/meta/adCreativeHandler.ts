@@ -70,7 +70,7 @@ export class MetaAdCreativeHandler {
 
         const allRawAdCreatives = await fetchAllPaginatedData<unknown>({
           cursor: adCreativesCursor,
-          limit: env.META_MAX_CREATIVES_TO_FETCH,
+          limit: 1000,  // Max creatives to fetch
           entityName: 'ad creatives',
           userId: authPayload.userId,
           apiContext: { adAccountId },

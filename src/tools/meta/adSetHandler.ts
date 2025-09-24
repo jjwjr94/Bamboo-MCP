@@ -275,7 +275,7 @@ export class MetaAdSetHandler {
 
         const allRawAdSets = await fetchAllPaginatedData<unknown>({
           cursor: adSetsCursor,
-          limit: env.META_MAX_ADSETS_TO_FETCH,
+          limit: 1000,  // Max adsets to fetch
           entityName: 'ad sets',
           userId: authPayload.userId,
           apiContext: { adAccountId },

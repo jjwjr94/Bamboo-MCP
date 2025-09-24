@@ -27,7 +27,7 @@ export class MetaBusinessManagerHandler {
 
         const allRawBusinesses = await fetchAllPaginatedData<unknown>({
           cursor: businessAccountsCursor,
-          limit: env.META_MAX_BUSINESS_ACCOUNTS_TO_FETCH,
+          limit: 100,  // Max business accounts to fetch
           entityName: 'business accounts',
           userId: authPayload.userId,
           apiContext: {},
@@ -92,7 +92,7 @@ export class MetaBusinessManagerHandler {
 
         const allRawUsers = await fetchAllPaginatedData<unknown>({
           cursor: businessUsersCursor,
-          limit: env.META_MAX_BUSINESS_USERS_TO_FETCH,
+          limit: 1000,  // Max business users to fetch
           entityName: 'business users',
           userId: authPayload.userId,
           apiContext: { businessId: params.businessId },

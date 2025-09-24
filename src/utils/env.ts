@@ -55,11 +55,7 @@ const envSchema = z
     // Timeout Configurations
     DB_STATEMENT_TIMEOUT: z.string().transform(Number).default('10000'),
 
-    // Server Timeout Configurations
-    FASTIFY_REQUEST_TIMEOUT: z.string().transform(Number).default('60000'),
-    FASTIFY_CONNECTION_TIMEOUT: z.string().transform(Number).default('60000'),
-
-    // Upload-Specific Timeout Configurations
+    // Upload-Specific Timeout Configurations (only for uploads which need longer timeouts)
     FASTIFY_UPLOAD_REQUEST_TIMEOUT: z.string().transform(Number).default('600000'),
     FASTIFY_UPLOAD_CONNECTION_TIMEOUT: z.string().transform(Number).default('600000'),
     META_UPLOAD_TIMEOUT: z.string().transform(Number).default('480000'),
@@ -75,20 +71,8 @@ const envSchema = z
     RETRY_BASE_DELAY: z.string().transform(Number).default('1000'),
     RETRY_MAX_DELAY: z.string().transform(Number).default('10000'),
 
-    // Safety Limits
+    // Safety Limits (only keep the most critical ones that might need tuning)
     META_MAX_BATCH_SIZE: z.string().transform(Number).default('50'),
-    META_MAX_CAMPAIGNS_TO_FETCH: z.string().transform(Number).default('500'),
-    META_MAX_ADS_TO_FETCH: z.string().transform(Number).default('500'),
-    META_MAX_ADSETS_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_CREATIVES_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_INSIGHTS_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_AD_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
-    META_MAX_BUSINESS_USERS_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_BUSINESS_ACCOUNTS_TO_FETCH: z.string().transform(Number).default('100'),
-    META_MAX_AUDIENCES_TO_FETCH: z.string().transform(Number).default('1000'),
-    META_MAX_PAGES_TO_FETCH: z.string().transform(Number).default('100'),
-    META_MAX_POSTS_TO_FETCH: z.string().transform(Number).default('500'),
-    META_MAX_ADS_ARCHIVE_TO_FETCH: z.string().transform(Number).default('5000'),
     MAX_RECURSION_DEPTH: z.string().transform(Number).default('20'),
     MAX_REDACTION_DEPTH: z.string().transform(Number).default('20'),
   })

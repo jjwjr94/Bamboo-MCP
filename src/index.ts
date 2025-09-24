@@ -84,8 +84,8 @@ export async function build(opts = {}) {
     logger: {
       level: 'debug',
     },
-    requestTimeout: env.FASTIFY_REQUEST_TIMEOUT,
-    connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT,
+    requestTimeout: 60000,  // 60 seconds
+    connectionTimeout: 60000,  // 60 seconds
     ...opts,
   });
 

@@ -79,7 +79,7 @@ export class MetaAdAccountHandler {
 
     const allRawAccounts = await fetchAllPaginatedData<unknown>({
       cursor: adAccountsCursor,
-      limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
+      limit: 100,  // Max ad accounts to fetch
       entityName: 'ad accounts',
       userId,
     });
@@ -254,7 +254,7 @@ export class MetaAdAccountHandler {
 
       const allRawAccounts = await fetchAllPaginatedData<unknown>({
         cursor: adAccountsCursor,
-        limit: env.META_MAX_AD_ACCOUNTS_TO_FETCH,
+        limit: 100,  // Max ad accounts to fetch
         entityName: 'ad accounts',
         userId: 'direct-token-user', // Use a placeholder for logging
       });
