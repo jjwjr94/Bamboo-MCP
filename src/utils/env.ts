@@ -36,11 +36,6 @@ const envSchema = z
     META_API_VERSION: z.string().default('v22.0'),
     META_API_TIMEOUT: z.string().transform(Number).default('15000'),
 
-    // Connection Pool Configuration
-    META_API_MAX_SOCKETS: z.string().transform(Number).default('10'),
-    META_API_MAX_FREE_SOCKETS: z.string().transform(Number).default('5'),
-    META_API_KEEP_ALIVE_TIMEOUT: z.string().transform(Number).default('30000'),
-
     // OAuth Scopes (optional)
     FACEBOOK_OAUTH_SCOPES: z
       .string()

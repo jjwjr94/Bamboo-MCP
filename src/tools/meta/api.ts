@@ -8,12 +8,12 @@ import { logger } from '../../utils/logger.js';
 import { createMetaResiliencePolicy } from '../../utils/resiliencePolicy.js';
 import { env } from '../../utils/env.js';
 
-// Add HTTP agent with connection pooling
+// Add HTTP agent with connection pooling for better performance
 const httpsAgent = new https.Agent({
   keepAlive: true,
-  maxSockets: 10,
-  maxFreeSockets: 5,
-  timeout: 30000,
+  maxSockets: 10,        // Max concurrent connections
+  maxFreeSockets: 5,     // Max idle connections to keep open
+  timeout: 30000,        // Connection timeout
 });
 
 // Circuit breaker is now request-scoped to prevent cross-user impact
