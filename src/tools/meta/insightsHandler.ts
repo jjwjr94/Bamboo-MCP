@@ -80,10 +80,25 @@ export class MetaInsightsHandler {
             api
           ) as unknown as InsightsGetter;
           insightsCursor = await apiObject.getInsights([], insightsParams);
+        } else if (params.level === 'account') {
+          // Handle account-level insights - need to get adAccountId from user context
+          const accountContext = await accountManager.getAccountContext(authPayload.userId);
+          if (!accountContext.selectedAccountId) {
+            throw new ValidationError(
+              'Account-level insights require a selected ad account. Please select an account first or use get_ad_account_insights tool with adAccountId parameter.'
+            );
+          }
+          const apiObject = new MetaAdAccountSDK(
+            accountContext.selectedAccountId,
+            {},
+            null,
+            api
+          ) as unknown as InsightsGetter;
+          insightsCursor = await apiObject.getInsights([], insightsParams);
         } else {
           // This case should not occur due to validation in the registry, but handle gracefully
           throw new ValidationError(
-            'At least one of adId, adSetId, or campaignId must be provided.'
+            'At least one of adId, adSetId, or campaignId must be provided for non-account level insights.'
           );
         }
 

@@ -119,11 +119,11 @@ export class InsightsToolRegistry implements IToolRegistry {
         .describe('Export format for the insights data. If not specified, returns JSON format.'),
     })
     .superRefine((data, ctx) => {
-      // Validate that at least one target is specified
-      if (!data.campaignId && !data.adSetId && !data.adId) {
+      // Validate that at least one target is specified, but only for non-account levels
+      if (data.level !== 'account' && !data.campaignId && !data.adSetId && !data.adId) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'You must provide at least one of campaignId, adSetId, or adId.',
+          message: 'You must provide at least one of campaignId, adSetId, or adId for non-account level insights.',
           path: ['campaignId'],
         });
       }
@@ -269,7 +269,7 @@ export class InsightsToolRegistry implements IToolRegistry {
       {
         title: 'Get Comprehensive Ad Insights Report',
         description:
-          'Retrieves comprehensive performance metrics (insights) for campaigns, ad sets, or ads. This enhanced tool provides detailed analytics data with advanced filtering, sorting, breakdowns, and export capabilities. Supports all Meta Ads API insights features including custom date ranges, multiple metrics, demographic/placement breakdowns, and data export in various formats.',
+          'Retrieves comprehensive performance metrics (insights) for campaigns, ad sets, ads, or account-level data. This enhanced tool provides detailed analytics data with advanced filtering, sorting, breakdowns, and export capabilities. Supports all Meta Ads API insights features including custom date ranges, multiple metrics, demographic/placement breakdowns, and data export in various formats. For account-level insights, set level to "account" and no specific IDs are required.',
         inputSchema: InsightsToolRegistry.GetAdInsightsInputSchema,
         successDataSchema,
       },
